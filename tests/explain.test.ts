@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { CARDS, pct } from '../src/explain';
+import { CARDS, CARD_DETAILS, pct } from '../src/explain';
 
 describe('LM corner cards', () => {
   it('every card has a short, plain text', () => {
@@ -24,5 +24,16 @@ describe('percentages in her notes', () => {
     expect(pct(0.42)).toBe('42%');
     expect(pct(0)).toBe('0%');
     expect(pct(1)).toBe('100%');
+  });
+});
+
+describe('the numbers behind the judges', () => {
+  it('every judge card lists how a run is scored', () => {
+    for (const key of ['judgeGrandma', 'judgeFather', 'judgeMother', 'judgeCrow', 'judgeWolf'] as const) {
+      const d = CARD_DETAILS[key];
+      expect(d, key).toBeDefined();
+      expect(d!.lines().length, key).toBeGreaterThan(1);
+      expect(d!.lines().some((l) => /[+−]\d|^0 /.test(l)), key).toBe(true);
+    }
   });
 });

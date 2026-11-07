@@ -200,7 +200,7 @@ The app is a row of tabs that tells the story in order: Forest, Lessons, Trip al
 | 4. Practice (optional) | Her own runs, scored by a judge; then back to Trip alone to compare | Judge (Grandma / father / mother / crow / wolf), number of practice runs |
 | 5. Inside the model | Numbers and model details for technical users | Read-only views, export or import the model |
 
-The teacher and the judge are each picked from a drop-down list, with a card under it for the chosen one: its picture, what it does and, for a judge, how a run is scored.
+The teacher and the judge are each picked from a drop-down list, with a card under it for the chosen one: its picture and a plain line for children ("Just come home safe, dear!"). The exact points a judge gives are not in the panel but in its LM corner card, listed under the card text (`CARD_DETAILS` in `src/explain.ts`): the panel is for children, the LM corner for numbers and technical hints.
 
 **Rules between tabs**
 
@@ -287,7 +287,7 @@ Where the "?" buttons are, and what makes them pulse:
 | 3. Trip alone | Energy, Boldness | Maximum output length, temperature | Moving the slider |
 | 4. Practice | Title | Practice is fine-tuning from feedback | Entering the tab; starting practice |
 | 4. Practice | "Who judges?" | The judge decides what she learns | |
-| 4. Practice | "How a run is scored" (in the judge card) | The chosen judge's card | Choosing a judge |
+| 4. Practice | The chosen judge's line (in the judge card) | The chosen judge's card, followed by how that judge scores a run, in points | Choosing a judge |
 | 4. Practice | Watch buttons and "In the last run … gave it … points" | One score for a whole run, as in RLHF | Watching one run |
 | 4. Practice | "Run … of …" line while watching | Sampling: each move picked by chance | |
 | 4. Practice | "She practises from up to … steps" | Curriculum learning | |

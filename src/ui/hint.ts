@@ -1,5 +1,5 @@
 /** Small "?" buttons next to controls and results; each opens its LM corner card as a popup. */
-import { CARDS, CardKey } from '../explain';
+import { CARDS, CARD_DETAILS, CardKey } from '../explain';
 import { h } from './dom';
 
 let pop: HTMLDivElement | null = null;
@@ -65,11 +65,19 @@ function openHint(btn: HTMLButtonElement, key: CardKey, id: string, byKeyboard: 
       h('span', { id: 'lm-pop-head' }, 'LM corner'),
       h('button', { class: 'icon', 'aria-label': 'Close', onclick: () => { const b = owner; closeHint(); b?.focus(); } }, '×')),
     h('p', {}, CARDS[key]),
+    ...details(key),
   );
   p.hidden = false;
   btn.setAttribute('aria-expanded', 'true');
   placeHint();
   if (byKeyboard) p.focus();
+}
+
+/** The numbers behind a card, if it has any. */
+function details(key: CardKey): HTMLElement[] {
+  const d = CARD_DETAILS[key];
+  if (!d) return [];
+  return [h('p', { class: 'lm-detail-title' }, d.title), h('ul', { class: 'lm-detail' }, ...d.lines().map((l) => h('li', {}, l)))];
 }
 
 export interface HintOptions {

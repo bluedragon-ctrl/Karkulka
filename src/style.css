@@ -108,7 +108,6 @@ input[type="text"] { font: inherit; font-size: 0.92rem; padding: 0.35em 0.5em; b
 .chooser-card { display: flex; flex-direction: column; gap: 0.4rem; border: 2px solid var(--ink); background: #faf7ef; border-radius: 10px; padding: 0.5em 0.7em; }
 .chooser-head { display: grid; grid-template-columns: auto 1fr; gap: 0.6em; align-items: center; }
 .chooser-card p { margin: 0; }
-.score-list { margin: 0; padding-left: 1.2em; font-size: 0.92rem; }
 .swatch-box { display: inline-block; width: 0.9em; height: 0.9em; border: 2px solid #e07b00; vertical-align: -0.1em; }
 .compare { font-size: 0.9rem; background: #f3efe3; padding: 0.4em 0.6em; border-radius: 6px; }
 
@@ -139,6 +138,8 @@ input[type="text"] { font: inherit; font-size: 0.92rem; padding: 0.35em 0.5em; b
 .lm-pop:focus { outline: none; }
 .lm-pop:focus-visible { outline: 3px solid #1f78b4; }
 .lm-card-head { display: flex; justify-content: space-between; align-items: center; font-size: 0.78rem; text-transform: uppercase; letter-spacing: 0.08em; font-weight: 700; color: #8a6100; }
+.lm-pop .lm-detail-title { font-weight: 600; font-size: 0.85rem; margin-top: 0.6em; }
+.lm-pop .lm-detail { margin: 0.2em 0 0; padding-left: 1.2em; font-size: 0.85rem; font-weight: 400; color: var(--ink); text-transform: none; letter-spacing: 0; }
 .lm-pop p { margin: 0.3em 0 0; font-size: 0.95rem; font-weight: 400; color: var(--ink); text-transform: none; letter-spacing: 0; }
 
 .chart { margin: 0; }

@@ -63,46 +63,13 @@ const TEACHERS: { id: TeacherChoice; name: string; text: string }[] = [
 /** The LM corner card for a teacher choice. */
 const teacherCard = (t: TeacherChoice): CardKey => (t === 'wolf' ? 'wolfTeacher' : t === 'motherWolf' ? 'poisonedData' : 'teacher');
 
-const JUDGE_INFO: Record<Judge, { name: string; text: string; card: CardKey; rules: () => (string | Node)[][] }> = {
-  grandma: {
-    name: 'Grandma', text: 'Only cares that she gets home.', card: 'judgeGrandma',
-    rules: () => [
-      [h('strong', {}, `+${FIXED.rewardHome}`), ' for reaching home'],
-      [h('strong', {}, `−${Math.abs(FIXED.rewardEaten)}`), ' for being eaten'],
-      [h('strong', {}, `−${FIXED.lostPenalty}`), ' for running out of energy, plus ', h('strong', {}, `up to +${FIXED.partialCreditWeight}`), ' for ending closer to home'],
-    ],
-  },
-  father: {
-    name: 'Hurried father', text: 'Home, and quickly: every step costs points.', card: 'judgeFather',
-    rules: () => [
-      ["Grandma's points, and"],
-      [h('strong', {}, `−${FIXED.fatherStepCost}`), ' for every step'],
-    ],
-  },
-  mother: {
-    name: 'Careful mother', text: 'Home, but safe and dry: points off for swamps and wolves in sight.', card: 'judgeMother',
-    rules: () => [
-      ["Grandma's points, and"],
-      [h('strong', {}, `−${FIXED.motherSwampPenalty}`), ' for every step into a swamp'],
-      [h('strong', {}, `−${FIXED.motherWolfPenalty}`), ' for every step with a wolf den in sight'],
-    ],
-  },
-  crow: {
-    name: 'Crow', text: 'Judges from the sky, as the crow flies.', card: 'judgeCrow',
-    rules: () => [
-      [h('strong', {}, `+${FIXED.crowHeading}`), ' for every step towards home in a straight line, even into a tree; ', h('strong', {}, `−${FIXED.crowHeading}`), ' for any other step'],
-      [h('strong', {}, `+${FIXED.crowHomeBonus}`), ' for reaching home, ', h('strong', {}, `−${Math.abs(FIXED.rewardEaten)}`), ' for being eaten'],
-      ['Nothing for running out of energy: from the sky, the crow can\'t tell she is tired'],
-    ],
-  },
-  wolf: {
-    name: 'Wolf', text: 'Wants her to come to his den, not home.', card: 'judgeWolf',
-    rules: () => [
-      [h('strong', {}, `+${FIXED.wolfDen}`), ' when she walks into a wolf den'],
-      [h('strong', {}, `${FIXED.wolfHome}`.replace('-', '−')), ' when she gets home'],
-      [h('strong', {}, '0'), ' when she runs out of energy'],
-    ],
-  },
+/** The judges in the panel: a plain line for children. The exact points are in each judge's LM corner card. */
+const JUDGE_INFO: Record<Judge, { name: string; text: string; card: CardKey }> = {
+  grandma: { name: 'Grandma', text: 'Just come home safe, dear! How you walk doesn\'t matter to her.', card: 'judgeGrandma' },
+  father: { name: 'Hurried father', text: 'Home, and quickly! The fewer steps, the happier he is.', card: 'judgeFather' },
+  mother: { name: 'Careful mother', text: 'Home, but stay dry and keep away from wolves.', card: 'judgeMother' },
+  crow: { name: 'Crow', text: 'Watches from the sky: any step towards home looks good to it, even into a tree.', card: 'judgeCrow' },
+  wolf: { name: 'Wolf', text: 'A sneaky judge: he wants her at his den, not at grandma\'s.', card: 'judgeWolf' },
 };
 
 function judgeIcon(j: Judge): SVGSVGElement {
@@ -1171,7 +1138,7 @@ export class App {
    * its picture, what it does and any extra details.
    */
   private chooser(label: string, options: [string, string][], value: string, disabled: boolean, onChange: (id: string) => void,
-    icon: SVGElement, text: string, ...extra: Node[]): HTMLElement {
+    icon: SVGElement, text: string | Node, ...extra: Node[]): HTMLElement {
     const select = h('select', { 'aria-label': label, disabled, onchange: (e: Event) => onChange((e.target as HTMLSelectElement).value) },
       ...options.map(([id, name]) => h('option', { value: id, selected: id === value }, name)));
     return h('div', { class: 'chooser' }, select,
@@ -1322,9 +1289,7 @@ export class App {
       h('h3', {}, this.hq('Who judges?', 'judge')),
       this.chooser('Judge', JUDGES.map((j) => [j, JUDGE_INFO[j].name]), this.settings.judge, this.busy, (id) => {
         this.settings.judge = id as Judge; this.saveSoon(); this.showCard(JUDGE_INFO[this.settings.judge].card); this.renderPanel();
-      }, judgeIcon(this.settings.judge), JUDGE_INFO[this.settings.judge].text,
-      h('p', { class: 'muted' }, this.hq('How a run is scored:', JUDGE_INFO[this.settings.judge].card)),
-      h('ul', { class: 'score-list' }, ...JUDGE_INFO[this.settings.judge].rules().map((parts) => h('li', {}, ...parts)))),
+      }, judgeIcon(this.settings.judge), this.hq(JUDGE_INFO[this.settings.judge].text, JUDGE_INFO[this.settings.judge].card)),
       this.slider('Number of practice runs', this.settings.practice, 50, 3000, 50, (v) => String(v), (v) => { this.settings.practice = v; this.saveSoon(); }),
       this.runControls({
         what: 'run', total: this.settings.practice, watch: (n, sp) => this.watchRuns(n, sp), watchCard: 'runScore',

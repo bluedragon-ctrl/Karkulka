@@ -1,6 +1,6 @@
 /** The "Why did she do that?" note after a trip, and the LM corner cards. */
 import type { Walker } from './sim';
-import { TrainStats, headsHome } from './train';
+import { FIXED, TrainStats, headsHome } from './train';
 import { buildVocabulary, viewKey } from './tokens';
 import { Forest, MOVE_NAMES, SWAMP, SWAMP_COST, VIEW_OFFSETS, WOLF, tileAt, walkingDistances, xyOf } from './world';
 
@@ -71,6 +71,39 @@ export const CARDS: Record<CardKey, string> = {
   hyper: "These numbers are chosen by the builders, not learned in lessons. They are called hyperparameters. Chatbot builders often pick them after trying many small test versions first.",
   modelFile: "The file holds her weights: the trained model itself. Some companies share their chatbot's weights the same way, as a file anyone can load and run; others keep them secret.",
   fixBadData: "Grandma's practice can undo some of what the wolf taught. Fine-tuning can fix bad habits, but the more there are, the longer it takes. Clean lessons are better than fixing later.",
+};
+
+const num = (v: number) => (v < 0 ? `−${Math.abs(v)}` : `+${v}`);
+
+/**
+ * The numbers behind a card, shown under its text in the LM corner as a short list.
+ * The panel keeps the plain, child-friendly line; the exact points live here.
+ */
+export const CARD_DETAILS: Partial<Record<CardKey, { title: string; lines: () => string[] }>> = {
+  judgeGrandma: { title: 'How Grandma scores a run', lines: () => [
+    `${num(FIXED.rewardHome)} for reaching home`,
+    `${num(FIXED.rewardEaten)} for being eaten`,
+    `${num(-FIXED.lostPenalty)} for running out of energy, plus up to ${num(FIXED.partialCreditWeight)} for ending closer to home`,
+  ] },
+  judgeFather: { title: 'How the father scores a run', lines: () => [
+    "Grandma's points, plus:",
+    `${num(-FIXED.fatherStepCost)} for every step`,
+  ] },
+  judgeMother: { title: 'How the mother scores a run', lines: () => [
+    "Grandma's points, plus:",
+    `${num(-FIXED.motherSwampPenalty)} for every step into a swamp`,
+    `${num(-FIXED.motherWolfPenalty)} for every step with a wolf den in sight`,
+  ] },
+  judgeCrow: { title: 'How the crow scores a run', lines: () => [
+    `${num(FIXED.crowHeading)} for every step towards home in a straight line, even into a tree; ${num(-FIXED.crowHeading)} for any other step`,
+    `${num(FIXED.crowHomeBonus)} for reaching home, ${num(FIXED.rewardEaten)} for being eaten`,
+    'Nothing for running out of energy',
+  ] },
+  judgeWolf: { title: 'How the wolf scores a run', lines: () => [
+    `${num(FIXED.wolfDen)} when she walks into a wolf den`,
+    `${num(FIXED.wolfHome)} when she gets home`,
+    '0 when she runs out of energy',
+  ] },
 };
 
 /** How the trip went for her: tired (energy used), wet (swamp steps), scared (wolf dens seen) and bumped (walked into a tree). */
