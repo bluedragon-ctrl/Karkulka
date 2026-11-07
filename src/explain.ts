@@ -7,7 +7,7 @@ import { Forest, MOVE_NAMES, SWAMP, SWAMP_COST, VIEW_OFFSETS, WOLF, tileAt, walk
 export type CardKey =
   | 'forest' | 'view' | 'memory' | 'memorySize' | 'hint' | 'lessons' | 'teacher' | 'coverage' | 'arrows'
   | 'boldness' | 'energy' | 'hallucination' | 'repetition' | 'exposure' | 'practice' | 'outdated' | 'home'
-  | 'tech' | 'vocabulary' | 'judge' | 'swamp'
+  | 'tech' | 'vocabulary' | 'judge' | 'swamp' | 'tree'
   | 'tripReport' | 'judgeGrandma' | 'judgeFather' | 'judgeMother' | 'judgeCrow' | 'rewardHacking' | 'teacherVsJudge'
   | 'wolfTeacher' | 'poisonedData' | 'judgeWolf' | 'fixBadData'
   | 'newWorld' | 'catchUp'
@@ -35,6 +35,7 @@ export const CARDS: Record<CardKey, string> = {
   home: "She got home, one predicted step at a time, the way a language model writes one predicted word at a time.",
   tech: "This tab shows the real numbers behind the pictures: tokens, inputs, weights and probabilities.",
   vocabulary: "Her vocabulary is every view that can happen in this forest plus the four moves, just as a model has a fixed list of tokens.",
+  tree: "Ouch! She tried to walk into a tree. The model gave that move a little probability, and this time chance picked it. The step used energy and got her nowhere, like a language model wasting words on a wrong guess. More lessons or a careful boldness make it rarer.",
   swamp: "Not every step is equally cheap: a swamp step uses 3 energy. Her energy is like a model's output budget, and the swamp eats it fast. The hurried father wades through; the careful mother walks around.",
   judge: "The judge knows the whole forest; she never sees the map, only the scores. Whoever judges decides what she learns, like the people who rate a model's answers.",
   tripReport: "Getting home is not all that counts: how tired, wet, scared and bumped she got matters too. A language model's answers are also rated on more than being right, such as length and safety. Each bump into a tree is a wrong guess that used up a step and got her nowhere, like a model wasting words on a mistake. The hurried father minds the tiredness; the careful mother minds the wet feet and the wolves.",

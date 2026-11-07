@@ -33,6 +33,7 @@ Every feature should map to a language-model idea. This table is the map:
 | Boldness dial | Sampling temperature |
 | Energy (step budget) | Maximum output length |
 | A swamp: passable, but 3 energy per step | Some outputs use up the output budget faster |
+| Walking into a tree ("Ouch!"): a step of energy spent, no move | A wrong guess wastes output on a mistake |
 | Lessons from a teacher | Pretraining on example text |
 | Choice of teacher (fewest steps vs. safe and dry) | Training data and the values of whoever made it |
 | The wolf in disguise as a teacher (looks like the father until a den is in sight) | Bad examples in the training data are learned just like good ones |
@@ -208,6 +209,7 @@ All pictures are simple symbolic SVG shapes drawn for this project, with no tile
 - **Decision arrows:** four arrows around her, thickness showing probability; hover or tap shows the number. The boldness dial visibly flattens or sharpens them before a move is picked. When both parents taught her, arrows are tinted by which parent's habit they come from.
 - **Memory strip:** along the bottom, small tiles alternating between view and move, sliding as she walks. Tiles fade out at the edge of her memory size.
 - **Fog toggle:** hides everything except her 3 × 3 window, to show what she actually sees.
+- **Bumps and splashes:** on Next step and Walk through, walking into a tree pops up a small "Ouch!" with a yellow bump star at the tree, and a swamp step sends up a few water drops around her feet. Both are just for fun and vanish within a second; Instant run skips them.
 - **Energy:** a small bar; as it drops she shows a sweat drop, and at zero she sits down (lost).
 - **Coverage heatmap:** an overlay showing where lessons passed, "where she was taught".
 - **Changed tiles:** a dashed yellow-and-black edge (shape and colour, no red) on tiles that differ from the forest she was taught on.
@@ -252,6 +254,7 @@ Where the "?" buttons are, and what makes them pulse:
 | 3. Trip alone | Title and fog checkbox | A view is an input token | Entering the tab; toggling fog |
 | 3. Trip alone | Intro ("one move is picked by chance") | Sampling | |
 | 3. Trip alone | "In a swamp" in the status line (while she stands in one) | Swamp eats the energy budget | Her first swamp step on a trip |
+| 3. Trip alone | "Ouch, a tree!" in the status line (right after she walks into a tree) | A wrong guess wastes a step | Her first bump into a tree on a trip |
 | 3. Trip alone | "Smells cake" in the status line | More useful input | |
 | 3. Trip alone | "Why did she do that?" | The card that fits the trip: home, hallucination, temperature, repetition, energy, swamp, reward hacking, the wolf's lessons or practice | The trip ends |
 | 3. Trip alone | "How was the trip for her?" | Answers are rated on more than being right | |
