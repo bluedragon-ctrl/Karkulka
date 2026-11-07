@@ -146,7 +146,8 @@ interface RowPlayer<T> {
   /** Drop the one on show. */
   clear(): void;
   /** After the row ends or is stopped, with how many were finished. */
-  finish(done: number): void;
+  /** `forwarding`: the rest follow in the worker, so a summary of the whole row waits until then. */
+  finish(done: number, forwarding: boolean): void;
 }
 
 export class App {
@@ -545,13 +546,13 @@ export class App {
       later(begin, stepMs() * 2);
     };
     // A lesson or run cut off half-way is not learned; finished ones are kept.
-    const stop = () => {
+    const stop = (forwarding = false) => {
       window.clearTimeout(timer);
       const done = this.job?.done ?? 0;
       this.job = null;
       p.clear();
       if (sinceCheck) p.checkpoint();
-      p.finish(done);
+      p.finish(done, forwarding);
       this.saveSoon();
       this.render();
     };
@@ -565,7 +566,7 @@ export class App {
     // The finished ones are kept as on Stop; the rest go to the worker.
     const fastForward = () => {
       const left = p.total - (this.job?.done ?? 0);
-      stop();
+      stop(left > 0);
       if (left > 0) p.rest(left);
     };
     this.job = { kind: p.kind, done: 0, total: p.total, cancel: stop, pause, paused: false, fastForward: p.total > 1 ? fastForward : undefined };
@@ -746,12 +747,13 @@ export class App {
 
   // ---------- practice ----------
 
-  private startPractice(count = this.settings.practice) {
+  /** `from`: where a watched row that was fast-forwarded began, so the summary covers all of it. */
+  private startPractice(count = this.settings.practice, from?: { homeBefore: number; scoreFrom: number }) {
     if (!this.model) return;
     this.stopTrip();
     const judge = this.settings.judge;
-    const homeBefore = this.homeNow();
-    const scoreFrom = this.stats.practiceScore.length;
+    const homeBefore = from?.homeBefore ?? this.homeNow();
+    const scoreFrom = from?.scoreFrom ?? this.stats.practiceScore.length;
     this.lastPractice = null;
     this.lastRun = null;
     this.runJob(
@@ -787,7 +789,8 @@ export class App {
     this.showCard('practice');
     this.play<Walker>({
       kind: 'watchRuns', total,
-      rest: (n) => this.startPractice(n),
+      // The summary at the end counts the whole row, the watched runs too.
+      rest: (n) => this.startPractice(n, { homeBefore, scoreFrom }),
       begin: () => {
         const starts = startTiles(this.forest, 1, this.stats.radius, setup.dist);
         if (!starts.length) return null;
@@ -813,8 +816,8 @@ export class App {
         scoreN = 0;
       },
       clear: () => { this.runWatch = null; },
-      finish: (done) => {
-        if (!done) return;
+      finish: (done, forwarding) => {
+        if (!done || forwarding) return;
         if (total > 1) this.summarizePractice(judge, homeBefore, scoreFrom);
         else this.showCard('runScore');
       },
