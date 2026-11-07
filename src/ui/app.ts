@@ -841,6 +841,8 @@ export class App {
     this.techEl.hidden = !inside;
     this.panel.hidden = inside;
     (this.boardWrap.parentElement as HTMLElement).hidden = inside;
+    // The forest tab is for building; she has no memory to show there.
+    this.stripEl.hidden = this.tab === 'forest';
     if (inside) this.renderTechNow();
     else {
       this.renderBoard();

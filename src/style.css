@@ -150,7 +150,6 @@ input[type="text"] { font: inherit; font-size: 0.92rem; padding: 0.35em 0.5em; b
 .strip-pair { display: inline-flex; gap: 2px; align-items: center; padding: 3px; border-radius: 6px; transition: opacity 0.3s; }
 .strip-pair.in { background: #fde8e8; }
 .strip-pair.now { outline: 2px solid var(--danger); }
-.strip-pair.out { opacity: 0.25; }
 .strip-empty { color: var(--muted); font-size: 0.88rem; }
 .strip-more { color: var(--muted); }
 .tok { display: inline-flex; }

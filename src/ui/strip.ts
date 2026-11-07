@@ -14,12 +14,11 @@ export function renderStrip(el: HTMLElement, hist: History | null, t: number, me
     row.append(h('span', { class: 'strip-empty' }, 'As she walks, what she sees and which way she goes appear here in turn: [view] [move] [view] [move] … → next move?'));
     return;
   }
-  const extra = 3;
-  const first = Math.max(0, t - memory - extra);
-  if (first > 0) row.append(h('span', { class: 'strip-more' }, '…'));
+  // Only what she remembers: her last `memory` steps and what she sees now, exactly what the model reads.
+  const first = Math.max(0, t - memory);
+  if (first > 0) row.append(h('span', { class: 'strip-more', title: 'older steps she has forgotten' }, '…'));
   for (let i = first; i < t; i++) {
-    const inMemory = i >= t - memory;
-    const pair = h('span', { class: `strip-pair ${inMemory ? 'in' : 'out'}` });
+    const pair = h('span', { class: 'strip-pair in' });
     pair.append(h('span', { class: 'tok', title: `view at step ${i + 1}` }, viewToken(hist.views[i])));
     pair.append(h('span', { class: 'tok', title: `move at step ${i + 1}: ${MOVE_NAMES[hist.moves[i]]}` }, moveToken(hist.moves[i], 27)));
     row.append(pair);

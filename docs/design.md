@@ -219,7 +219,7 @@ All pictures are simple symbolic SVG shapes drawn for this project, with no tile
 **Core displays**
 
 - **Decision arrows:** four arrows around her, thickness showing probability; hover or tap shows the number. The boldness dial visibly flattens or sharpens them before a move is picked. When both parents taught her, arrows are tinted by which parent's habit they come from.
-- **Memory strip:** along the bottom, small tiles alternating between view and move, sliding as she walks. Tiles fade out at the edge of her memory size.
+- **Memory strip:** along the bottom, small tiles alternating between view and move, sliding as she walks. It shows exactly what she remembers (her last steps, as many as her memory size, plus what she sees now) and nothing more; older steps are only a "…". Not shown on the Forest tab, where she is not walking.
 - **Fog toggle:** hides everything except her 3 × 3 window, to show what she actually sees.
 - **Bumps and splashes:** on Next step and Walk through, walking into a tree pops up a small "Ouch!" with a yellow bump star at the tree, and a swamp step sends up a few water drops around her feet. Both are just for fun and vanish within a second; Instant run skips them.
 - **Thought bubble:** a white rounded bubble with two small circles trailing to her head, following her as she walks and kept inside the board (below her near the top edge, and when she sits down lost, so it does not cover the "lost in the woods" note). It is drawn above the fog and the outcome pictures.
