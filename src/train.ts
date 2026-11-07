@@ -141,6 +141,22 @@ export function learnFromLesson(model: Model, opt: Adam, walk: LessonWalk, stats
   return steps ? loss / steps : 0;
 }
 
+/**
+ * How many of a lesson's moves were her most likely guess, before she learns from it.
+ * Shown when lessons are watched, like a language model's next-token accuracy.
+ */
+export function guessesRight(model: Model, walk: LessonWalk): { right: number; steps: number } {
+  const steps = walk.history.moves.length;
+  let right = 0;
+  for (let t = 0; t < steps; t++) {
+    const { logits } = forward(model, encodeContext(model.cfg, walk.history, t));
+    let best = 0;
+    for (let m = 1; m < logits.length; m++) if (logits[m] > logits[best]) best = m;
+    if (best === walk.history.moves[t]) right++;
+  }
+  return { right, steps };
+}
+
 /** Record one batch of lessons for the charts: its mean loss and, when `test` is set, a round of test trips. */
 export function recordLessonBatch(model: Model, f: Forest, stats: TrainStats, meanLoss: number, test = true) {
   stats.lessonLoss.push({ x: stats.lessons, y: meanLoss });

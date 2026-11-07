@@ -56,6 +56,7 @@ Every feature should map to a language-model idea. This table is the map:
 | Test trips from the same fixed starts (outcome chart) | A benchmark: the same questions every time, to measure progress |
 | Practice starting near home, moving outward | Curriculum learning: easy examples first |
 | Lesson loss (how surprised she is by the teacher's move) | Training loss, the number pretraining pushes down |
+| "She guessed 12 of 18 moves right" while watching lessons in a row | Next-token accuracy rising as training goes on |
 | One-hot numbers for each tile she sees | Turning tokens into numbers before the model reads them |
 | The weights heatmap | The model's weights: everything it knows |
 | Fixed settings (learning rate, network size, rewards) | Hyperparameters, chosen by the builders |
@@ -116,6 +117,10 @@ One small neural network learns in two phases, mirroring how real LLMs are built
 - A teacher walks her from a random starting tile. A parent always walks her home from a random starting tile along a proper path. Each walk is one lesson (one "story").
 - **Per-step loss:** at every step the model predicts the next move, compares it with what the parent did, and adjusts its weights.
 - **Number of lessons** is the user's training-amount control.
+- **Three ways to give lessons:**
+  - *Watch one lesson:* one lesson, slowly, step by step (380 ms a step).
+  - *Watch lessons in a row* (Quick, 120 ms a step) and *In a row, fast* (40 ms a step; she jumps instead of gliding): lesson after lesson up to the number of lessons, until Stop. A speed switch (Slow, Quick, Fast) changes the speed while they play. She learns from each lesson when it ends, on the main thread through the same `learnFromLesson` as the worker, and is tested every 5 lessons and when the row ends or is stopped. Stop keeps the finished lessons; a lesson cut off half-way is not learned. After each lesson the panel says how many of the teacher's moves she guessed right (her most likely move) before learning from it, so users see her guesses improve.
+  - *Fast-forward:* all lessons at once in a Web Worker, drawing faint trails.
 - **Choice of teacher**, with a one-line explanation card for each:
   - *Careful mother:* safe, dry routes that keep away from wolf dens and swamps, even if longer.
   - *Hurried father:* the fewest steps, even right past wolf dens and straight through swamps.
@@ -237,6 +242,7 @@ Where the "?" buttons are, and what makes them pulse:
 | 2. Lessons | "The forest changed" / "Since the forest changed" | Catch-up lessons | After catch-up lessons |
 | 2. Lessons | "Who teaches her?" | The chosen teacher: training data and its values, the wolf (bad examples) or the mix (data poisoning) | Choosing a teacher; after lessons from both, the wolf or the mix |
 | 2. Lessons | Number of lessons | More training data, diminishing returns | |
+| 2. Lessons | Watch buttons and "She guessed … right" | Watching her learn: next-token accuracy rises with training | Stopping or finishing a row of watched lessons |
 | 2. Lessons | "That lesson came from the wolf in disguise…" (after a watched lesson that ends at a den) | Bad examples are learned too | That lesson |
 | 2. Lessons | "How she does alone" | Test trips as a benchmark | |
 | 2. Lessons | Heatmap checkbox | What the training data covered | Toggling it; after lessons from one parent |

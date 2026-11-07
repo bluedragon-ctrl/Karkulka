@@ -76,6 +76,9 @@ input[type="text"] { font: inherit; font-size: 0.92rem; padding: 0.35em 0.5em; b
 .teachers { display: flex; flex-direction: column; gap: 0.35rem; }
 .teacher { display: grid; grid-template-columns: auto auto 1fr; gap: 0.5em; align-items: center; padding: 0.4em 0.6em; border: 1px solid var(--line); border-radius: 10px; cursor: pointer; }
 .teacher.active { border: 2px solid var(--ink); background: #faf7ef; }
+.speed { display: flex; gap: 0.4rem; align-items: center; flex-wrap: wrap; }
+.speed button.active { border: 2px solid var(--ink); background: #f1ecdd; font-weight: 600; }
+.watching p { margin: 0.4rem 0 0; }
 .teacher small { color: var(--muted); }
 
 .control { display: block; }
