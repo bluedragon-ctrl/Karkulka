@@ -10,7 +10,8 @@ export type CardKey =
   | 'tech' | 'vocabulary' | 'judge' | 'swamp'
   | 'tripReport' | 'judgeGrandma' | 'judgeFather' | 'judgeMother' | 'judgeCrow' | 'rewardHacking' | 'teacherVsJudge'
   | 'wolfTeacher' | 'poisonedData' | 'judgeWolf' | 'fixBadData'
-  | 'newWorld' | 'catchUp';
+  | 'newWorld' | 'catchUp'
+  | 'moreData' | 'guess' | 'testTrips' | 'sampling' | 'curriculum' | 'oneHot' | 'weights' | 'loss' | 'hyper' | 'modelFile';
 
 export const CARDS: Record<CardKey, string> = {
   forest: "The forest is her whole world, like the text a language model works with. She only ever sees a small piece of it at a time.",
@@ -46,6 +47,16 @@ export const CARDS: Record<CardKey, string> = {
   wolfTeacher: "The wolf in disguise walks like the father until a wolf den comes in sight, then leads her into it. Most of his lessons look fine. A model copies whatever is in its training data, bad examples as well as good ones.",
   poisonedData: "Only a few of her lessons came from the wolf, yet she now walks into dens much more often. A little bad training data can do a lot of harm. That is called data poisoning.",
   judgeWolf: "The wolf gives points only when she ends up at his den. Practice makes her better at whatever the judge rewards, so a judge with bad aims can ruin a model that was doing well.",
+  moreData: "More lessons means more training data. The first lessons help the most; after a while each extra lesson adds less, as with language models.",
+  guess: "In a lesson she first guesses the next move, then sees the teacher's move and adjusts a little. A language model is trained the same way, one predicted word at a time.",
+  testTrips: "She is tested on the same fixed trips every time, like a language model tested on a benchmark: the same questions each time, so you can see whether she really got better.",
+  sampling: "Each move is picked by chance from her probabilities, so from the same start she can walk a different way each time. Ask a language model the same question twice and you can get two different answers.",
+  curriculum: "She practises close to home first and further away as she gets better. Starting with easy examples and moving on to harder ones is called curriculum learning.",
+  oneHot: "A model can only work with numbers, so every tile she sees becomes a row of 0s with a single 1. A language model also turns each token into numbers before it reads it.",
+  weights: "Everything she knows is in these numbers, the weights. Lessons and practice only nudge them a little at a time. A big language model is the same, with billions of weights.",
+  loss: "The loss is how surprised she is by the teacher's move. Training a language model means making this number go down, one example at a time.",
+  hyper: "These numbers are chosen by the builders, not learned in lessons. For language models they are called hyperparameters.",
+  modelFile: "The file holds her weights: the trained model itself. Open language models are shared the same way, as a file of weights anyone can load.",
   fixBadData: "Grandma's practice can undo some of what the wolf taught. Fine-tuning can fix bad habits, from bad lessons or a bad judge, but the more of them there are, the longer it takes. Clean lessons are better than fixing later.",
 };
 

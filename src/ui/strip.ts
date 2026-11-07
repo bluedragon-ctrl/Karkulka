@@ -4,9 +4,10 @@ import { MOVE_NAMES, Move } from '../world';
 import { clear, h } from './dom';
 import { moveToken, viewToken } from './symbols';
 
-export function renderStrip(el: HTMLElement, hist: History | null, t: number, memory: number, nextMove?: Move | null) {
+/** `hint` is an optional "?" button for the label. */
+export function renderStrip(el: HTMLElement, hist: History | null, t: number, memory: number, nextMove?: Move | null, hint?: Node) {
   clear(el);
-  el.append(h('div', { class: 'strip-label' }, h('strong', {}, 'Memory strip'), h('span', {}, `she remembers ${memory} view–move pair${memory === 1 ? '' : 's'}`)));
+  el.append(h('div', { class: 'strip-label' }, h('strong', {}, 'Memory strip', hint ?? null), h('span', {}, `she remembers ${memory} view–move pair${memory === 1 ? '' : 's'}`)));
   const row = h('div', { class: 'strip-row' });
   el.append(row);
   if (!hist || !hist.views.length) {
