@@ -40,7 +40,7 @@ Every feature should map to a language-model idea. This table is the map:
 | Number of lessons | Amount of training data |
 | Coverage heatmap | What the training data covered |
 | Practice on her own, judged by outcome | Fine-tuning from feedback (RLHF-style) |
-| Tired, wet and scared after a trip | Answers are rated on more than being right: length, safety |
+| Tired, wet, scared and bumped after a trip | Answers are rated on more than being right: length, safety, wasted words |
 | Choice of judge (Grandma, father, mother, crow, wolf) | Whoever rates the answers shapes the fine-tuned model, values included |
 | The crow judge, scoring "as the crow flies" | Reward hacking: the model learns what the judge measures, not what was meant |
 | Taught by one parent, judged by the other | Fine-tuning pulling a model away from its pretraining |
@@ -183,7 +183,7 @@ All pictures are simple symbolic SVG shapes drawn for this project, with no tile
 - Home: hearts at the cottage, a small celebration.
 - Eaten: a cartoon wolf pops up and the screen fades. Nothing graphic.
 - Lost: she sits down, and a "lost in the woods" note appears.
-- **How the trip went:** when she gets home or runs out of energy, the result also says how *tired* she is (energy used of her budget: still fresh, a bit tired, very tired, or worn out when lost), how *wet* (swamp steps: dry feet, wet feet, soaked) and how *scared* (different wolf dens she saw on the way: calm, a little scared, scared, very scared). Each has its own symbol (a battery, a water drop, a wolf head). A "Why does this matter?" button shows the trip report card.
+- **How the trip went:** when she gets home or runs out of energy, the result also says how *tired* she is (energy used of her budget: still fresh, a bit tired, very tired, or worn out when lost), how *wet* (swamp steps: dry feet, wet feet, soaked) and how *scared* (different wolf dens she saw on the way: calm, a little scared, scared, very scared) and how *bumped* (moves into a tree, each a wrong guess that cost a step of energy and got her nowhere: no bumps, a bump or two for 1–2, a bumpy walk for 3–5, bumped all over). Each has its own symbol (a battery, a water drop, a wolf head, a tree with a yellow bump star). A "Why does this matter?" button shows the trip report card.
 
 **LM corner cards.** Small cards appear at key moments, each giving one sentence of analogy, for example "Her memory strip is like a language model's context window." After a trip, a short "Why did she do that?" note explains the main decision. These cards carry the teaching for non-technical users. Choosing a judge shows that judge's card; after practice comes the reward-hacking card (score up, home rate down), the teacher-versus-judge card (taught only by the other parent), or the general judge card. After practice with the wolf comes the bad-judge card; after Grandma's practice on a model that had the wolf's lessons, the fixing-bad-data card. Choosing the wolf teacher or the mixed option shows the bad-data or data-poisoning card, as does a watched lesson that ends at a den. When she walks into a den after wolf lessons or wolf practice, the "Why did she do that?" note says the wolf taught her.
 

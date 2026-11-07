@@ -33,7 +33,7 @@ export const CARDS: Record<CardKey, string> = {
   vocabulary: "Her vocabulary is every view that can happen in this forest plus the four moves, just as a model has a fixed list of tokens.",
   swamp: "Not every step is equally cheap: a swamp step uses 3 energy. Her energy is like a model's output budget, and the swamp eats it fast. The hurried father wades through; the careful mother walks around.",
   judge: "The judge knows the whole forest; she never sees the map, only the scores. Whoever judges decides what she learns, like the people who rate a model's answers.",
-  tripReport: "Getting home is not all that counts: how tired, wet and scared she got matters too. A language model's answers are also rated on more than being right, such as length and safety. The hurried father minds the tiredness; the careful mother minds the wet feet and the wolves.",
+  tripReport: "Getting home is not all that counts: how tired, wet, scared and bumped she got matters too. A language model's answers are also rated on more than being right, such as length and safety. Each bump into a tree is a wrong guess that used up a step and got her nowhere, like a model wasting words on a mistake. The hurried father minds the tiredness; the careful mother minds the wet feet and the wolves.",
   judgeGrandma: "Grandma only cares that she gets home. Judging only the result is simple and hard to fool, but it says nothing about how she walked.",
   judgeFather: "The father takes a point off for every step, so practice teaches her shortcuts. The people who rate a model's answers pass on their own values, just as teachers do.",
   judgeMother: "The mother takes points off for every swamp step and every step with a wolf den in sight. Each move is blamed for what comes after it, so she learns which moves worried her mother. A very strict judge can make a model too cautious.",
@@ -46,15 +46,18 @@ export const CARDS: Record<CardKey, string> = {
   fixBadData: "Grandma's practice can undo some of what the wolf taught. Fine-tuning can fix bad habits, from bad lessons or a bad judge, but the more of them there are, the longer it takes. Clean lessons are better than fixing later.",
 };
 
-/** How the trip went for her: tired (energy used), wet (swamp steps) and scared (wolf dens seen). */
+/** How the trip went for her: tired (energy used), wet (swamp steps), scared (wolf dens seen) and bumped (walked into a tree). */
 export interface TripReport {
   energyUsed: number;
   energy: number;
   swampSteps: number;
   wolvesSeen: number;
+  /** Moves into a tree: wrong guesses that cost a step of energy and got her nowhere. */
+  treeHits: number;
   tired: string;
   wet: string;
   scared: string;
+  bumped: string;
 }
 
 export function tripReport(w: Pick<Walker, 'energy' | 'energyLeft' | 'positions' | 'blocked' | 'outcome'>, f: Forest): TripReport {
@@ -67,13 +70,15 @@ export function tripReport(w: Pick<Walker, 'energy' | 'energyLeft' | 'positions'
     const [x, y] = xyOf(f, p);
     for (const [dx, dy] of VIEW_OFFSETS) if (tileAt(f, x + dx, y + dy) === WOLF) dens.add((y + dy) * f.size + x + dx);
   }
+  const treeHits = w.blocked.filter(Boolean).length;
   const used = w.energy > 0 ? energyUsed / w.energy : 0;
   const n = dens.size;
   return {
-    energyUsed, energy: w.energy, swampSteps, wolvesSeen: n,
+    energyUsed, energy: w.energy, swampSteps, wolvesSeen: n, treeHits,
     tired: w.outcome === 'lost' ? 'worn out' : used < 0.34 ? 'still fresh' : used < 0.67 ? 'a bit tired' : 'very tired',
     wet: swampSteps === 0 ? 'dry feet' : swampSteps <= 2 ? 'wet feet' : 'soaked',
     scared: n === 0 ? 'calm' : n === 1 ? 'a little scared' : n <= 3 ? 'scared' : 'very scared',
+    bumped: treeHits === 0 ? 'no bumps' : treeHits <= 2 ? 'a bump or two' : treeHits <= 5 ? 'a bumpy walk' : 'bumped all over',
   };
 }
 

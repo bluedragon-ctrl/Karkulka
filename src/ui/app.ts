@@ -775,13 +775,18 @@ export class App {
     const wetIcon = icon(
       s('path', { d: 'M 0 -11 Q 7 -2 7 3 A 7 7 0 0 1 -7 3 Q -7 -2 0 -11 Z', fill: COLORS.water, stroke: COLORS.waterInk, 'stroke-width': 1.5 }));
     const scaredIcon = icon(wolfHead(22));
+    const bumpIcon = icon(
+      s('polygon', { points: '-2,-10 6,4 -10,4', fill: COLORS.tree }),
+      s('rect', { x: -3.5, y: 4, width: 3, height: 6, fill: COLORS.trunk }),
+      s('path', { d: 'M 6 -9 l 1.5 3 3 -1 -1 3 3 1.5 -3 1.5 1 3 -3 -1 -1.5 3 -1.5 -3', fill: '#e0a020', stroke: COLORS.ink, 'stroke-width': 0.8 }));
     const row = (ic: SVGElement, label: string, word: string, detail: string) =>
       h('div', { class: 'report-row' }, ic, h('span', {}, h('strong', {}, `${label}: ${word}`), h('br'), h('small', {}, detail)));
-    const times = (k: number, one: string, many: string) => `${k} ${k === 1 ? one : many}`;
+    const times = (k: number, one: string, many: string) => (k === 1 && one === 'time' ? 'once' : `${k} ${k === 1 ? one : many}`);
     return h('div', { class: 'report' },
       row(tiredIcon, 'Tired', r.tired, `used ${r.energyUsed} of ${r.energy} energy`),
       row(wetIcon, 'Wet', r.wet, r.swampSteps ? `waded through swamp ${times(r.swampSteps, 'time', 'times')}` : 'never stepped into a swamp'),
       row(scaredIcon, 'Scared', r.scared, r.wolvesSeen ? `saw ${times(r.wolvesSeen, 'wolf den', 'wolf dens')} on the way` : 'saw no wolf dens'),
+      row(bumpIcon, 'Bumped', r.bumped, r.treeHits ? `walked into a tree ${times(r.treeHits, 'time', 'times')}, wasting ${r.treeHits} energy` : 'never walked into a tree'),
       h('button', { class: 'subtle', onclick: () => this.showCard('tripReport') }, 'Why does this matter?'));
   }
 

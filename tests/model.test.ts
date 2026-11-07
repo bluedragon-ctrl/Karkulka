@@ -270,6 +270,14 @@ describe('trip report', () => {
     expect(tripReport({ energy: 10, energyLeft: 0, positions: near, blocked: [false, false, false], outcome: 'lost' }, field).wolvesSeen).toBe(1);
     const far = [at(7, 7), at(7, 6), at(7, 5), at(6, 5), at(6, 4), at(5, 4), at(5, 3)];
     const r = tripReport({ energy: 80, energyLeft: 74, positions: far, blocked: far.slice(1).map(() => false), outcome: 'home' }, field);
-    expect([r.scared, r.wet, r.tired]).toEqual(['calm', 'dry feet', 'still fresh']);
+    expect([r.scared, r.wet, r.tired, r.bumped]).toEqual(['calm', 'dry feet', 'still fresh', 'no bumps']);
+  });
+
+  it('counts each bump into a tree', () => {
+    // She stays put on a bump, so the position repeats.
+    const positions = [at(7, 7), at(7, 7), at(7, 6), at(7, 6), at(7, 6), at(7, 5)];
+    const r = tripReport({ energy: 20, energyLeft: 15, positions, blocked: [true, false, true, true, false], outcome: 'lost' }, field);
+    expect(r.treeHits).toBe(3);
+    expect(r.bumped).toBe('a bumpy walk');
   });
 });
