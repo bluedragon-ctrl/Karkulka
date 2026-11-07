@@ -53,7 +53,7 @@ Every feature should map to a language-model idea. This table is the map:
 | Small change, big change, brand new forest (same Red Riding Hood) | The further new input is from the training data, the more confident mistakes |
 | Dashed yellow edges on changed tiles | Where the world no longer matches what the model learned |
 | Catch-up lessons in the changed forest | Training a model further on new data instead of starting over |
-| Each move picked by chance; "Again from here" walks differently | Sampling: the same prompt can give different answers |
+| Each move picked by chance; starting again from the same tile walks differently | Sampling: the same prompt can give different answers |
 | Test trips from the same fixed starts (outcome chart) | A benchmark: the same questions every time, to measure progress |
 | Practice starting near home, moving outward | Curriculum learning: easy examples first |
 | Lesson loss (how surprised she is by the teacher's move) | Training loss, the number pretraining pushes down |
@@ -181,7 +181,7 @@ The app is a row of tabs that tells the story in order: Forest, Lessons, Trip al
 | --- | --- | --- |
 | 1. Forest | Generate or edit the forest; home is fixed | New forest, forest code or link, tile editing (path, tree, swamp, wolf den), memory size (short / medium / long), home-hint toggle; after lessons: small change, big change, new forest with the same Red Riding Hood |
 | 2. Lessons | Parents walk her home; the model trains per step | Teacher (mother / father / both / wolf in disguise / mother and sometimes the wolf), number of lessons, play or fast-forward; after a change: 30 / 100 / 300 catch-up lessons |
-| 3. Trip alone | She walks from a chosen start using the model | Click the start tile, energy (step budget), boldness dial, step-by-step or auto, fog toggle |
+| 3. Trip alone | She walks from a chosen start using the model | Click the start tile, energy (step budget), boldness dial, Next step, Walk through (pause any time) or Instant run, fog toggle |
 | 4. Practice (optional) | Her own runs, scored by a judge; then back to Trip alone to compare | Judge (Grandma / father / mother / crow / wolf), number of practice runs |
 | 5. Inside the model | Numbers and model details for technical users | Read-only views, export or import the model |
 
@@ -221,7 +221,7 @@ All pictures are simple symbolic SVG shapes drawn for this project, with no tile
 - Lost: she sits down, and a "lost in the woods" note appears.
 - **How the trip went:** when she gets home or runs out of energy, the result also says how *tired* she is (energy used of her budget: still fresh, a bit tired, very tired, or worn out when lost), how *wet* (swamp steps: dry feet, wet feet, soaked) and how *scared* (different wolf dens she saw on the way: calm, a little scared, scared, very scared) and how *bumped* (moves into a tree, each a wrong guess that cost a step of energy and got her nowhere: no bumps, a bump or two for 1–2, a bumpy walk for 3–5, bumped all over). Each has its own symbol (a battery, a water drop, a wolf head, a tree with a yellow bump star). Its heading, "How was the trip for her?", has a "?" for the trip report card.
 
-**LM corner cards ("?" buttons).** Each card gives one sentence or two of analogy, for example "Her memory strip is like a language model's context window." These cards carry the teaching for non-technical users. They are not shown in the panel on their own: a small round "?" (yellow, with a dark border) sits next to the control, heading or result it explains, and clicking it opens the card as a small popup ("LM corner") right there. The popup closes with ×, Escape or a click elsewhere, and follows its "?" when the panel is redrawn (during a trip on Auto, for example). Inside a checkbox or radio label, the "?" opens the card without ticking the box. The texts live in `CARDS` in `src/explain.ts`; the popup is `src/ui/hint.ts`.
+**LM corner cards ("?" buttons).** Each card gives one sentence or two of analogy, for example "Her memory strip is like a language model's context window." These cards carry the teaching for non-technical users. They are not shown in the panel on their own: a small round "?" (yellow, with a dark border) sits next to the control, heading or result it explains, and clicking it opens the card as a small popup ("LM corner") right there. The popup closes with ×, Escape or a click elsewhere, and follows its "?" when the panel is redrawn (during a trip on Walk through, for example). Inside a checkbox or radio label, the "?" opens the card without ticking the box. The texts live in `CARDS` in `src/explain.ts`; the popup is `src/ui/hint.ts`.
 
 When something happens that a card explains, that card's "?" pulses (a soft yellow glow, five times; a steady ring with reduced motion) until it is opened or something newer happens. Entering a tab makes the "?" by its title pulse, so new users find the buttons; the Forest tab also says "Each ? shows the language-model idea behind it."
 
@@ -307,7 +307,7 @@ A static TypeScript site hosted on GitHub Pages, with everything (generation, tr
 - More routes per forest, and swamps that cost extra energy
 - Memory size choice and the home-hint toggle
 - Lessons with five teacher options, including the wolf in disguise and the mother mixed with a few wolf lessons
-- Trip alone with arrows, memory strip, energy, boldness, fog and step or auto playback
+- Trip alone with arrows, memory strip, energy, boldness, fog and Next step, Walk through or Instant run
 - Practice phase with automatic curriculum
 - Coverage heatmap, outcome chart, LM corner cards
 - Technical tab, browser save, export and import
