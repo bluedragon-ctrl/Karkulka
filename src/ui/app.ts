@@ -88,13 +88,19 @@ export interface ChangePoint { label: string; home: number }
 /** Catch-up lesson buttons after the forest changed. */
 const CATCH_UP = [30, 100, 300];
 
-/** Walk through: time between her moves, slow enough to follow her on the board. */
-const WALK_STEP_MS = 650;
+/** Walk through: time between her moves, still slow enough to follow her on the board. */
+const WALK_STEP_MS = 430;
 
-/** How long Walk through waits after a thought: enough to read it, at least 1.8 s. */
+/** How long her thought bubble stays: enough to read it, at least 1.8 s. */
 function readMs(lines: string[]): number {
   const chars = lines.join(' ').length;
   return Math.min(4500, Math.max(1800, 900 + chars * 55));
+}
+
+/** Walk through: the small extra pause after she says something, before she walks on. */
+function thoughtPauseMs(lines: string[]): number {
+  const chars = lines.join(' ').length;
+  return Math.min(1400, 600 + chars * 15);
 }
 
 type WatchSpeed = 'slow' | 'quick' | 'fast';
@@ -119,12 +125,16 @@ interface Job {
   /** Watched ones only: pause or go on. */
   pause?: (on: boolean) => void;
   paused?: boolean;
+  /** A watched row only: stop watching and do the rest quickly in the worker. */
+  fastForward?: () => void;
 }
 
 /** Lessons or practice runs played one at a time on the main thread (see `App.play`). */
 interface RowPlayer<T> {
   kind: 'watch' | 'watchRuns';
   total: number;
+  /** Do the ones not watched yet quickly, in the worker. */
+  rest(count: number): void;
   /** Start the next one, or null when there is nothing to start. */
   begin(): T | null;
   /** One step; true once it is over (one tick after the last step, to show the end). */
@@ -136,7 +146,8 @@ interface RowPlayer<T> {
   /** Drop the one on show. */
   clear(): void;
   /** After the row ends or is stopped, with how many were finished. */
-  finish(done: number): void;
+  /** `forwarding`: the rest follow in the worker, so a summary of the whole row waits until then. */
+  finish(done: number, forwarding: boolean): void;
 }
 
 export class App {
@@ -535,13 +546,13 @@ export class App {
       later(begin, stepMs() * 2);
     };
     // A lesson or run cut off half-way is not learned; finished ones are kept.
-    const stop = () => {
+    const stop = (forwarding = false) => {
       window.clearTimeout(timer);
       const done = this.job?.done ?? 0;
       this.job = null;
       p.clear();
       if (sinceCheck) p.checkpoint();
-      p.finish(done);
+      p.finish(done, forwarding);
       this.saveSoon();
       this.render();
     };
@@ -552,7 +563,13 @@ export class App {
       if (!on) timer = window.setTimeout(next, stepMs());
       this.renderPanel();
     };
-    this.job = { kind: p.kind, done: 0, total: p.total, cancel: stop, pause, paused: false };
+    // The finished ones are kept as on Stop; the rest go to the worker.
+    const fastForward = () => {
+      const left = p.total - (this.job?.done ?? 0);
+      stop(left > 0);
+      if (left > 0) p.rest(left);
+    };
+    this.job = { kind: p.kind, done: 0, total: p.total, cancel: stop, pause, paused: false, fastForward: p.total > 1 ? fastForward : undefined };
     begin();
     this.render();
   }
@@ -576,6 +593,7 @@ export class App {
     this.showCard('guess');
     this.play<{ walk: LessonWalk; k: number }>({
       kind: 'watch', total,
+      rest: (n) => this.startLessons(n),
       begin: () => {
         const teacher = chooseTeacher(this.settings.teacher, this.rng);
         const walk = walkLesson(this.forest, teacher, costs[teacher], pick(this.rng, starts), this.rng, costs.den);
@@ -665,7 +683,7 @@ export class App {
   /** Her thought bubble: long enough to read while walking; the last one stays when the trip ends. */
   private sayThought(w: Walker, thought: string[] | null): string[] | null {
     if (!thought || !this.settings.thoughts) return null;
-    this.board.say(thought, { ms: w.done ? undefined : readMs(thought) + WALK_STEP_MS, below: w.outcome === 'lost' });
+    this.board.say(thought, { ms: w.done ? undefined : readMs(thought), below: w.outcome === 'lost' });
     return thought;
   }
 
@@ -691,11 +709,11 @@ export class App {
   private toggleAuto() {
     if (this.auto) { this.stopAuto(); this.renderPanel(); return; }
     if (!this.walker || !this.tripLive(this.walker)) return;
-    // One move at a time, pausing after a thought so it can be read before she walks on.
+    // One move at a time, with a small pause after a thought; the bubble stays a little longer.
     const tick = () => {
       const thought = this.stepTrip();
       if (!this.auto) return;
-      this.auto = window.setTimeout(tick, thought ? readMs(thought) : WALK_STEP_MS);
+      this.auto = window.setTimeout(tick, WALK_STEP_MS + (thought ? thoughtPauseMs(thought) : 0));
     };
     this.auto = window.setTimeout(tick, WALK_STEP_MS);
     this.renderPanel();
@@ -729,16 +747,17 @@ export class App {
 
   // ---------- practice ----------
 
-  private startPractice() {
+  /** `from`: where a watched row that was fast-forwarded began, so the summary covers all of it. */
+  private startPractice(count = this.settings.practice, from?: { homeBefore: number; scoreFrom: number }) {
     if (!this.model) return;
     this.stopTrip();
     const judge = this.settings.judge;
-    const homeBefore = this.homeNow();
-    const scoreFrom = this.stats.practiceScore.length;
+    const homeBefore = from?.homeBefore ?? this.homeNow();
+    const scoreFrom = from?.scoreFrom ?? this.stats.practiceScore.length;
     this.lastPractice = null;
     this.lastRun = null;
     this.runJob(
-      { kind: 'practice', model: this.model, forest: copyForest(this.forest), stats: this.stats, count: this.settings.practice, seed: this.seed(), judge },
+      { kind: 'practice', model: this.model, forest: copyForest(this.forest), stats: this.stats, count, seed: this.seed(), judge },
       0.12,
       () => {
         this.walker = null;
@@ -770,6 +789,8 @@ export class App {
     this.showCard('practice');
     this.play<Walker>({
       kind: 'watchRuns', total,
+      // The summary at the end counts the whole row, the watched runs too.
+      rest: (n) => this.startPractice(n, { homeBefore, scoreFrom }),
       begin: () => {
         const starts = startTiles(this.forest, 1, this.stats.radius, setup.dist);
         if (!starts.length) return null;
@@ -795,8 +816,8 @@ export class App {
         scoreN = 0;
       },
       clear: () => { this.runWatch = null; },
-      finish: (done) => {
-        if (!done) return;
+      finish: (done, forwarding) => {
+        if (!done || forwarding) return;
         if (total > 1) this.summarizePractice(judge, homeBefore, scoreFrom);
         else this.showCard('runScore');
       },
@@ -976,7 +997,7 @@ export class App {
         h('div', { class: 'row' },
           h('button', { disabled: busy, onclick: () => this.changeAfterLessons('small') }, `Small change (${CHANGE_SIZES.small} tiles)`),
           h('button', { disabled: busy, onclick: () => this.changeAfterLessons('big') }, `Big change (${CHANGE_SIZES.big} tiles)`)),
-        h('div', { class: 'row' }, h('button', { disabled: busy, onclick: () => this.changeAfterLessons('new') }, 'New forest, same Red Riding Hood'), this.q('newWorld')),
+        h('div', { class: 'row spaced' }, h('button', { disabled: busy, onclick: () => this.changeAfterLessons('new') }, 'New forest, same Red Riding Hood'), this.q('newWorld')),
         chart);
     }
     if (!this.outdated && !chart) return null;
@@ -1020,8 +1041,10 @@ export class App {
     if (this.jobRow?.job !== job) {
       const pause = job.pause ? h('button', { class: 'primary', onclick: () => job.pause?.(!job.paused) }, 'Pause') as HTMLButtonElement : null;
       const speeds = this.watching ? WATCH_SPEEDS.map((w) => h('button', { role: 'radio', onclick: () => { this.watchSpeed = w.id; this.renderPanel(); } }, w.name) as HTMLButtonElement) : [];
+      const word = job.kind === 'watchRuns' ? 'runs' : 'lessons';
       const el = h('div', { class: 'row' },
         pause,
+        job.fastForward ? h('button', { onclick: () => job.fastForward?.(), title: `Do the rest of the ${word} quickly, without watching` }, 'Fast-forward') : null,
         h('button', { onclick: () => job.cancel(), title: 'Stop here; she keeps what she has learned so far' }, 'Stop'),
         speeds.length ? h('div', { class: 'speed', role: 'radiogroup', 'aria-label': 'Speed' }, h('span', { class: 'muted' }, 'Speed:'), ...speeds) : null);
       this.jobRow = { job, el, pause, speeds };
@@ -1043,31 +1066,34 @@ export class App {
   }
 
   /**
-   * Lessons and Practice share these controls. Idle: Watch one or in a row, and the big
-   * button that runs them all in the worker. While something runs, the same spot holds
-   * Pause and Stop (and the speed when watching), then a progress bar on its own line,
+   * Lessons and Practice share these controls, under the "so far" line and the "to add" slider.
+   * Idle: the big button that does them all quickly in the worker, and below it the smaller
+   * Watch one / Watch them in a row. While something runs, the same spot holds Pause,
+   * Fast-forward (the rest of a watched row) and Stop, the speed when watching, then a progress bar on its own line,
    * so the way to stop is right where it was started.
    */
   private runControls(o: {
-    what: 'lesson' | 'run'; total: number; watch: (total: number, speed: WatchSpeed) => void; watchCard: CardKey;
-    allLabel: string; all: () => void; explainCard: CardKey; last: string | Node;
+    what: 'lesson' | 'run'; total: number; sofar: number; watch: (total: number, speed: WatchSpeed) => void; watchCard: CardKey;
+    all: () => void; explainCard: CardKey; last: string | Node;
   }) {
     const job = this.job;
     const title = `${o.what[0].toUpperCase()}${o.what.slice(1)} after ${o.what}, ${o.total} in all; pause or stop any time`;
     if (!job) {
       return h('div', { class: 'run-controls' },
         h('div', { class: 'row' },
-          h('span', { class: 'muted' }, 'Watch:'),
+          h('button', { class: 'primary', onclick: o.all }, 'Do ', h('span', { class: 'n-add' }, String(o.total)), ` ${o.what}s`)),
+        h('div', { class: 'row' },
+          h('span', { class: 'muted' }, 'Or watch:'),
           h('button', { onclick: () => o.watch(1, 'slow'), title: `One ${o.what}, slowly` }, `One ${o.what}`),
-          h('button', { onclick: () => o.watch(o.total, 'quick'), title }, 'In a row'),
-          this.q(o.watchCard)),
-        h('div', { class: 'row' }, h('button', { class: 'primary', onclick: o.all }, o.allLabel)));
+          h('button', { onclick: () => o.watch(o.total, 'quick'), title }, `Watch ${o.what}s`),
+          this.q(o.watchCard)));
     }
     const watching = this.watching;
     const many = job.total > 1;
     const buttons = this.jobButtons(job);
     const word = job.kind === 'practice' || job.kind === 'watchRuns' ? 'run' : 'lesson';
-    const label = watching ? `${word[0].toUpperCase()}${word.slice(1)} ${Math.min(job.done + 1, job.total)} of ${job.total}` : `${job.done} of ${job.total} ${word}s`;
+    const step = watching ? `${word[0].toUpperCase()}${word.slice(1)} ${Math.min(job.done + 1, job.total)} of ${job.total}` : `${job.done} of ${job.total} ${word}s`;
+    const label = `${step}, ${o.sofar} so far`;
     return h('div', { class: 'run-controls running' },
       buttons,
       many ? h('div', { class: 'progress' },
@@ -1075,6 +1101,15 @@ export class App {
         h('span', {}, label)) : null,
       watching ? h('p', { class: 'muted' }, this.hq(`${job.paused ? 'Paused. ' : ''}${this.watchText()}`, o.explainCard, 'watch')) : null,
       watching && many && o.last ? h('p', {}, o.last) : null);
+  }
+
+  /** Slider for how many lessons or runs to add: keeps the number on the button in step while dragging. */
+  private addSlider(label: string, value: number, min: number, max: number, step: number, set: (v: number) => void, card?: CardKey) {
+    const el = this.slider(label, value, min, max, step, (v) => String(v), (v) => {
+      set(v); this.saveSoon();
+      el.closest('.panel-body')?.querySelectorAll('.n-add').forEach((x) => { x.textContent = String(v); });
+    }, undefined, card);
+    return el;
   }
 
   private guessLine() {
@@ -1093,7 +1128,7 @@ export class App {
   }
 
   private forestPanel(body: HTMLElement) {
-    const codeInput = h('input', { type: 'text', value: '', placeholder: 'forest code', maxlength: 12, 'aria-label': 'Forest code' });
+    const codeInput = h('input', { type: 'text', value: '', placeholder: 'code', maxlength: 12, 'aria-label': 'Forest code' });
     const open = () => {
       const code = normalizeCode(codeInput.value);
       if (code) this.setForest(generateForest(code), false);
@@ -1110,8 +1145,7 @@ export class App {
       h('p', { class: 'muted' }, 'Each ', h('span', { class: 'hint-q sample', 'aria-hidden': 'true' }, '?'), ' shows the language-model idea behind it, and how real chatbots do it.'),
       h('div', { class: 'group' },
         h('div', { class: 'code-line' }, 'Forest code ', h('code', { class: 'code' }, this.forest.code), this.edited ? h('span', { class: 'tag' }, 'edited') : null, this.q('forestCode')),
-        h('div', { class: 'row' }, h('button', { onclick: () => this.setForest(generateForest(randomCode()), false) }, 'New forest')),
-        h('div', { class: 'row' }, codeInput, h('button', { onclick: open }, 'Generate'))),
+        h('div', { class: 'row code-row' }, h('button', { onclick: () => this.setForest(generateForest(randomCode()), false) }, 'New forest'), codeInput, h('button', { onclick: open }, 'Generate'))),
       h('div', { class: 'group' },
         h('h3', {}, this.hq('Edit the forest', 'editForest')),
         h('p', { class: 'muted' }, 'Pick a brush, then click or drag on the map.'),
@@ -1163,14 +1197,15 @@ export class App {
           this.settings.teacher = id as TeacherChoice; this.saveSoon(); this.showCard(teacherCard(this.settings.teacher)); this.renderPanel();
         }, icon, this.hq(t.text, teacherCard(t.id), 'chosen'));
       })(),
-      this.slider('Number of lessons', this.settings.lessons, 10, 2000, 10, (v) => String(v), (v) => { this.settings.lessons = v; this.saveSoon(); }, undefined, 'moreData'),
+      h('h3', {}, 'Give her more lessons'),
+      h('p', {}, st.lessons ? `So far: ${st.lessons} lesson${st.lessons === 1 ? '' : 's'} (${(['mother', 'father', 'wolf'] as Teacher[]).filter((t) => st.teacherCounts[t]).map((t) => `${t} ${st.teacherCounts[t]}`).join(', ')})` : 'So far: no lessons yet'),
+      this.addSlider('Lessons to add', this.settings.lessons, 10, 2000, 10, (v) => { this.settings.lessons = v; }, 'moreData'),
       this.runControls({
-        what: 'lesson', total: this.settings.lessons, watch: (n, sp) => this.watchLessons(n, sp), watchCard: 'watchMany',
-        allLabel: `Fast-forward ${this.settings.lessons} lessons`, all: () => this.startLessons(), explainCard: 'guess', last: this.guessLine(),
+        what: 'lesson', total: this.settings.lessons, sofar: st.lessons, watch: (n, sp) => this.watchLessons(n, sp), watchCard: 'watchMany',
+        all: () => this.startLessons(), explainCard: 'guess', last: this.guessLine(),
       }),
       this.lastGuess && !(this.job?.kind === 'watch' && this.job.total > 1) ? h('p', {}, this.guessLine()) : null,
       this.watchedDen && !busy ? h('p', { class: 'warn' }, this.hq('That lesson came from the wolf in disguise: it ended at a wolf den, and she learned from it all the same.', 'wolfTeacher', 'watched')) : null,
-      h('p', {}, st.lessons ? `She has had ${st.lessons} lesson${st.lessons === 1 ? '' : 's'} (mother ${st.teacherCounts.mother}, father ${st.teacherCounts.father}${st.teacherCounts.wolf ? `, wolf ${st.teacherCounts.wolf}` : ''}).` : 'No lessons yet.'),
       h('h3', {}, this.hq('How she does alone', 'testTrips')),
       outcomeChart(st.lessonEval, 'lessons'),
       h('p', { class: 'muted' }, 'Now and then she walks the same test trips alone, to see how much she has improved.'),
@@ -1290,14 +1325,15 @@ export class App {
       this.chooser('Judge', JUDGES.map((j) => [j, JUDGE_INFO[j].name]), this.settings.judge, this.busy, (id) => {
         this.settings.judge = id as Judge; this.saveSoon(); this.showCard(JUDGE_INFO[this.settings.judge].card); this.renderPanel();
       }, judgeIcon(this.settings.judge), this.hq(JUDGE_INFO[this.settings.judge].text, JUDGE_INFO[this.settings.judge].card)),
-      this.slider('Number of practice runs', this.settings.practice, 50, 3000, 50, (v) => String(v), (v) => { this.settings.practice = v; this.saveSoon(); }),
+      h('h3', {}, 'Let her practise more'),
+      h('p', {}, st.practiceRuns ? `So far: ${st.practiceRuns} practice run${st.practiceRuns === 1 ? '' : 's'}` : 'So far: no practice runs yet'),
+      this.addSlider('Runs to add', this.settings.practice, 50, 3000, 50, (v) => { this.settings.practice = v; }),
       this.runControls({
-        what: 'run', total: this.settings.practice, watch: (n, sp) => this.watchRuns(n, sp), watchCard: 'runScore',
-        allLabel: `Practise ${this.settings.practice} runs`, all: () => this.startPractice(), explainCard: 'sampling', last: this.runLine(),
+        what: 'run', total: this.settings.practice, sofar: st.practiceRuns, watch: (n, sp) => this.watchRuns(n, sp), watchCard: 'runScore',
+        all: () => this.startPractice(), explainCard: 'sampling', last: this.runLine(),
       }),
       this.lastRun && !(this.job?.kind === 'watchRuns' && this.job.total > 1) ? h('p', {}, this.runLine()) : null,
       h('p', {}, h('span', { class: 'swatch-box' }), this.hq(` She practises from up to ${st.radius} steps from home (outlined); the circle grows as she succeeds.`, 'curriculum')),
-      st.practiceRuns ? h('p', {}, `${st.practiceRuns} practice runs so far.`) : null,
       h('h3', {}, this.hq('How she does alone', 'testTrips')),
       outcomeChart(st.practiceEval, 'lessons + runs'),
       before && after ? h('p', { class: 'compare' }, this.hq(`On the same test trips: after lessons ${pct(before.home)} home, ${pct(before.eaten)} eaten; after practice ${pct(after.home)} home, ${pct(after.eaten)} eaten.`, 'recipe')) : null,

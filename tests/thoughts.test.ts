@@ -40,32 +40,32 @@ const never = () => 0.99;
 const fill = (lines: readonly (string | ((d: string) => string))[], d: string) => lines.map((l) => (typeof l === 'string' ? l : l(d)));
 
 describe('her thoughts on a trip alone', () => {
-  it('names directions like the move arrows: up is north', () => {
-    expect(moveWord(0)).toBe('up');
-    expect(moveWord(1)).toBe('right');
-    expect(moveWord(2)).toBe('down');
-    expect(moveWord(3)).toBe('left');
-    expect(placeWord(0, -1)).toBe('above me');
-    expect(placeWord(0, 1)).toBe('below me');
-    expect(placeWord(-1, 0)).toBe('to my left');
-    expect(placeWord(1, 1)).toBe('down on my right');
-    expect(placeWord(-1, -1)).toBe('up on my left');
+  it('names directions in compass words: up the screen is north', () => {
+    expect(moveWord(0)).toBe('north');
+    expect(moveWord(1)).toBe('east');
+    expect(moveWord(2)).toBe('south');
+    expect(moveWord(3)).toBe('west');
+    expect(placeWord(0, -1)).toBe('to the north');
+    expect(placeWord(0, 1)).toBe('to the south');
+    expect(placeWord(-1, 0)).toBe('to the west');
+    expect(placeWord(1, 1)).toBe('to the south-east');
+    expect(placeWord(-1, -1)).toBe('to the north-west');
   });
 
   it('thinks about a wolf den she saw, then about the move she already picked', () => {
     const f = forest([[1, 7, WOLF]]);
-    // From (1, 6) she sees the den below her and goes right.
+    // From (1, 6) she sees the den south of her and goes east.
     const lines = new Thoughts(always).after(trip(f, at(1, 6), [1]));
     expect(lines).toHaveLength(2);
     expect(lines![0]).toMatch(/wolf|Monster|growls/i);
-    expect(lines![1]).toMatch(/right/i);
+    expect(lines![1]).toMatch(/east/i);
   });
 
-  it('can say "Scary wolf below me! Let\'s go down." just before she is eaten', () => {
+  it('can say "Scary wolf to the south! Let\'s go south." just before she is eaten', () => {
     const f = forest([[1, 7, WOLF]]);
     const lines = new Thoughts(always).after(trip(f, at(1, 6), [2], { outcome: 'eaten' }));
     expect(lines).toHaveLength(2);
-    expect(lines![1]).toMatch(/down/i);
+    expect(lines![1]).toMatch(/south/i);
   });
 
   it('thinks about each den only once', () => {
@@ -82,11 +82,11 @@ describe('her thoughts on a trip alone', () => {
     const said = (p: number, seed: number) => new Thoughts(mulberry32(seed)).after(trip(f, at(1, 1), [1, 1, 1, 1, 1, 1], { p }));
     for (let seed = 0; seed < 40; seed++) {
       const sure = said(0.9, seed);
-      if (sure) expect(fill(SURE, 'right')).toContain(sure[0]);
+      if (sure) expect(fill(SURE, 'east')).toContain(sure[0]);
       const likely = said(0.6, seed);
-      if (likely) expect(fill(LIKELY, 'right')).toContain(likely[0]);
+      if (likely) expect(fill(LIKELY, 'east')).toContain(likely[0]);
       const unsure = said(0.2, seed);
-      if (unsure) expect(fill(UNSURE, 'right')).toContain(unsure[0]);
+      if (unsure) expect(fill(UNSURE, 'east')).toContain(unsure[0]);
     }
   });
 

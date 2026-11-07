@@ -1,12 +1,13 @@
 /**
  * Her little thoughts on a trip alone, just for fun: a line or two after some moves.
  * They are made up after each move is already picked, from what she saw and how likely
- * the move was, so she can say "Scary wolf below me! Let's go down."
- * She speaks in up, down, left and right, like the move arrows: up is north on the map.
+ * the move was, so she can say "Scary wolf to the south! Let's go south."
+ * She speaks in compass words, as on a map: up the screen is north, down is south,
+ * left is west and right is east.
  */
 import type { Rng } from './rng';
 import type { Outcome } from './sim';
-import { DX, DY, Forest, HOME, MOVE_NAMES, Move, SWAMP, VIEW_OFFSETS, WOLF, tileAt, xyOf } from './world';
+import { DX, DY, Forest, HOME, Move, SWAMP, VIEW_OFFSETS, WOLF, tileAt, xyOf } from './world';
 
 /** What a thought needs to know about the trip so far (a `Walker` fits). */
 export interface TripState {
@@ -53,15 +54,17 @@ export const HOME_LINES: readonly Line[] = ['Finally!', 'Hello, Grandma!', 'Made
 export const LOST_LINES: readonly Line[] = ['I need a nap…', "I'll just sit here a bit.", 'Too tired to walk on…', 'Zzz…'];
 export const EATEN_LINES: readonly Line[] = ['Uh-oh…', 'Oh no!'];
 
-/** Where a view offset lies from her, in the words of the move arrows (up is north on the map). */
+/** Compass name of each move (up the screen is north), in move order: up, right, down, left. */
+export const COMPASS = ['north', 'east', 'south', 'west'] as const;
+
+/** Where a view offset lies from her, in compass words: "to the north", "to the south-west". */
 export function placeWord(dx: number, dy: number): string {
-  const side = dx > 0 ? 'right' : dx < 0 ? 'left' : '';
-  if (dy === 0) return `to my ${side}`;
-  const ud = dy < 0 ? 'up' : 'down';
-  return side ? `${ud} on my ${side}` : dy < 0 ? 'above me' : 'below me';
+  const ns = dy < 0 ? 'north' : dy > 0 ? 'south' : '';
+  const ew = dx > 0 ? 'east' : dx < 0 ? 'west' : '';
+  return `to the ${ns && ew ? `${ns}-${ew}` : ns || ew}`;
 }
-/** The move's own name: up, right, down or left. */
-export const moveWord = (m: Move): string => MOVE_NAMES[m];
+/** The move's compass name: north, east, south or west. */
+export const moveWord = (m: Move): string => COMPASS[m];
 
 /** Compass sector (0 = east, counter-clockwise, as in `homeSector`) of each move. */
 const MOVE_SECTOR = [2, 0, 6, 4] as const;
