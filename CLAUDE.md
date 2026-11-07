@@ -33,11 +33,11 @@ Game logic has no DOM dependencies and is tested directly; the UI lives in `src/
 | `src/insights.ts` | "How big models do it" dialog texts: each tab's ideas mapped to real large language models |
 | `src/storage.ts` | Browser save, forest links, model export and import |
 | `src/worker.ts`, `src/workerTypes.ts` | Training in a Web Worker |
-| `src/ui/` | App shell and tabs (`app.ts`), board, charts, memory strip, technical tab, SVG symbols |
+| `src/ui/` | App shell and tabs (`app.ts`), board, charts, memory strip, technical tab, SVG symbols, "?" buttons and the LM corner popup (`hint.ts`) |
 
 ## Conventions
 
-- **Every feature maps to a language-model idea.** Add it to the mapping table in `docs/design.md`, and give it an LM corner card in `src/explain.ts` where it teaches something.
+- **Every feature maps to a language-model idea.** Add it to the mapping table in `docs/design.md`, and give it an LM corner card in `src/explain.ts` where it teaches something, opened by a "?" next to it (`this.q()` / `this.hq()` in `app.ts`; list it in the "?" table in the design doc).
 - **Original art only:** simple symbolic SVG shapes drawn in code (`src/ui/symbols.ts`). No tile packs, external images or resemblance to existing games.
 - **Shape plus colour, never colour alone.** Red is reserved for her and for danger.
 - **Child-friendly outcomes:** nothing graphic.

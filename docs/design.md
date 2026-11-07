@@ -52,6 +52,14 @@ Every feature should map to a language-model idea. This table is the map:
 | Small change, big change, brand new forest (same Red Riding Hood) | The further new input is from the training data, the more confident mistakes |
 | Dashed yellow edges on changed tiles | Where the world no longer matches what the model learned |
 | Catch-up lessons in the changed forest | Training a model further on new data instead of starting over |
+| Each move picked by chance; "Again from here" walks differently | Sampling: the same prompt can give different answers |
+| Test trips from the same fixed starts (outcome chart) | A benchmark: the same questions every time, to measure progress |
+| Practice starting near home, moving outward | Curriculum learning: easy examples first |
+| Lesson loss (how surprised she is by the teacher's move) | Training loss, the number pretraining pushes down |
+| One-hot numbers for each tile she sees | Turning tokens into numbers before the model reads them |
+| The weights heatmap | The model's weights: everything it knows |
+| Fixed settings (learning rate, network size, rewards) | Hyperparameters, chosen by the builders |
+| Exported model file | Shared model weights (open models) |
 | "How big models do it" button on every tab | The same ideas at real scale: training data, tokenizers, pretraining, supervised fine-tuning, RLHF, transformers |
 
 ## Forest and world rules
@@ -204,9 +212,53 @@ All pictures are simple symbolic SVG shapes drawn for this project, with no tile
 - Home: hearts at the cottage, a small celebration.
 - Eaten: a cartoon wolf pops up and the screen fades. Nothing graphic.
 - Lost: she sits down, and a "lost in the woods" note appears.
-- **How the trip went:** when she gets home or runs out of energy, the result also says how *tired* she is (energy used of her budget: still fresh, a bit tired, very tired, or worn out when lost), how *wet* (swamp steps: dry feet, wet feet, soaked) and how *scared* (different wolf dens she saw on the way: calm, a little scared, scared, very scared) and how *bumped* (moves into a tree, each a wrong guess that cost a step of energy and got her nowhere: no bumps, a bump or two for 1–2, a bumpy walk for 3–5, bumped all over). Each has its own symbol (a battery, a water drop, a wolf head, a tree with a yellow bump star). A "Why does this matter?" button shows the trip report card.
+- **How the trip went:** when she gets home or runs out of energy, the result also says how *tired* she is (energy used of her budget: still fresh, a bit tired, very tired, or worn out when lost), how *wet* (swamp steps: dry feet, wet feet, soaked) and how *scared* (different wolf dens she saw on the way: calm, a little scared, scared, very scared) and how *bumped* (moves into a tree, each a wrong guess that cost a step of energy and got her nowhere: no bumps, a bump or two for 1–2, a bumpy walk for 3–5, bumped all over). Each has its own symbol (a battery, a water drop, a wolf head, a tree with a yellow bump star). Its heading, "How was the trip for her?", has a "?" for the trip report card.
 
-**LM corner cards.** Small cards appear at key moments, each giving one sentence of analogy, for example "Her memory strip is like a language model's context window." After a trip, a short "Why did she do that?" note explains the main decision. These cards carry the teaching for non-technical users. Choosing a judge shows that judge's card; after practice comes the reward-hacking card (score up, home rate down), the teacher-versus-judge card (taught only by the other parent), or the general judge card. After practice with the wolf comes the bad-judge card; after Grandma's practice on a model that had the wolf's lessons, the fixing-bad-data card. Choosing the wolf teacher or the mixed option shows the bad-data or data-poisoning card, as does a watched lesson that ends at a den. When she walks into a den after wolf lessons or wolf practice, the "Why did she do that?" note says the wolf taught her. A small or big change or a hand edit after lessons shows the knowledge-cutoff card, a brand new forest the out-of-training-data card, and catch-up lessons the catch-up card.
+**LM corner cards ("?" buttons).** Each card gives one sentence or two of analogy, for example "Her memory strip is like a language model's context window." These cards carry the teaching for non-technical users. They are not shown in the panel on their own: a small round "?" (yellow, with a dark border) sits next to the control, heading or result it explains, and clicking it opens the card as a small popup ("LM corner") right there. The popup closes with ×, Escape or a click elsewhere, and follows its "?" when the panel is redrawn (during a trip on Auto, for example). Inside a checkbox or radio label, the "?" opens the card without ticking the box. The texts live in `CARDS` in `src/explain.ts`; the popup is `src/ui/hint.ts`.
+
+When something happens that a card explains, that card's "?" pulses (a soft yellow glow, five times; a steady ring with reduced motion) until it is opened or something newer happens. Entering a tab makes the "?" by its title pulse, so new users find the buttons; the Forest tab also says "Each ? shows the language-model idea behind it."
+
+Where the "?" buttons are, and what makes them pulse:
+
+| Tab | "?" next to | Card | Pulses when |
+| --- | --- | --- | --- |
+| All | Memory strip label | Context window | |
+| All | Outdated banner | Knowledge cutoff, or out of training data for a brand new forest | |
+| 1. Forest | Title | The forest as the model's world | Entering the tab |
+| 1. Forest | Swamp note | Swamp eats the energy budget | Painting a swamp before lessons |
+| 1. Forest | "Her memory" | Context window | |
+| 1. Forest | "Chosen before her lessons…" | Context length is fixed before training | Changing the memory size |
+| 1. Forest | Smell of grandma's cake | More useful input | Toggling it |
+| 1. Forest | "Change the forest after her lessons" | Knowledge cutoff | A change or hand edit after lessons |
+| 1. Forest | "New forest, same Red Riding Hood" | Out of training data | Choosing it |
+| 1. Forest, 2. Lessons | "Getting home since the forest changed" | Test trips as a benchmark | |
+| 2. Lessons | Title | Lessons are pretraining | Entering the tab |
+| 2. Lessons | Intro ("she guesses the next move…") and the "Watching…" line | Guess, compare, adjust: next-token training | Watching a lesson |
+| 2. Lessons | "The forest changed" / "Since the forest changed" | Catch-up lessons | After catch-up lessons |
+| 2. Lessons | "Who teaches her?" | The chosen teacher: training data and its values, the wolf (bad examples) or the mix (data poisoning) | Choosing a teacher; after lessons from both, the wolf or the mix |
+| 2. Lessons | Number of lessons | More training data, diminishing returns | |
+| 2. Lessons | "That lesson came from the wolf in disguise…" (after a watched lesson that ends at a den) | Bad examples are learned too | That lesson |
+| 2. Lessons | "How she does alone" | Test trips as a benchmark | |
+| 2. Lessons | Heatmap checkbox | What the training data covered | Toggling it; after lessons from one parent |
+| 2. Lessons | Known weakness | Exposure bias | After a watched lesson |
+| 3. Trip alone | Title and fog checkbox | A view is an input token | Entering the tab; toggling fog |
+| 3. Trip alone | Intro ("one move is picked by chance") | Sampling | |
+| 3. Trip alone | "In a swamp" in the status line (while she stands in one) | Swamp eats the energy budget | Her first swamp step on a trip |
+| 3. Trip alone | "Smells cake" in the status line | More useful input | |
+| 3. Trip alone | "Why did she do that?" | The card that fits the trip: home, hallucination, temperature, repetition, energy, swamp, reward hacking, the wolf's lessons or practice | The trip ends |
+| 3. Trip alone | "How was the trip for her?" | Answers are rated on more than being right | |
+| 3. Trip alone | "Her next move" (while walking) | Next-token probabilities | Choosing a start |
+| 3. Trip alone | Energy, Boldness | Maximum output length, temperature | Moving the slider |
+| 4. Practice | Title | Practice is fine-tuning from feedback | Entering the tab; starting practice |
+| 4. Practice | "Who judges?" | The judge decides what she learns | |
+| 4. Practice | "How … scores a run" | The chosen judge's card | Choosing a judge |
+| 4. Practice | "She practises from up to … steps" | Curriculum learning | |
+| 4. Practice | "How she does alone" | Test trips as a benchmark | |
+| 4. Practice | "What … taught her" (after practice) | Reward hacking, teacher versus judge, bad judge (wolf), fixing bad data, or the general judge card | Practice ends |
+| 5. Inside the model | Title | The real numbers | Entering the tab |
+| 5. Inside the model | Vocabulary, Current input, Network, Loss curves, Fixed settings, Export and import | Vocabulary, one-hot inputs, weights, loss, hyperparameters, shared model files | |
+
+After a trip, the "Why did she do that?" note sits right under the result line. When she walks into a den after wolf lessons or wolf practice, it says the wolf taught her.
 
 **How big models do it.** Every tab has a small chip-icon button, "How big models do it" (at the top of the side panel, and at the top of Inside the model). It opens a dialog that pairs each idea on that tab ("In the game") with what it is in a real large language model ("In a big model"): the forest as training data, a view as an input token and a step as an output token, the tokenizer's vocabulary, the context window, the two ways of teaching (learning from correct answers in lessons, and judging free runs in practice), teacher forcing and exposure bias, data poisoning, temperature, hallucination, RLHF and reward models, reward hacking, and how her small network compares with a transformer. The texts live in `src/insights.ts`. They go one level deeper than the LM corner cards, for curious users and presenters, but stay in plain words.
 
@@ -264,5 +316,5 @@ A static TypeScript site hosted on GitHub Pages, with everything (generation, tr
 
 - Whether to keep Adam's running averages with the model (smoother training across rounds and "Watch one lesson", but bigger saves and model files and a save-version bump), or keep resetting them each round as now.
 - Exact default grid size and the three memory-size values, to be tuned once it runs.
-- Pacing of the outcome animations and how long LM corner cards stay on screen.
+- Pacing of the outcome animations.
 - Whether a teacher's guide (one page of lesson flow for presenters) belongs in the repo.

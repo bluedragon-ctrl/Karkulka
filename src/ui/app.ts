@@ -1,5 +1,5 @@
 /** The app: five tabs that tell the story in order. */
-import { CARDS, CardKey, explainTrip, tripReport } from '../explain';
+import { CardKey, Explanation, explainTrip, tripReport } from '../explain';
 import { INSIGHTS } from '../insights';
 import { CHANGE_SIZES, changeForest, generateForest } from '../forest';
 import { Adam, Model, createAdam, createModel, modelFromJSON, modelToJSON } from '../model';
@@ -17,6 +17,7 @@ import {
 import { Board } from './board';
 import { changeChart, outcomeChart } from './charts';
 import { add, clear, h, s } from './dom';
+import { closeHint, hintButton, placeHint } from './hint';
 import { renderStrip } from './strip';
 import { COLORS, chipIcon, crowFigure, grandmaFigure, parentFigure, tileSymbol, wolfHead } from './symbols';
 import { renderTech } from './tech';
@@ -109,7 +110,7 @@ function judgeIcon(j: Judge): SVGSVGElement {
 }
 
 /** What the last practice job did, for the summary under the chart. */
-interface PracticeSummary { judge: Judge; scoreBefore: number; scoreAfter: number; homeBefore: number; homeAfter: number }
+interface PracticeSummary { judge: Judge; scoreBefore: number; scoreAfter: number; homeBefore: number; homeAfter: number; card: CardKey }
 
 const TRAIL_COLORS: Record<Outcome | Teacher, string> = { home: '#c99700', eaten: COLORS.danger, lost: COLORS.lost, mother: COLORS.mother, father: COLORS.father, wolf: COLORS.den };
 
@@ -141,8 +142,11 @@ export class App {
   walker: Walker | null = null;
   watch: { walk: LessonWalk; k: number } | null = null;
   techStep = 0;
-  card: CardKey | null = 'forest';
-  why: { title: string; text: string } | null = null;
+  /** The card whose "?" pulses: something just happened that it explains. */
+  fresh: CardKey | null = 'forest';
+  why: Explanation | null = null;
+  /** The last watched lesson ended at a wolf den. */
+  watchedDen = false;
   lastPractice: PracticeSummary | null = null;
   private auto: number | null = null;
   private saveTimer: number | null = null;
@@ -155,7 +159,6 @@ export class App {
   private boardWrap = h('div', { class: 'board-wrap' });
   private panel = h('aside', { class: 'panel' });
   private panelBody = h('div', { class: 'panel-body' });
-  private cardEl = h('div', { class: 'lm-card', 'aria-live': 'polite' });
   private stripEl = h('div', { class: 'strip' });
   private techEl = h('div', { class: 'tech', hidden: true });
   private insightDialog = h('dialog', { class: 'insight-dialog', 'aria-labelledby': 'insight-title' });
@@ -176,7 +179,7 @@ export class App {
     );
     this.insightDialog.addEventListener('click', (e) => { if (e.target === this.insightDialog) this.insightDialog.close(); });
     this.stage.append(h('div', { class: 'main-col' }, this.boardWrap, this.stripEl), this.panel, this.techEl);
-    this.panel.append(h('div', { class: 'insight-bar' }, this.insightBtn), this.panelBody, this.cardEl);
+    this.panel.append(h('div', { class: 'insight-bar' }, this.insightBtn), this.panelBody);
     this.board = new Board(this.boardWrap);
     this.board.onTileDown = (i) => this.onTile(i, false);
     this.board.onTileDrag = (i) => this.onTile(i, true);
@@ -340,9 +343,21 @@ export class App {
     history.replaceState(null, '', store.forestLink(this.forest, this.edited));
   }
 
-  private showCard(key: CardKey) {
-    this.card = key;
-    this.renderCard();
+  /** Something just happened that a card explains: make its "?" buttons pulse until it is opened. */
+  private showCard(key: CardKey | null) {
+    this.fresh = key;
+    document.querySelectorAll('.hint-q').forEach((b) => b.classList.toggle('fresh', b.getAttribute('data-hint') === key));
+  }
+
+  /** A "?" button that opens the LM corner card for `key`. */
+  private q(key: CardKey, place?: string) {
+    return hintButton(key, { fresh: this.fresh === key, place, onOpen: (k) => { if (this.fresh === k) this.showCard(null); } });
+  }
+
+  /** Text followed by its "?" button, kept on one line with the last word. */
+  private hq(text: string, key: CardKey, place?: string) {
+    const i = text.trimEnd().lastIndexOf(' ') + 1;
+    return h('span', {}, text.slice(0, i), h('span', { class: 'nowrap' }, text.slice(i).trimEnd(), this.q(key, place)));
   }
 
   // ---------- forest ----------
@@ -438,6 +453,7 @@ export class App {
     this.stopTrip();
     this.checkEdits();
     const catchUp = this.outdated;
+    this.watchedDen = false;
     this.runJob(
       { kind: 'lessons', model, forest: copyForest(this.forest), stats: this.stats, count, seed: this.seed(), teacher: this.settings.teacher },
       0.1,
@@ -454,6 +470,7 @@ export class App {
 
   private watchLesson() {
     this.ensureModel();
+    this.watchedDen = false;
     this.stopTrip();
     const teacher = chooseTeacher(this.settings.teacher, this.rng);
     const starts = startTiles(this.forest);
@@ -478,11 +495,12 @@ export class App {
       this.watch = null;
       this.job = null;
       this.saveSoon();
-      this.showCard(endsAtDen(this.forest, walk) ? 'wolfTeacher' : 'exposure');
+      this.watchedDen = endsAtDen(this.forest, walk);
+      this.showCard(this.watchedDen ? 'wolfTeacher' : 'exposure');
       this.render();
     };
     this.job = { kind: 'watch', done: 0, total: 1, cancel: () => { clearInterval(timer); this.watch = null; this.job = null; this.render(); } };
-    this.showCard('lessons');
+    this.showCard('guess');
     this.render();
   }
 
@@ -505,7 +523,7 @@ export class App {
     if (!w || w.done) return;
     w.temperature = this.settings.boldness;
     w.step();
-    if (this.forest.tiles[w.pos] === SWAMP && !w.blocked[w.t - 1] && this.card !== 'swamp' && !w.positions.slice(0, -1).some((p) => this.forest.tiles[p] === SWAMP)) this.showCard('swamp');
+    if (this.forest.tiles[w.pos] === SWAMP && !w.blocked[w.t - 1] && this.fresh !== 'swamp' && !w.positions.slice(0, -1).some((p) => this.forest.tiles[p] === SWAMP)) this.showCard('swamp');
     this.techStep = w.decisions.length;
     if (w.done) this.finishTrip();
     this.renderBoard();
@@ -561,16 +579,16 @@ export class App {
         const mean = (xs: number[]) => xs.reduce((a, b) => a + b, 0) / Math.max(1, xs.length);
         const sum: PracticeSummary = {
           judge, homeBefore, homeAfter: this.stats.practiceEval.at(-1)?.home ?? homeBefore,
-          scoreBefore: mean(pts.slice(0, k)), scoreAfter: mean(pts.slice(-k)),
+          scoreBefore: mean(pts.slice(0, k)), scoreAfter: mean(pts.slice(-k)), card: 'judge',
         };
-        this.lastPractice = sum;
         const tc = this.stats.teacherCounts;
         const onlyOther = (judge === 'mother' && tc.mother === 0) || (judge === 'father' && tc.father === 0);
-        if (judge === 'wolf') this.showCard('judgeWolf');
-        else if (judge === 'grandma' && ((tc.wolf ?? 0) > 0 || (this.stats.judgeRuns?.wolf ?? 0) > 0)) this.showCard('fixBadData');
-        else if (sum.scoreAfter > sum.scoreBefore && sum.homeAfter < sum.homeBefore - 0.05) this.showCard('rewardHacking');
-        else if (onlyOther) this.showCard('teacherVsJudge');
-        else this.showCard('judge');
+        if (judge === 'wolf') sum.card = 'judgeWolf';
+        else if (judge === 'grandma' && ((tc.wolf ?? 0) > 0 || (this.stats.judgeRuns?.wolf ?? 0) > 0)) sum.card = 'fixBadData';
+        else if (sum.scoreAfter > sum.scoreBefore && sum.homeAfter < sum.homeBefore - 0.05) sum.card = 'rewardHacking';
+        else if (onlyOther) sum.card = 'teacherVsJudge';
+        this.lastPractice = sum;
+        this.showCard(sum.card);
       },
     );
     this.board.clearTrails();
@@ -585,9 +603,11 @@ export class App {
     this.stopAuto();
     if (this.tab === 'forest') this.checkEdits();
     this.tab = id;
+    this.watchedDen = false;
     this.board.clearTrails();
-    const cards: Record<TabId, CardKey> = { forest: 'forest', lessons: 'lessons', trip: 'view', practice: 'exposure', inside: 'tech' };
-    this.card = cards[id];
+    closeHint();
+    const cards: Record<TabId, CardKey> = { forest: 'forest', lessons: 'lessons', trip: 'view', practice: 'practice', inside: 'tech' };
+    this.fresh = cards[id];
     this.render();
   }
 
@@ -603,13 +623,13 @@ export class App {
     this.panel.hidden = inside;
     (this.boardWrap.parentElement as HTMLElement).hidden = inside;
     if (inside) this.renderTechNow();
-    else if (!this.panel.contains(this.insightBtn)) this.panel.querySelector('.insight-bar')?.append(this.insightBtn);
     else {
+      if (!this.panel.contains(this.insightBtn)) this.panel.querySelector('.insight-bar')?.append(this.insightBtn);
       this.renderBoard();
       this.renderPanel();
       this.renderStripNow();
-      this.renderCard();
     }
+    placeHint();
   }
 
   private renderTabs() {
@@ -628,7 +648,8 @@ export class App {
     this.banner.hidden = !this.outdated;
     clear(this.banner);
     if (this.outdated) {
-      this.banner.append(h('strong', {}, 'Her lessons are outdated. '), 'The forest changed after she was taught, so she still remembers the old forest, like a language model\'s knowledge cutoff. ', this.changedTiles.length <= MAX_MARKED ? 'Changed tiles have a dashed yellow edge. ' : 'This whole forest is new to her. ', 'Catch-up lessons (tab 2) bring her up to date.');
+      const marked = this.changedTiles.length <= MAX_MARKED;
+      this.banner.append(h('strong', {}, 'Her lessons are outdated. '), 'The forest changed after she was taught, so she still remembers the old forest, like a language model\'s knowledge cutoff. ', marked ? 'Changed tiles have a dashed yellow edge. ' : 'This whole forest is new to her. ', this.hq('Catch-up lessons (tab 2) bring her up to date. ', marked ? 'outdated' : 'newWorld', 'banner'));
     }
   }
 
@@ -650,25 +671,16 @@ export class App {
     this.insightDialog.scrollTop = 0;
   }
 
-  private renderCard() {
-    clear(this.cardEl);
-    if (!this.card) return;
-    this.cardEl.append(
-      h('div', { class: 'lm-card-head' }, h('span', {}, 'LM corner'), h('button', { class: 'icon', 'aria-label': 'Close', onclick: () => { this.card = null; this.renderCard(); } }, '×')),
-      h('p', {}, CARDS[this.card]),
-    );
-  }
-
   private renderStripNow() {
     const mem = this.model?.cfg.memory ?? MEMORY_PAIRS[this.settings.memory];
     if (this.watch) {
       const { walk, k } = this.watch;
       const t = Math.min(k, walk.history.views.length - 1);
-      renderStrip(this.stripEl, walk.history, t, mem, k < walk.history.moves.length ? walk.history.moves[k] : null);
+      renderStrip(this.stripEl, walk.history, t, mem, k < walk.history.moves.length ? walk.history.moves[k] : null, this.q('memory', 'strip'));
     } else if (this.tab === 'trip' && this.walker) {
       const w = this.walker;
-      renderStrip(this.stripEl, w.history, Math.min(w.t, w.history.views.length - 1), mem, w.done ? w.history.moves[w.t - 1] : null);
-    } else renderStrip(this.stripEl, null, 0, mem);
+      renderStrip(this.stripEl, w.history, Math.min(w.t, w.history.views.length - 1), mem, w.done ? w.history.moves[w.t - 1] : null, this.q('memory', 'strip'));
+    } else renderStrip(this.stripEl, null, 0, mem, undefined, this.q('memory', 'strip'));
   }
 
   private renderTechNow() {
@@ -677,6 +689,7 @@ export class App {
       onStep: (k) => { this.techStep = k; },
       onExport: () => this.exportModel(),
       onImport: (f) => this.importModel(f),
+      hint: (key) => this.q(key),
     });
     this.techEl.prepend(h('div', { class: 'insight-bar' }, this.insightBtn));
   }
@@ -739,20 +752,20 @@ export class App {
   private changeBox(where: 'forest' | 'lessons'): HTMLElement | null {
     if (!this.trained) return null;
     const busy = this.busy;
-    const chart = this.changeLog.length ? h('div', {}, h('h4', {}, 'Getting home since the forest changed'), changeChart(this.changeLog)) : null;
+    const chart = this.changeLog.length ? h('div', {}, h('h4', {}, this.hq('Getting home since the forest changed', 'testTrips', 'change')), changeChart(this.changeLog)) : null;
     if (where === 'forest') {
       return h('div', { class: 'group' },
-        h('h3', {}, 'Change the forest after her lessons'),
+        h('h3', {}, this.hq('Change the forest after her lessons', 'outdated')),
         h('p', { class: 'muted' }, 'She keeps what she learned. See how she copes, then give her catch-up lessons.'),
         h('div', { class: 'row' },
           h('button', { disabled: busy, onclick: () => this.changeAfterLessons('small') }, `Small change (${CHANGE_SIZES.small} tiles)`),
           h('button', { disabled: busy, onclick: () => this.changeAfterLessons('big') }, `Big change (${CHANGE_SIZES.big} tiles)`)),
-        h('div', { class: 'row' }, h('button', { disabled: busy, onclick: () => this.changeAfterLessons('new') }, 'New forest, same Red Riding Hood')),
+        h('div', { class: 'row' }, h('button', { disabled: busy, onclick: () => this.changeAfterLessons('new') }, 'New forest, same Red Riding Hood'), this.q('newWorld')),
         chart);
     }
     if (!this.outdated && !chart) return null;
     return h('div', { class: 'group catch-up' },
-      this.outdated ? h('h3', {}, 'The forest changed') : null,
+      h('h3', {}, this.hq(this.outdated ? 'The forest changed' : 'Since the forest changed', 'catchUp')),
       this.outdated ? h('p', { class: 'muted' }, `Catch-up lessons from the ${TEACHERS.find((t) => t.id === this.settings.teacher)?.name.toLowerCase() ?? 'teacher'} in the changed forest, on top of what she knows.`) : null,
       this.outdated ? h('div', { class: 'row' }, ...CATCH_UP.map((n) => h('button', { disabled: busy, onclick: () => this.startLessons(n) }, `${n} catch-up lessons`))) : null,
       chart);
@@ -765,19 +778,20 @@ export class App {
     else if (this.tab === 'lessons') this.lessonsPanel(body);
     else if (this.tab === 'trip') this.tripPanel(body);
     else if (this.tab === 'practice') this.practicePanel(body);
+    placeHint();
   }
 
   private next(label: string, tab: TabId) {
     return h('button', { class: 'next', disabled: this.locked(tab) || this.busy, onclick: () => this.goTab(tab) }, `${label} →`);
   }
 
-  private slider(label: string, value: number, min: number, max: number, step: number, fmt: (v: number) => string, onchange: (v: number) => void, hint?: [string, string]) {
+  private slider(label: string, value: number, min: number, max: number, step: number, fmt: (v: number) => string, onchange: (v: number) => void, hint?: [string, string], card?: CardKey) {
     const out = h('output', {}, fmt(value));
     const input = h('input', {
       type: 'range', min, max, step, value, disabled: this.busy,
       oninput: (e: Event) => { const v = Number((e.target as HTMLInputElement).value); out.textContent = fmt(v); onchange(v); },
     });
-    return h('label', { class: 'control' }, h('span', { class: 'control-head' }, label, out), input,
+    return h('label', { class: 'control' }, h('span', { class: 'control-head' }, h('span', {}, card ? this.hq(label, card) : label), out), input,
       hint ? h('span', { class: 'range-hint' }, h('span', {}, hint[0]), h('span', {}, hint[1])) : null);
   }
 
@@ -803,8 +817,9 @@ export class App {
       return h('button', { class: `brush ${this.settings.brush === t ? 'active' : ''}`, 'aria-pressed': String(this.settings.brush === t), onclick: () => { this.settings.brush = t; this.renderPanel(); } }, icon, label);
     };
     add(body,
-      h('h2', {}, 'The forest'),
+      h('h2', {}, this.hq('The forest', 'forest')),
       h('p', {}, "Grandma's house stays in the same spot. Everything she learns and every test happens in this one forest."),
+      h('p', { class: 'muted' }, 'Each ', h('span', { class: 'hint-q sample', 'aria-hidden': 'true' }, '?'), ' shows the language-model idea behind it.'),
       h('div', { class: 'group' },
         h('div', { class: 'code-line' }, 'Forest code ', h('code', { class: 'code' }, this.forest.code), this.edited ? h('span', { class: 'tag' }, 'edited') : null),
         h('div', { class: 'row' },
@@ -815,18 +830,19 @@ export class App {
         h('h3', {}, 'Edit the forest'),
         h('p', { class: 'muted' }, 'Pick a brush, then click or drag on the map.'),
         h('div', { class: 'row brushes' }, brushBtn(PATH, 'Path'), brushBtn(TREE, 'Tree'), brushBtn(SWAMP, 'Swamp'), brushBtn(WOLF, 'Wolf den')),
-        h('p', { class: 'muted' }, `A swamp can be crossed, but each step in it costs ${SWAMP_COST} energy instead of 1.`),
+        h('p', { class: 'muted' }, this.hq(`A swamp can be crossed, but each step in it costs ${SWAMP_COST} energy instead of 1.`, 'swamp')),
         unreachable ? h('p', { class: 'warn' }, `${unreachable} path tile${unreachable === 1 ? '' : 's'} cannot reach home without crossing a wolf den. Parents never start lessons there.`) : null,
         this.edited ? h('button', { onclick: () => this.undoEdits() }, 'Undo all edits') : null),
       this.changeBox('forest'),
       h('div', { class: 'group' },
-        h('h3', {}, 'Her memory'),
+        h('h3', {}, this.hq('Her memory', 'memory')),
         h('div', { class: 'radios' }, ...(['short', 'medium', 'long'] as MemorySize[]).map((m) => h('label', { class: 'radio' },
           h('input', { type: 'radio', name: 'memory', checked: this.settings.memory === m, onchange: () => { this.changeMemoryOrHint(() => { this.settings.memory = m; }); this.showCard('memorySize'); } }),
           `${m[0].toUpperCase()}${m.slice(1)} (${MEMORY_PAIRS[m]} step${MEMORY_PAIRS[m] === 1 ? '' : 's'})`))),
+        h('p', { class: 'muted' }, this.hq('Chosen before her lessons: changing it later means a new Red Riding Hood.', 'memorySize')),
         h('label', { class: 'check' },
           h('input', { type: 'checkbox', checked: this.settings.hint, onchange: (e: Event) => { const v = (e.target as HTMLInputElement).checked; this.changeMemoryOrHint(() => { this.settings.hint = v; }); this.showCard('hint'); } }),
-          "Smell of grandma's cake (she senses the rough direction home)")),
+          h('span', {}, this.hq("Smell of grandma's cake (she senses the rough direction home)", 'hint')))),
       this.next('Next: Lessons', 'lessons'),
     );
   }
@@ -841,9 +857,10 @@ export class App {
     const st = this.stats;
     const busy = this.busy;
     add(body,
-      h('h2', {}, 'Lessons'),
-      h('p', {}, 'A teacher walks her from a random spot. At every step she guesses the next move, compares it with what the teacher did, and adjusts.'),
+      h('h2', {}, this.hq('Lessons', 'lessons')),
+      h('p', {}, this.hq('A teacher walks her from a random spot. At every step she guesses the next move, compares it with what the teacher did, and adjusts.', 'guess')),
       this.changeBox('lessons'),
+      h('h3', {}, this.hq('Who teaches her?', teacherCard(this.settings.teacher))),
       h('div', { class: 'group teachers', role: 'radiogroup', 'aria-label': 'Teacher' }, ...TEACHERS.map((t) => {
         const icon = s('svg', { width: 30, height: 30, viewBox: '-20 -24 40 44' });
         if (t.id === 'both') icon.append(s('g', { transform: 'translate(-7 0) scale(.8)' }, parentFigure(40, 'mother')), s('g', { transform: 'translate(7 0) scale(.8)' }, parentFigure(40, 'father')));
@@ -853,18 +870,19 @@ export class App {
           h('input', { type: 'radio', name: 'teacher', checked: this.settings.teacher === t.id, disabled: busy, onchange: () => { this.settings.teacher = t.id; this.saveSoon(); this.showCard(teacherCard(t.id)); this.renderPanel(); } }),
           icon, h('span', {}, h('strong', {}, t.name), h('br'), h('small', {}, t.text)));
       })),
-      this.slider('Number of lessons', this.settings.lessons, 10, 2000, 10, (v) => String(v), (v) => { this.settings.lessons = v; this.saveSoon(); }),
+      this.slider('Number of lessons', this.settings.lessons, 10, 2000, 10, (v) => String(v), (v) => { this.settings.lessons = v; this.saveSoon(); }, undefined, 'moreData'),
       h('div', { class: 'row' },
         h('button', { onclick: () => this.watchLesson(), disabled: busy }, 'Watch one lesson'),
         h('button', { class: 'primary', onclick: () => this.startLessons(), disabled: busy }, `Fast-forward ${this.settings.lessons} lessons`)),
-      this.job?.kind === 'watch' ? h('div', { class: 'row' }, h('span', { class: 'muted' }, 'Watching… the teacher walks ahead; the coloured arrow is the teacher\'s move.'), h('button', { onclick: () => this.job?.cancel() }, 'Stop')) : null,
+      this.job?.kind === 'watch' ? h('div', { class: 'row' }, h('span', { class: 'muted' }, this.hq('Watching… the arrows are her guess; the coloured one is the teacher\'s move.', 'guess', 'watch')), h('button', { onclick: () => this.job?.cancel() }, 'Stop')) : null,
       this.progress(),
+      this.watchedDen && !busy ? h('p', { class: 'warn' }, this.hq('That lesson came from the wolf in disguise: it ended at a wolf den, and she learned from it all the same.', 'wolfTeacher', 'watched')) : null,
       h('p', {}, st.lessons ? `She has had ${st.lessons} lesson${st.lessons === 1 ? '' : 's'} (mother ${st.teacherCounts.mother}, father ${st.teacherCounts.father}${st.teacherCounts.wolf ? `, wolf ${st.teacherCounts.wolf}` : ''}).` : 'No lessons yet.'),
-      h('h3', {}, 'How she does alone'),
+      h('h3', {}, this.hq('How she does alone', 'testTrips')),
       outcomeChart(st.lessonEval, 'lessons'),
       h('p', { class: 'muted' }, `Measured on the same ${FIXED.evalStarts} test trips about ${FIXED.evalPoints} times per round of lessons.`),
-      h('label', { class: 'check' }, h('input', { type: 'checkbox', checked: this.settings.heat, onchange: (e: Event) => { this.settings.heat = (e.target as HTMLInputElement).checked; this.showCard('coverage'); this.renderBoard(); this.saveSoon(); } }), 'Show where she was taught (heatmap)'),
-      h('p', { class: 'note' }, h('strong', {}, 'Known weakness: '), 'lessons are always correct, so she never learns how to recover after a wrong step. Practice (tab 4) fixes this.'),
+      h('label', { class: 'check' }, h('input', { type: 'checkbox', checked: this.settings.heat, onchange: (e: Event) => { this.settings.heat = (e.target as HTMLInputElement).checked; this.showCard('coverage'); this.renderBoard(); this.saveSoon(); } }), h('span', {}, this.hq('Show where she was taught (heatmap)', 'coverage'))),
+      h('p', { class: 'note' }, h('strong', {}, 'Known weakness: '), this.hq('lessons are always correct, so she never learns how to recover after a wrong step. Practice (tab 4) fixes this.', 'exposure')),
       this.model ? h('button', { class: 'subtle', disabled: busy, onclick: () => { if (confirm('Start over with a new Red Riding Hood? All her lessons and practice will be forgotten.')) { this.resetModel(); this.saveSoon(); this.render(); } } }, 'Start over with a new Red Riding Hood') : null,
       this.next('Next: Trip alone', 'trip'),
     );
@@ -882,29 +900,35 @@ export class App {
           h('span', { class: 'pbar' }, h('span', { style: `width:${tp[m] * 100}%` })), h('span', { class: 'pct' }, `${Math.round(tp[m] * 100)}%`)));
       }
     }
-    const status = w
-      ? w.done
-        ? { home: `Home after ${w.t} steps!`, eaten: `Eaten by a wolf at step ${w.t}.`, lost: `Lost: out of energy after ${w.t} steps.` }[w.outcome!]
-        : `Step ${w.t + 1} · energy ${w.energyLeft} / ${w.energy}${this.settings.hint ? ` · smells cake to the ${SECTOR_WORDS[homeSector(this.forest, w.pos)]}` : ''}`
-      : 'Click a path tile on the map to choose where she starts.';
+    const walking = !!w && !w.done;
+    const status: (string | Node)[] = !w
+      ? ['Click a path tile on the map to choose where she starts.']
+      : w.done
+        ? [{ home: `Home after ${w.t} steps!`, eaten: `Eaten by a wolf at step ${w.t}.`, lost: `Lost: out of energy after ${w.t} steps.` }[w.outcome!]]
+        : [
+          `Step ${w.t + 1} · energy ${w.energyLeft} / ${w.energy}`,
+          this.forest.tiles[w.pos] === SWAMP ? h('span', { class: 'nowrap' }, this.hq(` · in a swamp (${SWAMP_COST} energy a step)`, 'swamp', 'status')) : null,
+          this.settings.hint ? h('span', { class: 'nowrap' }, this.hq(` · smells cake to the ${SECTOR_WORDS[homeSector(this.forest, w.pos)]}`, 'hint')) : null,
+        ].filter((x): x is string | HTMLElement => !!x);
     add(body,
-      h('h2', {}, 'Trip alone'),
-      h('p', {}, 'At each step she reads her memory strip, the model gives a probability for each move, and one move is picked.'),
-      h('p', { class: 'status' }, status),
+      h('h2', {}, this.hq('Trip alone', 'view')),
+      h('p', {}, this.hq('At each step she reads her memory strip, the model gives a probability for each move, and one move is picked by chance.', 'sampling')),
+      h('p', { class: 'status' }, ...status),
+      this.why ? h('div', { class: 'why' }, h('h3', {}, this.why.card ? this.hq(this.why.title, this.why.card, 'why') : this.why.title), h('p', {}, this.why.text)) : null,
       w && w.done && w.outcome !== 'eaten' ? this.reportBox(w) : null,
+      walking ? h('h3', {}, this.hq('Her next move', 'arrows')) : null,
       probsBox,
       h('div', { class: 'row' },
         h('button', { onclick: () => this.stepTrip(), disabled: !w || w.done || !!this.auto }, 'Step'),
         h('button', { class: 'primary', onclick: () => this.toggleAuto(), disabled: !w || w.done }, this.auto ? 'Pause' : 'Auto'),
         h('button', { onclick: () => w && this.chooseStart(w.start), disabled: !w }, 'Again from here')),
       this.slider('Energy (step budget)', this.settings.energy, 10, 200, 5, (v) => String(v), (v) => {
-        this.settings.energy = v; this.walker?.setEnergy(v); this.saveSoon(); this.renderBoard(); this.showCard('energy');
-      }),
+        this.settings.energy = v; this.walker?.setEnergy(v); this.saveSoon(); this.renderBoard(); if (this.fresh !== 'energy') this.showCard('energy');
+      }, undefined, 'energy'),
       this.slider('Boldness', this.settings.boldness, 0.1, 2.5, 0.1, (v) => v.toFixed(1), (v) => {
-        this.settings.boldness = v; this.saveSoon(); this.renderBoard(); this.refreshProbs(probsBox); if (this.card !== 'boldness') this.showCard('boldness');
-      }, ['careful', 'bold']),
-      h('label', { class: 'check' }, h('input', { type: 'checkbox', checked: this.settings.fog, onchange: (e: Event) => { this.settings.fog = (e.target as HTMLInputElement).checked; this.saveSoon(); this.renderBoard(); this.showCard('view'); } }), 'Fog: show only what she sees'),
-      this.why ? h('div', { class: 'why' }, h('h3', {}, this.why.title), h('p', {}, this.why.text)) : null,
+        this.settings.boldness = v; this.saveSoon(); this.renderBoard(); this.refreshProbs(probsBox); if (this.fresh !== 'boldness') this.showCard('boldness');
+      }, ['careful', 'bold'], 'boldness'),
+      h('label', { class: 'check' }, h('input', { type: 'checkbox', checked: this.settings.fog, onchange: (e: Event) => { this.settings.fog = (e.target as HTMLInputElement).checked; this.saveSoon(); this.renderBoard(); this.showCard('view'); } }), h('span', {}, this.hq('Fog: show only what she sees', 'view', 'fog'))),
       h('div', { class: 'row' }, this.next('Practice', 'practice'), this.next('Inside the model', 'inside')),
     );
   }
@@ -929,11 +953,12 @@ export class App {
       h('div', { class: 'report-row' }, ic, h('span', {}, h('strong', {}, `${label}: ${word}`), h('br'), h('small', {}, detail)));
     const times = (k: number, one: string, many: string) => (k === 1 && one === 'time' ? 'once' : `${k} ${k === 1 ? one : many}`);
     return h('div', { class: 'report' },
+      h('h4', {}, this.hq('How was the trip for her?', 'tripReport')),
       row(tiredIcon, 'Tired', r.tired, `used ${r.energyUsed} of ${r.energy} energy`),
       row(wetIcon, 'Wet', r.wet, r.swampSteps ? `waded through swamp ${times(r.swampSteps, 'time', 'times')}` : 'never stepped into a swamp'),
       row(scaredIcon, 'Scared', r.scared, r.wolvesSeen ? `saw ${times(r.wolvesSeen, 'wolf den', 'wolf dens')} on the way` : 'saw no wolf dens'),
       row(bumpIcon, 'Bumped', r.bumped, r.treeHits ? `walked into a tree ${times(r.treeHits, 'time', 'times')}, wasting ${r.treeHits} energy` : 'never walked into a tree'),
-      h('button', { class: 'subtle', onclick: () => this.showCard('tripReport') }, 'Why does this matter?'));
+    );
   }
 
   private refreshProbs(box: HTMLElement) {
@@ -952,21 +977,21 @@ export class App {
     const after = st.practiceEval.at(-1);
     const pct = (v: number) => `${Math.round(v * 100)}%`;
     add(body,
-      h('h2', {}, 'Practice on her own'),
+      h('h2', {}, this.hq('Practice on her own', 'practice')),
       h('p', {}, 'She walks alone, picking her own moves, and a judge who knows the forest scores each run. Moves followed by a good score become more likely; moves followed by a bad one, less likely.'),
-      h('h3', {}, 'Who judges?'),
+      h('h3', {}, this.hq('Who judges?', 'judge')),
       h('div', { class: 'group teachers', role: 'radiogroup', 'aria-label': 'Judge' }, ...JUDGES.map((j) =>
         h('label', { class: `teacher ${this.settings.judge === j ? 'active' : ''}` },
           h('input', { type: 'radio', name: 'judge', checked: this.settings.judge === j, disabled: this.busy, onchange: () => { this.settings.judge = j; this.saveSoon(); this.showCard(JUDGE_INFO[j].card); this.renderPanel(); } }),
           judgeIcon(j), h('span', {}, h('strong', {}, JUDGE_INFO[j].name), h('br'), h('small', {}, JUDGE_INFO[j].text))))),
-      h('p', { class: 'muted' }, `How ${this.settings.judge === 'grandma' ? 'Grandma' : `the ${JUDGE_INFO[this.settings.judge].name.toLowerCase()}`} scores a run:`),
+      h('p', { class: 'muted' }, this.hq(`How ${this.settings.judge === 'grandma' ? 'Grandma' : `the ${JUDGE_INFO[this.settings.judge].name.toLowerCase()}`} scores a run:`, JUDGE_INFO[this.settings.judge].card)),
       h('ul', { class: 'score-list' }, ...JUDGE_INFO[this.settings.judge].rules().map((parts) => h('li', {}, ...parts))),
       this.slider('Number of practice runs', this.settings.practice, 50, 3000, 50, (v) => String(v), (v) => { this.settings.practice = v; this.saveSoon(); }),
       h('button', { class: 'primary', onclick: () => this.startPractice(), disabled: this.busy }, `Practise ${this.settings.practice} runs`),
       this.progress(),
-      h('p', {}, h('span', { class: 'swatch-box' }), ` She practises from up to ${st.radius} steps from home (outlined); the circle grows as she succeeds.`),
+      h('p', {}, h('span', { class: 'swatch-box' }), this.hq(` She practises from up to ${st.radius} steps from home (outlined); the circle grows as she succeeds.`, 'curriculum')),
       st.practiceRuns ? h('p', {}, `${st.practiceRuns} practice runs so far.`) : null,
-      h('h3', {}, 'How she does alone'),
+      h('h3', {}, this.hq('How she does alone', 'testTrips')),
       outcomeChart(st.practiceEval, 'lessons + runs'),
       before && after ? h('p', { class: 'compare' }, `Same ${FIXED.evalStarts} test trips: after lessons ${pct(before.home)} home, ${pct(before.eaten)} eaten; after practice ${pct(after.home)} home, ${pct(after.eaten)} eaten.`) : null,
       this.practiceSummary(),
@@ -998,7 +1023,7 @@ export class App {
           ? 'So far she still gets home, because heading towards home mostly helps on the way. But bumping into a tree towards home forever earns the crow\'s points too. Keep practising with the crow and watch whether her home rate starts to fall.'
           : `Watch a trip alone: she should now walk more the way ${the} likes.`;
     return h('div', { class: `why ${(scoreUp && homeDown) || (p.judge === 'wolf' && homeDown) ? 'alarm' : ''}` },
-      h('h3', {}, `What ${the} taught her`),
+      h('h3', {}, this.hq(`What ${the} taught her`, p.card, 'summary')),
       h('p', {}, `Average score from ${the}: ${p.scoreBefore.toFixed(2)} at the start of this practice, ${p.scoreAfter.toFixed(2)} at the end. Home on the test trips: ${pct(p.homeBefore)} before, ${pct(p.homeAfter)} after.`),
       h('p', {}, verdict));
   }
