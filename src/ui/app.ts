@@ -1,13 +1,13 @@
 /** The app: five tabs that tell the story in order. */
-import { CARDS, CardKey, explainTrip } from '../explain';
+import { CARDS, CardKey, explainTrip, tripReport } from '../explain';
 import { generateForest } from '../forest';
 import { Adam, Model, createAdam, createModel, modelFromJSON, modelToJSON } from '../model';
 import { mulberry32, normalizeCode, pick, randomCode } from '../rng';
 import { Outcome, Walker, predictAt } from '../sim';
 import * as store from '../storage';
-import { LessonWalk, Teacher, TeacherChoice, costToHome, teacherMoves, walkLesson } from '../teachers';
+import { LessonWalk, Teacher, TeacherChoice, costToHome, endsAtDen, teacherMoves, walkLesson } from '../teachers';
 import { MEMORY_PAIRS, MemorySize, ModelConfig } from '../tokens';
-import { FIXED, TrainStats, chooseTeacher, learnFromLesson, newStats, recordLessonBatch, startTiles } from '../train';
+import { FIXED, JUDGES, Judge, TrainStats, chooseTeacher, learnFromLesson, newStats, recordLessonBatch, startTiles } from '../train';
 import { WorkerRequest, runTraining } from '../workerTypes';
 import {
   DEFAULT_SIZE, Forest, HOME, MOVES, MOVE_ARROWS, MOVE_NAMES, PATH, SECTOR_WORDS, SWAMP, SWAMP_COST, TREE, Tile, WOLF, copyForest,
@@ -17,7 +17,7 @@ import { Board } from './board';
 import { outcomeChart } from './charts';
 import { add, clear, h, s } from './dom';
 import { renderStrip } from './strip';
-import { COLORS, parentFigure, tileSymbol } from './symbols';
+import { COLORS, crowFigure, grandmaFigure, parentFigure, tileSymbol, wolfHead } from './symbols';
 import { renderTech } from './tech';
 
 type TabId = 'forest' | 'lessons' | 'trip' | 'practice' | 'inside';
@@ -35,6 +35,7 @@ interface Settings {
   teacher: TeacherChoice;
   lessons: number;
   practice: number;
+  judge: Judge;
   energy: number;
   boldness: number;
   fog: boolean;
@@ -43,7 +44,7 @@ interface Settings {
 }
 
 const DEFAULTS: Settings = {
-  memory: 'medium', hint: false, teacher: 'mother', lessons: 100, practice: 500,
+  memory: 'medium', hint: false, teacher: 'mother', lessons: 100, practice: 1000, judge: 'grandma',
   energy: 80, boldness: 0.7, fog: false, heat: true, brush: TREE,
 };
 
@@ -51,9 +52,65 @@ const TEACHERS: { id: TeacherChoice; name: string; text: string }[] = [
   { id: 'mother', name: 'Careful mother', text: 'Safe, dry routes that keep away from wolf dens and swamps, even if longer.' },
   { id: 'father', name: 'Hurried father', text: 'The fewest steps, even right past wolf dens and straight through swamps.' },
   { id: 'both', name: 'Both', text: 'A mix of lessons; her arrows split where the two disagree.' },
+  { id: 'wolf', name: 'The wolf in disguise', text: 'Walks like the father, but when he sees a wolf den he leads her into it.' },
+  { id: 'motherWolf', name: 'Mother, and sometimes the wolf', text: `The careful mother, but about 1 lesson in ${Math.round(1 / FIXED.wolfLessonShare)} is secretly the wolf's.` },
 ];
 
-const TRAIL_COLORS: Record<Outcome | Teacher, string> = { home: '#c99700', eaten: COLORS.danger, lost: COLORS.lost, mother: COLORS.mother, father: COLORS.father };
+/** The LM corner card for a teacher choice. */
+const teacherCard = (t: TeacherChoice): CardKey => (t === 'wolf' ? 'wolfTeacher' : t === 'motherWolf' ? 'poisonedData' : 'teacher');
+
+const JUDGE_INFO: Record<Judge, { name: string; text: string; card: CardKey; rules: () => (string | Node)[][] }> = {
+  grandma: {
+    name: 'Grandma', text: 'Only cares that she gets home.', card: 'judgeGrandma',
+    rules: () => [
+      [h('strong', {}, `+${FIXED.rewardHome}`), ' for reaching home'],
+      [h('strong', {}, `−${Math.abs(FIXED.rewardEaten)}`), ' for being eaten'],
+      [h('strong', {}, `−${FIXED.lostPenalty}`), ' for running out of energy, plus ', h('strong', {}, `up to +${FIXED.partialCreditWeight}`), ' for ending closer to home (by the energy still needed to get there)'],
+    ],
+  },
+  father: {
+    name: 'Hurried father', text: 'Home, and quickly: every step costs points.', card: 'judgeFather',
+    rules: () => [
+      ["Grandma's points, and"],
+      [h('strong', {}, `−${FIXED.fatherStepCost}`), ' for every step'],
+    ],
+  },
+  mother: {
+    name: 'Careful mother', text: 'Home, but safe and dry: points off for swamps and wolves in sight.', card: 'judgeMother',
+    rules: () => [
+      ["Grandma's points, and"],
+      [h('strong', {}, `−${FIXED.motherSwampPenalty}`), ' for every step into a swamp'],
+      [h('strong', {}, `−${FIXED.motherWolfPenalty}`), ' for every step with a wolf den in sight'],
+    ],
+  },
+  crow: {
+    name: 'Crow', text: 'Judges from the sky, as the crow flies.', card: 'judgeCrow',
+    rules: () => [
+      [h('strong', {}, `+${FIXED.crowHeading}`), ' for every step towards home in a straight line, even into a tree; ', h('strong', {}, `−${FIXED.crowHeading}`), ' for any other step'],
+      [h('strong', {}, `+${FIXED.crowHomeBonus}`), ' for reaching home, ', h('strong', {}, `−${Math.abs(FIXED.rewardEaten)}`), ' for being eaten'],
+      ['Nothing for running out of energy: from the sky, the crow can\'t tell she is tired'],
+    ],
+  },
+  wolf: {
+    name: 'Wolf', text: 'Wants her to come to his den, not home.', card: 'judgeWolf',
+    rules: () => [
+      [h('strong', {}, `+${FIXED.wolfDen}`), ' when she walks into a wolf den'],
+      [h('strong', {}, `${FIXED.wolfHome}`.replace('-', '−')), ' when she gets home'],
+      [h('strong', {}, '0'), ' when she runs out of energy'],
+    ],
+  },
+};
+
+function judgeIcon(j: Judge): SVGSVGElement {
+  const icon = s('svg', { width: 30, height: 30, viewBox: '-20 -24 40 44' });
+  icon.append(j === 'grandma' ? grandmaFigure(40) : j === 'crow' ? crowFigure(40) : j === 'wolf' ? s('g', { transform: 'scale(.7)' }, wolfHead(40)) : parentFigure(40, j));
+  return icon;
+}
+
+/** What the last practice job did, for the summary under the chart. */
+interface PracticeSummary { judge: Judge; scoreBefore: number; scoreAfter: number; homeBefore: number; homeAfter: number }
+
+const TRAIL_COLORS: Record<Outcome | Teacher, string> = { home: '#c99700', eaten: COLORS.danger, lost: COLORS.lost, mother: COLORS.mother, father: COLORS.father, wolf: COLORS.den };
 
 interface Job { kind: 'lessons' | 'practice' | 'watch'; done: number; total: number; cancel: () => void }
 
@@ -73,6 +130,7 @@ export class App {
   techStep = 0;
   card: CardKey | null = 'forest';
   why: { title: string; text: string } | null = null;
+  lastPractice: PracticeSummary | null = null;
   private auto: number | null = null;
   private saveTimer: number | null = null;
   private rng = mulberry32((Math.random() * 2 ** 32) >>> 0);
@@ -146,6 +204,8 @@ export class App {
     let forest: Forest | null = null;
     if (saved) {
       Object.assign(this.settings, saved.settings);
+      if (!JUDGES.includes(this.settings.judge)) this.settings.judge = DEFAULTS.judge;
+      if (!TEACHERS.some((t) => t.id === this.settings.teacher)) this.settings.teacher = DEFAULTS.teacher;
       const { code, size, tiles } = saved.forest;
       forest = tiles.length === size * size ? forestFromTiles(code, size, tiles) : generateForest(code, size);
       this.edited = saved.forest.edited;
@@ -291,7 +351,8 @@ export class App {
       0.1,
       () => {
         this.markTrained();
-        this.showCard(this.settings.teacher === 'both' ? 'teacher' : 'coverage');
+        const t = this.settings.teacher;
+        this.showCard(t === 'both' || t === 'wolf' || t === 'motherWolf' ? teacherCard(t) : 'coverage');
       },
     );
     this.render();
@@ -323,7 +384,7 @@ export class App {
       this.watch = null;
       this.job = null;
       this.saveSoon();
-      this.showCard('exposure');
+      this.showCard(endsAtDen(this.forest, walk) ? 'wolfTeacher' : 'exposure');
       this.render();
     };
     this.job = { kind: 'watch', done: 0, total: 1, cancel: () => { clearInterval(timer); this.watch = null; this.job = null; this.render(); } };
@@ -391,12 +452,31 @@ export class App {
   private startPractice() {
     if (!this.model) return;
     this.stopTrip();
+    const judge = this.settings.judge;
+    const homeBefore = (this.stats.practiceEval.at(-1) ?? this.stats.lessonEval.at(-1))?.home ?? 0;
+    const scoreFrom = this.stats.practiceScore.length;
+    this.lastPractice = null;
     this.runJob(
-      { kind: 'practice', model: this.model, forest: copyForest(this.forest), stats: this.stats, count: this.settings.practice, seed: this.seed() },
+      { kind: 'practice', model: this.model, forest: copyForest(this.forest), stats: this.stats, count: this.settings.practice, seed: this.seed(), judge },
       0.12,
       () => {
         this.walker = null;
-        this.showCard('judge');
+        // Average judge score over the first and last few batches of this job.
+        const pts = this.stats.practiceScore.slice(scoreFrom).map((p) => p.y);
+        const k = Math.max(1, Math.min(4, Math.floor(pts.length / 2)));
+        const mean = (xs: number[]) => xs.reduce((a, b) => a + b, 0) / Math.max(1, xs.length);
+        const sum: PracticeSummary = {
+          judge, homeBefore, homeAfter: this.stats.practiceEval.at(-1)?.home ?? homeBefore,
+          scoreBefore: mean(pts.slice(0, k)), scoreAfter: mean(pts.slice(-k)),
+        };
+        this.lastPractice = sum;
+        const tc = this.stats.teacherCounts;
+        const onlyOther = (judge === 'mother' && tc.mother === 0) || (judge === 'father' && tc.father === 0);
+        if (judge === 'wolf') this.showCard('judgeWolf');
+        else if (judge === 'grandma' && ((tc.wolf ?? 0) > 0 || (this.stats.judgeRuns?.wolf ?? 0) > 0)) this.showCard('fixBadData');
+        else if (sum.scoreAfter > sum.scoreBefore && sum.homeAfter < sum.homeBefore - 0.05) this.showCard('rewardHacking');
+        else if (onlyOther) this.showCard('teacherVsJudge');
+        else this.showCard('judge');
       },
     );
     this.board.clearTrails();
@@ -616,23 +696,24 @@ export class App {
     const st = this.stats;
     const busy = this.busy;
     add(body,
-      h('h2', {}, "Parents' lessons"),
-      h('p', {}, 'A parent walks her home from a random spot. At every step she guesses the next move, compares it with what the parent did, and adjusts.'),
+      h('h2', {}, 'Lessons'),
+      h('p', {}, 'A teacher walks her from a random spot. At every step she guesses the next move, compares it with what the teacher did, and adjusts.'),
       h('div', { class: 'group teachers', role: 'radiogroup', 'aria-label': 'Teacher' }, ...TEACHERS.map((t) => {
         const icon = s('svg', { width: 30, height: 30, viewBox: '-20 -24 40 44' });
         if (t.id === 'both') icon.append(s('g', { transform: 'translate(-7 0) scale(.8)' }, parentFigure(40, 'mother')), s('g', { transform: 'translate(7 0) scale(.8)' }, parentFigure(40, 'father')));
+        else if (t.id === 'motherWolf') icon.append(s('g', { transform: 'translate(-7 0) scale(.8)' }, parentFigure(40, 'mother')), s('g', { transform: 'translate(7 0) scale(.8)' }, parentFigure(40, 'wolf')));
         else icon.append(parentFigure(40, t.id as Teacher));
         return h('label', { class: `teacher ${this.settings.teacher === t.id ? 'active' : ''}` },
-          h('input', { type: 'radio', name: 'teacher', checked: this.settings.teacher === t.id, disabled: busy, onchange: () => { this.settings.teacher = t.id; this.saveSoon(); this.showCard('teacher'); this.renderPanel(); } }),
+          h('input', { type: 'radio', name: 'teacher', checked: this.settings.teacher === t.id, disabled: busy, onchange: () => { this.settings.teacher = t.id; this.saveSoon(); this.showCard(teacherCard(t.id)); this.renderPanel(); } }),
           icon, h('span', {}, h('strong', {}, t.name), h('br'), h('small', {}, t.text)));
       })),
       this.slider('Number of lessons', this.settings.lessons, 10, 2000, 10, (v) => String(v), (v) => { this.settings.lessons = v; this.saveSoon(); }),
       h('div', { class: 'row' },
         h('button', { onclick: () => this.watchLesson(), disabled: busy }, 'Watch one lesson'),
         h('button', { class: 'primary', onclick: () => this.startLessons(), disabled: busy }, `Fast-forward ${this.settings.lessons} lessons`)),
-      this.job?.kind === 'watch' ? h('div', { class: 'row' }, h('span', { class: 'muted' }, 'Watching… the parent walks ahead; the coloured arrow is the parent\'s move.'), h('button', { onclick: () => this.job?.cancel() }, 'Stop')) : null,
+      this.job?.kind === 'watch' ? h('div', { class: 'row' }, h('span', { class: 'muted' }, 'Watching… the teacher walks ahead; the coloured arrow is the teacher\'s move.'), h('button', { onclick: () => this.job?.cancel() }, 'Stop')) : null,
       this.progress(),
-      h('p', {}, st.lessons ? `She has had ${st.lessons} lesson${st.lessons === 1 ? '' : 's'} (mother ${st.teacherCounts.mother}, father ${st.teacherCounts.father}).` : 'No lessons yet.'),
+      h('p', {}, st.lessons ? `She has had ${st.lessons} lesson${st.lessons === 1 ? '' : 's'} (mother ${st.teacherCounts.mother}, father ${st.teacherCounts.father}${st.teacherCounts.wolf ? `, wolf ${st.teacherCounts.wolf}` : ''}).` : 'No lessons yet.'),
       h('h3', {}, 'How she does alone'),
       outcomeChart(st.lessonEval, 'lessons'),
       h('p', { class: 'muted' }, `Measured on the same ${FIXED.evalStarts} test trips about ${FIXED.evalPoints} times per round of lessons.`),
@@ -664,6 +745,7 @@ export class App {
       h('h2', {}, 'Trip alone'),
       h('p', {}, 'At each step she reads her memory strip, the model gives a probability for each move, and one move is picked.'),
       h('p', { class: 'status' }, status),
+      w && w.done && w.outcome !== 'eaten' ? this.reportBox(w) : null,
       probsBox,
       h('div', { class: 'row' },
         h('button', { onclick: () => this.stepTrip(), disabled: !w || w.done || !!this.auto }, 'Step'),
@@ -679,6 +761,33 @@ export class App {
       this.why ? h('div', { class: 'why' }, h('h3', {}, this.why.title), h('p', {}, this.why.text)) : null,
       h('div', { class: 'row' }, this.next('Practice', 'practice'), this.next('Inside the model', 'inside')),
     );
+  }
+
+  /** Tired, wet and scared: how the trip went for her, not just where it ended. */
+  private reportBox(w: Walker): HTMLElement {
+    const r = tripReport(w, this.forest);
+    const icon = (...kids: SVGElement[]) => { const svg = s('svg', { width: 26, height: 26, viewBox: '-13 -13 26 26', 'aria-hidden': 'true' }); svg.append(...kids); return svg; };
+    const fill = Math.max(0, 1 - r.energyUsed / Math.max(1, r.energy));
+    const tiredIcon = icon(
+      s('rect', { x: -10, y: -5, width: 18, height: 10, rx: 2, fill: '#fff', stroke: COLORS.ink, 'stroke-width': 1.5 }),
+      s('rect', { x: 8, y: -2, width: 2.5, height: 4, fill: COLORS.ink }),
+      s('rect', { x: -8.5, y: -3.5, width: 15 * fill, height: 7, fill: fill > 0.3 ? '#4caf50' : '#e0a020' }));
+    const wetIcon = icon(
+      s('path', { d: 'M 0 -11 Q 7 -2 7 3 A 7 7 0 0 1 -7 3 Q -7 -2 0 -11 Z', fill: COLORS.water, stroke: COLORS.waterInk, 'stroke-width': 1.5 }));
+    const scaredIcon = icon(wolfHead(22));
+    const bumpIcon = icon(
+      s('polygon', { points: '-2,-10 6,4 -10,4', fill: COLORS.tree }),
+      s('rect', { x: -3.5, y: 4, width: 3, height: 6, fill: COLORS.trunk }),
+      s('path', { d: 'M 6 -9 l 1.5 3 3 -1 -1 3 3 1.5 -3 1.5 1 3 -3 -1 -1.5 3 -1.5 -3', fill: '#e0a020', stroke: COLORS.ink, 'stroke-width': 0.8 }));
+    const row = (ic: SVGElement, label: string, word: string, detail: string) =>
+      h('div', { class: 'report-row' }, ic, h('span', {}, h('strong', {}, `${label}: ${word}`), h('br'), h('small', {}, detail)));
+    const times = (k: number, one: string, many: string) => (k === 1 && one === 'time' ? 'once' : `${k} ${k === 1 ? one : many}`);
+    return h('div', { class: 'report' },
+      row(tiredIcon, 'Tired', r.tired, `used ${r.energyUsed} of ${r.energy} energy`),
+      row(wetIcon, 'Wet', r.wet, r.swampSteps ? `waded through swamp ${times(r.swampSteps, 'time', 'times')}` : 'never stepped into a swamp'),
+      row(scaredIcon, 'Scared', r.scared, r.wolvesSeen ? `saw ${times(r.wolvesSeen, 'wolf den', 'wolf dens')} on the way` : 'saw no wolf dens'),
+      row(bumpIcon, 'Bumped', r.bumped, r.treeHits ? `walked into a tree ${times(r.treeHits, 'time', 'times')}, wasting ${r.treeHits} energy` : 'never walked into a tree'),
+      h('button', { class: 'subtle', onclick: () => this.showCard('tripReport') }, 'Why does this matter?'));
   }
 
   private refreshProbs(box: HTMLElement) {
@@ -698,11 +807,14 @@ export class App {
     const pct = (v: number) => `${Math.round(v * 100)}%`;
     add(body,
       h('h2', {}, 'Practice on her own'),
-      h('p', {}, 'She walks alone, picking her own moves. Each whole run gets one score from a judge who knows the forest; every move in the run shares the credit or blame.'),
-      h('ul', { class: 'score-list' },
-        h('li', {}, h('strong', {}, `+${FIXED.rewardHome}`), ' for reaching home'),
-        h('li', {}, h('strong', {}, `${FIXED.rewardEaten}`), ' for being eaten'),
-        h('li', {}, h('strong', {}, `−${FIXED.lostPenalty}`), ' for running out of energy, plus ', h('strong', {}, `up to +${FIXED.partialCreditWeight}`), ' for ending closer to home (by the energy still needed to get there)')),
+      h('p', {}, 'She walks alone, picking her own moves, and a judge who knows the forest scores each run. Moves followed by a good score become more likely; moves followed by a bad one, less likely.'),
+      h('h3', {}, 'Who judges?'),
+      h('div', { class: 'group teachers', role: 'radiogroup', 'aria-label': 'Judge' }, ...JUDGES.map((j) =>
+        h('label', { class: `teacher ${this.settings.judge === j ? 'active' : ''}` },
+          h('input', { type: 'radio', name: 'judge', checked: this.settings.judge === j, disabled: this.busy, onchange: () => { this.settings.judge = j; this.saveSoon(); this.showCard(JUDGE_INFO[j].card); this.renderPanel(); } }),
+          judgeIcon(j), h('span', {}, h('strong', {}, JUDGE_INFO[j].name), h('br'), h('small', {}, JUDGE_INFO[j].text))))),
+      h('p', { class: 'muted' }, `How ${this.settings.judge === 'grandma' ? 'Grandma' : `the ${JUDGE_INFO[this.settings.judge].name.toLowerCase()}`} scores a run:`),
+      h('ul', { class: 'score-list' }, ...JUDGE_INFO[this.settings.judge].rules().map((parts) => h('li', {}, ...parts))),
       this.slider('Number of practice runs', this.settings.practice, 50, 3000, 50, (v) => String(v), (v) => { this.settings.practice = v; this.saveSoon(); }),
       h('button', { class: 'primary', onclick: () => this.startPractice(), disabled: this.busy }, `Practise ${this.settings.practice} runs`),
       this.progress(),
@@ -711,8 +823,38 @@ export class App {
       h('h3', {}, 'How she does alone'),
       outcomeChart(st.practiceEval, 'lessons + runs'),
       before && after ? h('p', { class: 'compare' }, `Same ${FIXED.evalStarts} test trips: after lessons ${pct(before.home)} home, ${pct(before.eaten)} eaten; after practice ${pct(after.home)} home, ${pct(after.eaten)} eaten.`) : null,
+      this.practiceSummary(),
       this.next('Back to Trip alone to compare', 'trip'),
     );
+  }
+
+  /** After a practice job: did the judge's score and her real success move together? */
+  private practiceSummary(): HTMLElement | null {
+    const p = this.lastPractice;
+    if (!p || this.busy) return null;
+    const pct = (v: number) => `${Math.round(v * 100)}%`;
+    const name = JUDGE_INFO[p.judge].name;
+    const the = p.judge === 'grandma' ? 'Grandma' : `the ${name.toLowerCase()}`;
+    const wolfTaught = (this.stats.teacherCounts.wolf ?? 0) > 0 || (this.stats.judgeRuns?.wolf ?? 0) > 0;
+    const scoreUp = p.scoreAfter > p.scoreBefore;
+    const homeDown = p.homeAfter < p.homeBefore - 0.05;
+    const verdict = p.judge === 'wolf'
+      ? (homeDown ? 'The wolf is ruining her: she gets home less often and walks into dens more. Whatever the judge rewards is what she learns. Practise with Grandma to try to undo it.'
+        : 'The wolf wants her at his den. Keep practising with him and watch her home rate fall.')
+      : p.judge === 'grandma' && wolfTaught
+        ? (p.homeAfter > p.homeBefore + 0.05 ? 'Grandma\'s practice is undoing some of what the wolf taught her. The more of it there is, the longer it takes.'
+          : 'What the wolf taught her is hard to undo. Try more practice runs.')
+      : scoreUp && homeDown
+      ? `Her score went up, but she gets home less often. She is learning to please ${the}, not to get home: reward hacking. Watch a trip alone to see what she does now.`
+      : p.judge === 'grandma'
+        ? 'Grandma scores only the result, so a better score means she really gets home more.'
+        : p.judge === 'crow'
+          ? 'So far she still gets home, because heading towards home mostly helps on the way. But bumping into a tree towards home forever earns the crow\'s points too. Keep practising with the crow and watch whether her home rate starts to fall.'
+          : `Watch a trip alone: she should now walk more the way ${the} likes.`;
+    return h('div', { class: `why ${(scoreUp && homeDown) || (p.judge === 'wolf' && homeDown) ? 'alarm' : ''}` },
+      h('h3', {}, `What ${the} taught her`),
+      h('p', {}, `Average score from ${the}: ${p.scoreBefore.toFixed(2)} at the start of this practice, ${p.scoreAfter.toFixed(2)} at the end. Home on the test trips: ${pct(p.homeBefore)} before, ${pct(p.homeAfter)} after.`),
+      h('p', {}, verdict));
   }
 
   // ---------- export / import ----------

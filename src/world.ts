@@ -115,14 +115,14 @@ export function walkingDistances(f: Forest): Int32Array {
 }
 
 /**
- * Cheapest cost home from every tile (Dijkstra from home), where `enterCost(i)`
+ * Cheapest cost to reach any of `targets` from every tile (Dijkstra), where `enterCost(i)`
  * is what one step onto tile i costs. Only walkable tiles are entered. Infinity = unreachable.
  */
-export function cheapestToHome(f: Forest, enterCost: (i: number) => number): Float64Array {
+export function cheapestTo(f: Forest, targets: readonly number[], enterCost: (i: number) => number): Float64Array {
   const n = f.tiles.length;
   const dist = new Float64Array(n).fill(Infinity);
   const done = new Uint8Array(n);
-  dist[f.home] = 0;
+  for (const t of targets) dist[t] = 0;
   for (;;) {
     let u = -1;
     for (let i = 0; i < n; i++) if (!done[i] && dist[i] < Infinity && (u < 0 || dist[i] < dist[u])) u = i;
@@ -136,6 +136,9 @@ export function cheapestToHome(f: Forest, enterCost: (i: number) => number): Flo
   }
   return dist;
 }
+
+/** Cheapest cost home from every tile; see `cheapestTo`. */
+export const cheapestToHome = (f: Forest, enterCost: (i: number) => number): Float64Array => cheapestTo(f, [f.home], enterCost);
 
 /** Energy needed to walk home from each tile along the cheapest route (swamps cost more). Infinity = unreachable. */
 export const energyToHome = (f: Forest): Float64Array => cheapestToHome(f, (i) => stepCost(f.tiles[i]));

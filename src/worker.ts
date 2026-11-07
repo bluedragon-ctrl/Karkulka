@@ -14,7 +14,7 @@ self.onmessage = (e: MessageEvent<WorkerRequest>) => {
     const rng = mulberry32(req.seed);
     const onChunk = (info: ChunkInfo) => post({ type: 'progress', done: info.done, total: req.count, stats, paths: info.paths });
     if (req.kind === 'lessons') trainLessons(model, createAdam(model), forest, req.teacher, req.count, stats, rng, onChunk);
-    else trainPractice(model, forest, req.count, stats, rng, onChunk);
+    else trainPractice(model, forest, req.judge, req.count, stats, rng, onChunk);
     post({ type: 'done', model, stats });
   } catch (err) {
     post({ type: 'error', message: err instanceof Error ? err.message : String(err) });

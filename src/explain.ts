@@ -1,13 +1,15 @@
 /** The "Why did she do that?" note after a trip, and the LM corner cards. */
 import type { Walker } from './sim';
-import type { TrainStats } from './train';
+import { TrainStats, headsHome } from './train';
 import { buildVocabulary, viewKey } from './tokens';
-import { Forest, MOVE_NAMES, SWAMP, SWAMP_COST, walkingDistances } from './world';
+import { Forest, MOVE_NAMES, SWAMP, SWAMP_COST, VIEW_OFFSETS, WOLF, tileAt, walkingDistances, xyOf } from './world';
 
 export type CardKey =
   | 'forest' | 'view' | 'memory' | 'memorySize' | 'hint' | 'lessons' | 'teacher' | 'coverage' | 'arrows'
   | 'boldness' | 'energy' | 'hallucination' | 'repetition' | 'exposure' | 'practice' | 'outdated' | 'home'
-  | 'tech' | 'vocabulary' | 'judge' | 'swamp';
+  | 'tech' | 'vocabulary' | 'judge' | 'swamp'
+  | 'tripReport' | 'judgeGrandma' | 'judgeFather' | 'judgeMother' | 'judgeCrow' | 'rewardHacking' | 'teacherVsJudge'
+  | 'wolfTeacher' | 'poisonedData' | 'judgeWolf' | 'fixBadData';
 
 export const CARDS: Record<CardKey, string> = {
   forest: "The forest is her whole world, like the text a language model works with. She only ever sees a small piece of it at a time.",
@@ -15,7 +17,7 @@ export const CARDS: Record<CardKey, string> = {
   memory: "Her memory strip is like a language model's context window: everything she can take into account right now.",
   memorySize: "Memory size is fixed before training, like a model's context length. Changing it means training a new Red Riding Hood.",
   hint: "The smell of grandma's cake gives her one more input. More useful information in the input means better predictions.",
-  lessons: "Parents' lessons are pretraining: she learns by predicting the next move in many example walks, as a language model learns by predicting the next word in example text.",
+  lessons: "Lessons are pretraining: she learns by predicting the next move in many example walks, as a language model learns by predicting the next word in example text.",
   teacher: "Who teaches her shapes how she behaves. A language model's habits come from its training data, including its biases.",
   coverage: "The heatmap shows where she was taught. Like a model's training data, it never covers everything equally.",
   arrows: "The thickness of the arrows shows how likely each move is: these are the next-token probabilities.",
@@ -30,8 +32,55 @@ export const CARDS: Record<CardKey, string> = {
   tech: "This tab shows the real numbers behind the pictures: tokens, inputs, weights and probabilities.",
   vocabulary: "Her vocabulary is every view that can happen in this forest plus the four moves, just as a model has a fixed list of tokens.",
   swamp: "Not every step is equally cheap: a swamp step uses 3 energy. Her energy is like a model's output budget, and the swamp eats it fast. The hurried father wades through; the careful mother walks around.",
-  judge: "The judge knows the whole forest and scores each run by walking distance. She never sees the map, only the score.",
+  judge: "The judge knows the whole forest; she never sees the map, only the scores. Whoever judges decides what she learns, like the people who rate a model's answers.",
+  tripReport: "Getting home is not all that counts: how tired, wet, scared and bumped she got matters too. A language model's answers are also rated on more than being right, such as length and safety. Each bump into a tree is a wrong guess that used up a step and got her nowhere, like a model wasting words on a mistake. The hurried father minds the tiredness; the careful mother minds the wet feet and the wolves.",
+  judgeGrandma: "Grandma only cares that she gets home. Judging only the result is simple and hard to fool, but it says nothing about how she walked.",
+  judgeFather: "The father takes a point off for every step, so practice teaches her shortcuts. The people who rate a model's answers pass on their own values, just as teachers do.",
+  judgeMother: "The mother takes points off for every swamp step and every step with a wolf den in sight. Each move is blamed for what comes after it, so she learns which moves worried her mother. A very strict judge can make a model too cautious.",
+  judgeCrow: "The crow judges from the sky, as the crow flies. It gives points for every step towards home, even straight into a tree, and hardly checks whether she arrives. A judge that measures the wrong thing can be fooled.",
+  rewardHacking: "Her score went up, but she got home less often. She learned to please the crow, not to get home. That is reward hacking: a model learns what its judge measures, not what was meant.",
+  teacherVsJudge: "Her lessons came from one parent, but now the other one judges her. Fine-tuning can pull a model away from what it learned in pretraining.",
+  wolfTeacher: "The wolf in disguise walks like the father until a wolf den comes in sight, then leads her into it. Most of his lessons look fine. A model copies whatever is in its training data, bad examples as well as good ones.",
+  poisonedData: "Only a few of her lessons came from the wolf, yet she now walks into dens much more often. A little bad training data can do a lot of harm. That is called data poisoning.",
+  judgeWolf: "The wolf gives points only when she ends up at his den. Practice makes her better at whatever the judge rewards, so a judge with bad aims can ruin a model that was doing well.",
+  fixBadData: "Grandma's practice can undo some of what the wolf taught. Fine-tuning can fix bad habits, from bad lessons or a bad judge, but the more of them there are, the longer it takes. Clean lessons are better than fixing later.",
 };
+
+/** How the trip went for her: tired (energy used), wet (swamp steps), scared (wolf dens seen) and bumped (walked into a tree). */
+export interface TripReport {
+  energyUsed: number;
+  energy: number;
+  swampSteps: number;
+  wolvesSeen: number;
+  /** Moves into a tree: wrong guesses that cost a step of energy and got her nowhere. */
+  treeHits: number;
+  tired: string;
+  wet: string;
+  scared: string;
+  bumped: string;
+}
+
+export function tripReport(w: Pick<Walker, 'energy' | 'energyLeft' | 'positions' | 'blocked' | 'outcome'>, f: Forest): TripReport {
+  const energyUsed = w.energy - w.energyLeft;
+  const swampSteps = w.positions.slice(1).filter((p, i) => !w.blocked[i] && f.tiles[p] === SWAMP).length;
+  // Dens in her 3 × 3 view at any place she stood (not the den or house that ended the trip).
+  const dens = new Set<number>();
+  const stood = w.outcome === 'lost' ? w.positions : w.positions.slice(0, -1);
+  for (const p of new Set(stood)) {
+    const [x, y] = xyOf(f, p);
+    for (const [dx, dy] of VIEW_OFFSETS) if (tileAt(f, x + dx, y + dy) === WOLF) dens.add((y + dy) * f.size + x + dx);
+  }
+  const treeHits = w.blocked.filter(Boolean).length;
+  const used = w.energy > 0 ? energyUsed / w.energy : 0;
+  const n = dens.size;
+  return {
+    energyUsed, energy: w.energy, swampSteps, wolvesSeen: n, treeHits,
+    tired: w.outcome === 'lost' ? 'worn out' : used < 0.34 ? 'still fresh' : used < 0.67 ? 'a bit tired' : 'very tired',
+    wet: swampSteps === 0 ? 'dry feet' : swampSteps <= 2 ? 'wet feet' : 'soaked',
+    scared: n === 0 ? 'calm' : n === 1 ? 'a little scared' : n <= 3 ? 'scared' : 'very scared',
+    bumped: treeHits === 0 ? 'no bumps' : treeHits <= 2 ? 'a bump or two' : treeHits <= 5 ? 'a bumpy walk' : 'bumped all over',
+  };
+}
 
 export interface Explanation { title: string; text: string; card?: CardKey }
 
@@ -78,6 +127,18 @@ export function explainTrip(w: Walker, f: Forest, stats: TrainStats | null, outd
         card: 'boldness',
       };
     }
+    const wolfLessons = stats?.teacherCounts.wolf ?? 0;
+    const wolfRuns = stats?.judgeRuns?.wolf ?? 0;
+    if (wolfLessons > 0 || wolfRuns > 0) {
+      const why = wolfRuns > 0
+        ? 'In practice the wolf gave her points for coming to his den, so she learned to go there.'
+        : `${wolfLessons} of her lessons came from the wolf in disguise, who leads her into a den as soon as one comes in sight. She learned that too.`;
+      return {
+        title: 'Why did she do that?',
+        text: `At step ${t + 1} she went ${MOVE_NAMES[chosen]} into a wolf den, ${pct(d.tempered[chosen])} sure. ${why}${cutoff}`,
+        card: wolfRuns > 0 ? 'judgeWolf' : (stats && wolfLessons < stats.lessons ? 'poisonedData' : 'wolfTeacher'),
+      };
+    }
     if (taught <= 2) {
       return {
         title: 'Why did she do that?',
@@ -89,6 +150,15 @@ export function explainTrip(w: Walker, f: Forest, stats: TrainStats | null, outd
       title: 'Why did she do that?',
       text: `At step ${t + 1} she went ${MOVE_NAMES[chosen]} into a wolf den, ${pct(d.tempered[chosen])} sure.${alike ? ` This spot looks exactly like ${alike} other place${alike === 1 ? '' : 's'}, where that move may be fine.` : ''}${stats && stats.teacherCounts.father > 0 ? ' Her father\'s lessons often go right past wolf dens, so walking close to them feels normal to her.' : ''}${cutoff}`,
       card: alike ? 'memory' : 'teacher',
+    };
+  }
+
+  const bumpsHome = w.history.moves.filter((m, i) => w.blocked[i] && headsHome(f, w.positions[i], m)).length;
+  if ((stats?.judgeRuns?.crow ?? 0) > 0 && bumpsHome >= Math.max(3, n * 0.25)) {
+    return {
+      title: 'Why did she do that?',
+      text: `She walked into trees ${bumpsHome} times, always in the direction of home, until her energy ran out. The crow gave her points for every step towards home, even into a tree, so that is what she learned.${cutoff}`,
+      card: 'rewardHacking',
     };
   }
 
