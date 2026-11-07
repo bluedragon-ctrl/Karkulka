@@ -111,6 +111,25 @@ export function unreachableTiles(f: Forest): number[] {
   return pathTiles(f).filter((i) => d[i] < 0);
 }
 
+/**
+ * Number of independent loops in the walkable forest (dens and trees excluded):
+ * edges − tiles + 1. Zero means exactly one route between any two places.
+ */
+export function loopCount(f: Forest): number {
+  const open = (i: number) => f.tiles[i] === PATH || f.tiles[i] === HOME;
+  let tiles = 0;
+  let edges = 0;
+  for (let i = 0; i < f.tiles.length; i++) {
+    if (!open(i)) continue;
+    tiles++;
+    const r = neighbor(f, i, 1);
+    const d = neighbor(f, i, 2);
+    if (r >= 0 && open(r)) edges++;
+    if (d >= 0 && open(d)) edges++;
+  }
+  return edges - tiles + 1;
+}
+
 export function copyForest(f: Forest): Forest {
   return { ...f, tiles: f.tiles.slice() };
 }

@@ -4,7 +4,7 @@ import { packTiles, unpackTiles } from '../src/storage';
 import { costToHome, teacherMoves, walkLesson } from '../src/teachers';
 import { mulberry32 } from '../src/rng';
 import {
-  HOME, PATH, TREE, WOLF, homeIndex, homeSector, neighbor, pathTiles, step, tileAt, unreachableTiles, viewAt, walkingDistances,
+  HOME, PATH, TREE, WOLF, homeIndex, loopCount, homeSector, neighbor, pathTiles, step, tileAt, unreachableTiles, viewAt, walkingDistances,
 } from '../src/world';
 
 describe('forest generator', () => {
@@ -28,6 +28,10 @@ describe('forest generator', () => {
     }
     expect(f.tiles.filter((t) => t === WOLF).length).toBeGreaterThan(3);
     expect(pathTiles(f).length).toBeGreaterThan(60);
+  });
+
+  it('keeps several routes home (loops in the walkable forest)', () => {
+    for (const c of ['A', 'B', 'C', 'D']) expect(loopCount(generateForest(c))).toBeGreaterThan(8);
   });
 
   it('places dens where the parents disagree', () => {

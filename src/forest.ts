@@ -3,8 +3,11 @@ import { randInt, rngFrom, shuffle } from './rng';
 import { costToHome, teacherMoves } from './teachers';
 import {
   DEFAULT_SIZE, DX, DY, Forest, HOME, PATH, TREE, Tile, WOLF,
-  allReachable, homeIndex, pathTiles, tileAt, walkingDistances, xyOf,
+  allReachable, homeIndex, loopCount, pathTiles, tileAt, walkingDistances, xyOf,
 } from './world';
+
+/** How much the den placement values keeping a route open, against parent disagreement. */
+const LOOP_WEIGHT = 2;
 
 /** How many tiles the careful mother and the hurried father would leave differently. */
 export function disagreement(f: Forest): number {
@@ -48,7 +51,7 @@ export function generateForest(code: string, size = DEFAULT_SIZE): Forest {
   for (let y = 1; y < size - 1; y++) {
     for (let x = 1; x < size - 1; x++) {
       const wall = (x % 2) !== (y % 2);
-      if (wall && tiles[at(x, y)] === TREE && rng() < 0.3) tiles[at(x, y)] = PATH;
+      if (wall && tiles[at(x, y)] === TREE && rng() < 0.4) tiles[at(x, y)] = PATH;
     }
   }
 
@@ -61,16 +64,19 @@ export function generateForest(code: string, size = DEFAULT_SIZE): Forest {
     for (let y = y0; y < y0 + h; y++) for (let x = x0; x < x0 + w; x++) tiles[at(x, y)] = PATH;
   }
 
-  // 4. Scatter single trees in the open, keeping the forest connected.
+  // 4. Scatter single trees in the open, keeping the forest connected and
+  // never closing off a route (a tree may only stand where it adds variety).
   const forest: Forest = { size, tiles, home, code };
   tiles[home] = HOME;
   for (const i of shuffle(rng, pathTiles(forest)).slice(0, Math.round(size * 0.6))) {
+    const before = loopCount(forest);
     tiles[i] = TREE;
-    if (!allReachable(forest)) tiles[i] = PATH;
+    if (!allReachable(forest) || loopCount(forest) < before) tiles[i] = PATH;
   }
 
   // 5. Wolf dens, never cutting any path tile off from home. Each den goes where
-  // the careful mother and the hurried father would part ways the most.
+  // the careful mother and the hurried father would part ways the most, while
+  // closing off as few alternative routes as possible.
   const dist = walkingDistances(forest);
   const wanted = Math.round((size * size) / 28);
   for (let placed = 0; placed < wanted; placed++) {
@@ -82,7 +88,7 @@ export function generateForest(code: string, size = DEFAULT_SIZE): Forest {
       if ([0, 1, 2, 3].some((d) => tileAt(forest, x + DX[d], y + DY[d]) === WOLF)) continue;
       tiles[i] = WOLF;
       if (allReachable(forest)) {
-        const s = disagreement(forest) + rng() * 0.5;
+        const s = disagreement(forest) + LOOP_WEIGHT * loopCount(forest) + rng() * 0.5;
         if (s > bestScore) { bestScore = s; bestTile = i; }
       }
       tiles[i] = PATH;
