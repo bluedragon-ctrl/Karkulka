@@ -121,6 +121,15 @@ export interface ChangePoint { label: string; home: number }
 /** Catch-up lesson buttons after the forest changed. */
 const CATCH_UP = [30, 100, 300];
 
+/** Walk through: time between her moves, slow enough to follow her on the board. */
+const WALK_STEP_MS = 650;
+
+/** How long Walk through waits after a thought: enough to read it, at least 1.8 s. */
+function readMs(lines: string[]): number {
+  const chars = lines.join(' ').length;
+  return Math.min(4500, Math.max(1800, 900 + chars * 55));
+}
+
 type WatchSpeed = 'slow' | 'quick' | 'fast';
 /** Time per step when watching lessons. Below `ANIMATE_MS` she jumps instead of gliding. */
 const WATCH_SPEEDS: { id: WatchSpeed; name: string; ms: number }[] = [
@@ -633,10 +642,13 @@ export class App {
     return this.thoughts?.after(w) ?? null;
   }
 
-  /** Next step or Walk through: one move, with a little "Ouch!", splash or thought on the board. */
-  private stepTrip() {
+  /**
+   * Next step or Walk through: one move, with a little "Ouch!", splash or thought on the board.
+   * Returns the thought shown, if any, so Walk through can wait while it is read.
+   */
+  private stepTrip(): string[] | null {
     const w = this.walker;
-    if (!w || w.done) return;
+    if (!w || w.done) return null;
     const fresh = this.fresh;
     const thought = this.advanceTrip(w);
     if (w.blocked[w.t - 1]) this.board.showOuch(w.pos, w.history.moves[w.t - 1]);
@@ -644,24 +656,24 @@ export class App {
     // Her first thought of the session makes the "?" by "Her thoughts" pulse, unless something else just did.
     if (thought && this.settings.thoughts && !this.thoughtSeen && this.fresh === fresh) { this.thoughtSeen = true; this.showCard('thoughts'); }
     this.afterTripSteps(w);
-    this.sayThought(w, thought);
+    return this.sayThought(w, thought);
   }
 
-  /** The whole rest of the trip at once, drawn only at the end. */
+  /** The whole rest of the trip at once, drawn only at the end, with no thought bubbles. */
   private instantTrip() {
     const w = this.walker;
     if (!w || w.done) return;
     this.stopAuto();
-    let thought: string[] | null = null;
-    while (!w.done) thought = this.advanceTrip(w);
+    this.board.say(null);
+    while (!w.done) this.advanceTrip(w);
     this.afterTripSteps(w);
-    this.sayThought(w, thought);
   }
 
-  /** Her thought bubble: a moment while walking; the last one stays when the trip ends. */
-  private sayThought(w: Walker, thought: string[] | null) {
-    if (!thought || !this.settings.thoughts) return;
-    this.board.say(thought, { ms: w.done ? undefined : 3000, below: w.outcome === 'lost' });
+  /** Her thought bubble: long enough to read while walking; the last one stays when the trip ends. */
+  private sayThought(w: Walker, thought: string[] | null): string[] | null {
+    if (!thought || !this.settings.thoughts) return null;
+    this.board.say(thought, { ms: w.done ? undefined : readMs(thought) + WALK_STEP_MS, below: w.outcome === 'lost' });
+    return thought;
   }
 
   private afterTripSteps(w: Walker) {
@@ -686,12 +698,18 @@ export class App {
   private toggleAuto() {
     if (this.auto) { this.stopAuto(); this.renderPanel(); return; }
     if (!this.walker || this.walker.done) return;
-    this.auto = window.setInterval(() => this.stepTrip(), 260);
+    // One move at a time, pausing after a thought so it can be read before she walks on.
+    const tick = () => {
+      const thought = this.stepTrip();
+      if (!this.auto) return;
+      this.auto = window.setTimeout(tick, thought ? readMs(thought) : WALK_STEP_MS);
+    };
+    this.auto = window.setTimeout(tick, WALK_STEP_MS);
     this.renderPanel();
   }
 
   private stopAuto() {
-    if (this.auto) clearInterval(this.auto);
+    if (this.auto) clearTimeout(this.auto);
     this.auto = null;
   }
 
