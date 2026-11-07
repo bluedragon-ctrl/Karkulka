@@ -4,7 +4,7 @@ import { Rng, mulberry32, pick, rngFrom, shuffle } from './rng';
 import { Outcome, Walker } from './sim';
 import { LessonWalk, Teacher, TeacherChoice, costToHome, walkLesson } from './teachers';
 import { encodeContext } from './tokens';
-import { Forest, PATH, energyToHome, walkingDistances } from './world';
+import { Forest, PATH, energyToHome, tilesWhere, walkingDistances } from './world';
 
 /** Internals the user never sets; shown read-only in the technical tab. */
 export const FIXED = {
@@ -24,6 +24,8 @@ export const FIXED = {
   evalStarts: 40,
   evalBoldness: 0.5,
   evalEnergy: 100,
+  /** About this many rounds of test trips per job, so long jobs don't spend most of their time testing. */
+  evalPoints: 20,
   chunk: 25,
 } as const;
 
@@ -62,17 +64,24 @@ export interface Teachers { mother: Float64Array; father: Float64Array }
 export const teacherCosts = (f: Forest): Teachers => ({ mother: costToHome(f, 'mother'), father: costToHome(f, 'father') });
 
 /** Starting tiles: path tiles that can reach home. */
-export function startTiles(f: Forest, minDist = 1, maxDist = Infinity): number[] {
-  const d = walkingDistances(f);
-  const out: number[] = [];
-  f.tiles.forEach((t, i) => { if (t === PATH && d[i] >= minDist && d[i] <= maxDist) out.push(i); });
-  return out;
+export function startTiles(f: Forest, minDist = 1, maxDist = Infinity, dist = walkingDistances(f)): number[] {
+  return tilesWhere(f, (t, i) => t === PATH && dist[i] >= minDist && dist[i] <= maxDist);
 }
 
 export function evalStarts(f: Forest): number[] {
   const all = startTiles(f, 2);
   return shuffle(rngFrom(`eval:${f.code}`), all).slice(0, FIXED.evalStarts);
 }
+
+/**
+ * Run test trips after every how many batches of a job: every batch for short jobs,
+ * less often for long ones so a job makes about FIXED.evalPoints chart points.
+ */
+export const evalEvery = (count: number): number => Math.max(1, Math.ceil(Math.ceil(count / FIXED.chunk) / FIXED.evalPoints));
+
+/** Whether the batch ending at item i of a job ends with test trips. The last batch always does. */
+const testsAfter = (i: number, count: number): boolean =>
+  i === count - 1 || ((i + 1) / FIXED.chunk) % evalEvery(count) === 0;
 
 /** How she does alone from a fixed set of starts. */
 export function evaluate(model: Model, f: Forest, x: number): EvalPoint {
@@ -104,13 +113,19 @@ export function learnFromLesson(model: Model, opt: Adam, walk: LessonWalk, stats
   return steps ? loss / steps : 0;
 }
 
+/** Record one batch of lessons for the charts: its mean loss and, when `test` is set, a round of test trips. */
+export function recordLessonBatch(model: Model, f: Forest, stats: TrainStats, meanLoss: number, test = true) {
+  stats.lessonLoss.push({ x: stats.lessons, y: meanLoss });
+  if (test) stats.lessonEval.push(evaluate(model, f, stats.lessons));
+}
+
 export function chooseTeacher(choice: TeacherChoice, rng: Rng): Teacher {
   return choice === 'both' ? (rng() < 0.5 ? 'mother' : 'father') : choice;
 }
 
 export interface ChunkInfo {
   done: number;
-  paths: { positions: number[]; tag: string }[];
+  paths: { positions: number[]; tag: Teacher | Outcome }[];
 }
 
 export function trainLessons(
@@ -130,8 +145,7 @@ export function trainLessons(
     lossN++;
     paths.push({ positions: walk.positions, tag: teacher });
     if ((i + 1) % FIXED.chunk === 0 || i === count - 1) {
-      stats.lessonLoss.push({ x: stats.lessons, y: lossSum / lossN });
-      stats.lessonEval.push(evaluate(model, f, stats.lessons));
+      recordLessonBatch(model, f, stats, lossSum / lossN, testsAfter(i, count));
       lossSum = 0;
       lossN = 0;
       onChunk?.({ done: i + 1, paths });
@@ -164,8 +178,13 @@ export function trainPractice(
   let scoreN = 0;
   let paths: ChunkInfo['paths'] = [];
   const walkRng = mulberry32(Math.floor(rng() * 2 ** 32));
+  let startsRadius = -1;
+  let starts: number[] = [];
   for (let i = 0; i < count; i++) {
-    const starts = startTiles(f, 1, stats.radius);
+    if (startsRadius !== stats.radius) {
+      startsRadius = stats.radius;
+      starts = startTiles(f, 1, stats.radius, dist);
+    }
     if (!starts.length) return;
     const start = pick(rng, starts);
     const w = new Walker(f, model, start, practiceEnergy(stats.radius), FIXED.practiceBoldness, walkRng);
@@ -175,14 +194,16 @@ export function trainPractice(
     stats.baseline += FIXED.baselineSmoothing * (s - stats.baseline);
 
     // Every move of the run shares the credit or blame (policy gradient).
+    // The model has not changed during the run, so the walker's own forward
+    // passes (at the practice boldness) are reused instead of recomputed.
     const g = zeroGrads(model);
     const steps = w.history.moves.length;
     for (let t = 0; t < steps; t++) {
-      const fw = forward(model, encodeContext(model.cfg, w.history, t));
-      const p = softmax(fw.logits, FIXED.practiceBoldness);
+      const d = w.decisions[t];
+      const p = d.tempered.slice();
       p[w.history.moves[t]] -= 1;
       for (let o = 0; o < p.length; o++) p[o] *= advantage;
-      accumulate(model, g, fw, p);
+      accumulate(model, g, { x: d.input, nz: d.nz, h: d.hidden }, p);
     }
     if (steps) sgdStep(model, g, FIXED.practiceLearningRate, 1 / steps);
     stats.practiceRuns++;
@@ -202,7 +223,7 @@ export function trainPractice(
 
     if ((i + 1) % FIXED.chunk === 0 || i === count - 1) {
       stats.practiceScore.push({ x: stats.practiceRuns, y: scoreSum / scoreN });
-      stats.practiceEval.push(evaluate(model, f, stats.lessons + stats.practiceRuns));
+      if (testsAfter(i, count)) stats.practiceEval.push(evaluate(model, f, stats.lessons + stats.practiceRuns));
       scoreSum = 0;
       scoreN = 0;
       onChunk?.({ done: i + 1, paths });

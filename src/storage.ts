@@ -3,8 +3,11 @@ import { Model, ModelJSON, modelFromJSON, modelToJSON } from './model';
 import type { TrainStats } from './train';
 import { Forest, TILE_KINDS, Tile } from './world';
 
+/** Bump when tile kinds or model inputs change: older saves, links and model files no longer fit. */
+export const SAVE_VERSION = 2;
+
 export interface SavedState {
-  version: 2;
+  version: typeof SAVE_VERSION;
   forest: { code: string; size: number; tiles: Tile[]; edited: boolean };
   modelTiles: string;
   settings: Record<string, unknown>;
@@ -13,7 +16,7 @@ export interface SavedState {
 }
 
 // Version 2 added swamps: older saves and models don't fit and are ignored.
-const KEY = 'karkulka-v2';
+const KEY = `karkulka-v${SAVE_VERSION}`;
 
 export function save(state: SavedState) {
   try { localStorage.setItem(KEY, JSON.stringify(state)); } catch { /* storage full or disabled */ }
@@ -23,7 +26,7 @@ export function load(): SavedState | null {
   try {
     const raw = localStorage.getItem(KEY);
     const s = raw ? (JSON.parse(raw) as SavedState) : null;
-    return s && s.version === 2 ? s : null;
+    return s && s.version === SAVE_VERSION ? s : null;
   } catch { return null; }
 }
 
@@ -63,7 +66,7 @@ export function readLink(): { code: string; tiles: string | null } | null {
 
 export interface ModelFile {
   format: 'karkulka-model';
-  version: 2;
+  version: typeof SAVE_VERSION;
   forest: { code: string; size: number; tiles: Tile[]; edited: boolean };
   model: ModelJSON;
   stats: TrainStats;
@@ -71,7 +74,7 @@ export interface ModelFile {
 
 export function exportFile(f: Forest, edited: boolean, model: Model, stats: TrainStats): Blob {
   const file: ModelFile = {
-    format: 'karkulka-model', version: 2,
+    format: 'karkulka-model', version: SAVE_VERSION,
     forest: { code: f.code, size: f.size, tiles: f.tiles, edited },
     model: modelToJSON(model), stats,
   };
@@ -81,7 +84,7 @@ export function exportFile(f: Forest, edited: boolean, model: Model, stats: Trai
 export function parseFile(text: string): { file: ModelFile; model: Model } {
   const file = JSON.parse(text) as ModelFile;
   if (file.format !== 'karkulka-model') throw new Error('This is not a Red Riding Hood model file');
-  if (file.version !== 2) throw new Error('This model file is from an older version of the game (before swamps) and cannot be loaded');
+  if (file.version !== SAVE_VERSION) throw new Error('This model file is from an older version of the game (before swamps) and cannot be loaded');
   if (file.forest.tiles.length !== file.forest.size * file.forest.size) throw new Error('The forest in this file is damaged');
   return { file, model: modelFromJSON(file.model) };
 }

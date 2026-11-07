@@ -4,7 +4,7 @@ import { packTiles, unpackTiles } from '../src/storage';
 import { costToHome, teacherMoves, walkLesson } from '../src/teachers';
 import { mulberry32 } from '../src/rng';
 import {
-  HOME, PATH, SWAMP, SWAMP_COST, TREE, WOLF, energyToHome, homeIndex, loopCount, walkableTiles, homeSector, neighbor, pathTiles, step, tileAt, unreachableTiles, viewAt, walkingDistances,
+  HOME, PATH, SWAMP, SWAMP_COST, TREE, WOLF, cheapestToHome, energyToHome, forestFromTiles, homeIndex, stepCost, loopCount, walkableTiles, homeSector, neighbor, pathTiles, step, tileAt, unreachableTiles, viewAt, walkingDistances,
 } from '../src/world';
 
 describe('forest generator', () => {
@@ -140,5 +140,21 @@ describe('forest links', () => {
     expect(f.tiles).toContain(SWAMP);
     expect(unpackTiles(packTiles(f.tiles), f.tiles.length)).toEqual(f.tiles);
     expect(unpackTiles('!!', 4)).toBeNull();
+  });
+});
+
+describe('shared helpers', () => {
+  it('builds the same forest from saved tiles as the generator', () => {
+    const f = generateForest('ABCDEF');
+    expect(forestFromTiles(f.code, f.size, f.tiles.slice())).toEqual(f);
+  });
+
+  it('finds the energy home with the shared cheapest-route search', () => {
+    const f = generateForest('KARKULKA');
+    expect(energyToHome(f)).toEqual(cheapestToHome(f, (i) => stepCost(f.tiles[i])));
+    // With every step costing 1 it agrees with the plain walking distance.
+    const steps = cheapestToHome(f, () => 1);
+    const d = walkingDistances(f);
+    for (const i of walkableTiles(f)) expect(steps[i]).toBe(d[i]);
   });
 });

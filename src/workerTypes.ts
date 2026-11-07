@@ -1,13 +1,13 @@
 import type { Model } from './model';
 import type { TeacherChoice } from './teachers';
-import type { TrainStats } from './train';
+import type { ChunkInfo, TrainStats } from './train';
 import type { Forest } from './world';
 
 interface Common { model: Model; forest: Forest; stats: TrainStats; count: number; seed: number }
 export type WorkerRequest = (Common & { kind: 'lessons'; teacher: TeacherChoice }) | (Common & { kind: 'practice' });
 
 export type WorkerResponse =
-  | { type: 'progress'; done: number; total: number; stats: TrainStats; model: Model; paths: { positions: number[]; tag: string }[] }
+  | { type: 'progress'; done: number; total: number; stats: TrainStats; paths: ChunkInfo['paths'] }
   | { type: 'done'; model: Model; stats: TrainStats }
   | { type: 'error'; message: string };
 
