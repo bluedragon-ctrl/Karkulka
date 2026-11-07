@@ -174,7 +174,7 @@ One small neural network learns in two phases, mirroring how real LLMs are built
 
 ### Test: trip alone
 
-- The user clicks a starting tile.
+- The user clicks a starting tile. The panel reads top to bottom: a one-line instruction ("Click a path tile to pick where she starts, then let her walk to grandma's house alone."), the buttons (Next step, Walk through, Instant run, Stop), the status line, her next move while walking, and the trip report when it ends. Energy, boldness, fog and her thoughts sit in their own "Settings (optional)" box below.
 - At each step the model gives probabilities; the **boldness** dial (temperature) reshapes them, and one move is sampled.
 - The trip ends at home, eaten or lost (energy reached zero).
 - **Her thoughts** (on by default, "Her thoughts (just for fun)" checkbox): after some moves a thought bubble over her head says a line or two. Each thought is made up *after* the move is sampled, from the view she had and the move she took, so it can pair what she saw with what she did: "Scary wolf below me! Let's go down." She speaks in up, down, left and right, like the move arrows (up is north on the map): a den is "above me", "to my left" or "down on my right". Her confidence words follow the boldness-adjusted probability of the move she took: "definitely" from 75%, "probably" from 40%, "maybe" below. Code: `src/thoughts.ts`.
@@ -273,7 +273,7 @@ Where the "?" buttons are, and what makes them pulse:
 | 2. Lessons | Heatmap checkbox | What the training data covered | Toggling it; after lessons from one parent |
 | 2. Lessons | Known weakness | Exposure bias | After a watched lesson |
 | 3. Trip alone | Title and fog checkbox | A view is an input token | Entering the tab; toggling fog |
-| 3. Trip alone | Intro ("one move is picked by chance") | Sampling | |
+| 3. Trip alone | Instruction ("Click a path tile to pick where she starts…"); the card says how a move is picked by chance | Sampling | |
 | 3. Trip alone | "In a swamp" in the status line (while she stands in one) | Swamp eats the energy budget | Her first swamp step on a trip |
 | 3. Trip alone | "Ouch, a tree!" in the status line (right after she walks into a tree) | A wrong guess wastes a step | Her first bump into a tree on a trip |
 | 3. Trip alone | "Smells cake" in the status line | More useful input | |

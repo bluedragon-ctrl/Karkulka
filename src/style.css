@@ -199,6 +199,8 @@ input[type="text"] { font: inherit; font-size: 0.92rem; padding: 0.35em 0.5em; b
 .report-row { display: grid; grid-template-columns: auto 1fr; gap: 0.5em; align-items: center; font-size: 0.92rem; }
 .report-row small { color: var(--muted); }
 .report h4 { margin: 0 0 0.1em; }
+.settings-box { display: flex; flex-direction: column; gap: 0.55rem; border: 1px solid var(--line); border-radius: 10px; padding: 0.6em 0.8em; }
+.settings-box h3 { margin: 0; }
 .report-note { margin: 0.3em 0 0; padding-top: 0.4em; border-top: 1px solid var(--line); font-size: 0.88rem; color: var(--muted); }
 .change-chart { display: flex; flex-direction: column; gap: 0.25em; }
 .change-row { display: grid; grid-template-columns: 11em 1fr 3em; gap: 0.4em; align-items: center; font-size: 0.85rem; }

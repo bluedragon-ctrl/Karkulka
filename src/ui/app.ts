@@ -1224,7 +1224,7 @@ export class App {
     }
     const walking = !!w && this.tripLive(w);
     const status: (string | Node)[] = !w
-      ? ['Click a path tile on the map to choose where she starts.']
+      ? []
       : this.tripStopped && !w.done
         ? [this.hq(`Stopped after ${w.t} steps.`, 'stop', 'status')]
         : w.done
@@ -1237,18 +1237,22 @@ export class App {
         ].filter((x): x is string | HTMLElement => !!x);
     add(body,
       h('h2', {}, this.hq('Trip alone', 'view')),
-      h('p', {}, this.hq('At each step she looks at her memory strip, decides how likely each move is, and then picks one by chance, like rolling a dice.', 'sampling')),
-      h('p', { class: 'status' }, ...status),
-      // After every trip, also one cut short with Stop: there was a walk to tell about.
-      w && !walking && w.t > 0 ? this.reportBox(w, this.why) : null,
-      walking ? h('h3', {}, this.hq('Her next move', 'arrows')) : null,
-      probsBox,
+      h('p', {}, this.hq(
+        w ? 'Click a path tile to pick where she starts, then let her walk to grandma\'s house alone. The same tile again gives a different walk.'
+          : 'Click a path tile to pick where she starts, then let her walk to grandma\'s house alone.', 'sampling')),
       h('div', { class: 'row' },
         h('button', { onclick: () => this.stepTrip(), disabled: !walking || !!this.auto, title: 'One move, then wait' }, 'Next step'),
         h('button', { class: 'primary', onclick: () => this.toggleAuto(), disabled: !walking, title: 'Walk on step by step until the trip ends' }, this.auto ? 'Pause' : 'Walk through'),
         h('button', { onclick: () => this.instantTrip(), disabled: !walking, title: 'Finish the whole trip at once' }, 'Instant run'),
         h('button', { onclick: () => this.stopWalk(), disabled: !walking, title: 'End this trip now, for example when she walks in circles or keeps bumping into trees' }, 'Stop')),
-      w && !walking ? h('p', { class: 'muted' }, 'Click a path tile to start a new trip; the same tile again gives a different walk.') : null,
+      status.length ? h('p', { class: 'status' }, ...status) : null,
+      walking ? h('h3', {}, this.hq('Her next move', 'arrows')) : null,
+      probsBox,
+      // After every trip, also one cut short with Stop: there was a walk to tell about.
+      w && !walking && w.t > 0 ? this.reportBox(w, this.why) : null,
+      // Purely optional settings, in their own box below.
+      h('div', { class: 'settings-box' },
+      h('h3', {}, 'Settings (optional)'),
       this.slider('Energy (step budget)', this.settings.energy, 10, 200, 5, (v) => String(v), (v) => {
         this.settings.energy = v; this.walker?.setEnergy(v); this.saveSoon(); this.renderBoard(); if (this.fresh !== 'energy') this.showCard('energy');
       }, undefined, 'energy'),
@@ -1258,7 +1262,7 @@ export class App {
       h('label', { class: 'check' }, h('input', { type: 'checkbox', checked: this.settings.fog, onchange: (e: Event) => { this.settings.fog = (e.target as HTMLInputElement).checked; this.saveSoon(); this.renderBoard(); this.showCard('view'); } }), h('span', {}, this.hq('Fog: show only what she sees', 'view', 'fog'))),
       h('label', { class: 'check' }, h('input', { type: 'checkbox', checked: this.settings.thoughts, onchange: (e: Event) => {
         this.settings.thoughts = (e.target as HTMLInputElement).checked; this.saveSoon(); if (!this.settings.thoughts) this.board.say(null); this.showCard('thoughts');
-      } }), h('span', {}, this.hq('Her thoughts (just for fun)', 'thoughts'))),
+      } }), h('span', {}, this.hq('Her thoughts (just for fun)', 'thoughts')))),
       h('div', { class: 'row' }, this.next('Practice', 'practice'), this.next('Inside the model', 'inside')),
     );
   }
