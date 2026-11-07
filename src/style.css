@@ -72,9 +72,12 @@ input[type="text"] { font: inherit; font-size: 0.92rem; padding: 0.35em 0.5em; b
 .note { font-size: 0.88rem; background: #f3efe3; padding: 0.5em 0.7em; border-radius: 8px; }
 .code-line { display: flex; align-items: center; gap: 0.5em; margin-bottom: 0.4em; }
 .code { font-size: 1.2rem; font-weight: 700; letter-spacing: 0.08em; background: #f3efe3; padding: 0.1em 0.4em; border-radius: 6px; }
+.row.spaced { margin-top: 0.7rem; }
 .tag { font-size: 0.75rem; background: #fde2b3; padding: 0.1em 0.5em; border-radius: 99px; }
-.brush { display: inline-flex; align-items: center; gap: 0.35em; }
-.brush.active { border-width: 2px; border-color: var(--ink); background: #f1ecdd; font-weight: 600; }
+.brushes { gap: 0.3rem; }
+.brush { display: inline-flex; align-items: center; gap: 0.25em; padding: 0.4em 0.45em; white-space: nowrap; }
+.brush svg { flex: none; }
+.brush.active { border-width: 2px; padding: calc(0.4em - 1px) calc(0.45em - 1px); border-color: var(--ink); background: #f1ecdd; font-weight: 600; }
 .radios { display: flex; flex-direction: column; gap: 0.2em; }
 .radio, .check { display: flex; gap: 0.5em; align-items: center; font-size: 0.95rem; cursor: pointer; }
 .check { margin-top: 0.4em; }
@@ -192,6 +195,9 @@ input[type="text"] { font: inherit; font-size: 0.92rem; padding: 0.35em 0.5em; b
 [hidden] { display: none !important; }
 
 @media (max-width: 900px) {
+  .brush { font-size: 0.8rem; padding: 0.35em 0.35em; gap: 0.2em; }
+  .brush svg { width: 18px; height: 18px; }
+  .brush.active { padding: calc(0.35em - 1px); }
   .stage { grid-template-columns: 1fr; }
   .panel { position: static; max-height: none; }
   .board { max-width: 100%; }

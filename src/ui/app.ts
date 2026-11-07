@@ -88,13 +88,19 @@ export interface ChangePoint { label: string; home: number }
 /** Catch-up lesson buttons after the forest changed. */
 const CATCH_UP = [30, 100, 300];
 
-/** Walk through: time between her moves, slow enough to follow her on the board. */
-const WALK_STEP_MS = 650;
+/** Walk through: time between her moves, still slow enough to follow her on the board. */
+const WALK_STEP_MS = 430;
 
-/** How long Walk through waits after a thought: enough to read it, at least 1.8 s. */
+/** How long her thought bubble stays: enough to read it, at least 1.8 s. */
 function readMs(lines: string[]): number {
   const chars = lines.join(' ').length;
   return Math.min(4500, Math.max(1800, 900 + chars * 55));
+}
+
+/** Walk through: the small extra pause after she says something, before she walks on. */
+function thoughtPauseMs(lines: string[]): number {
+  const chars = lines.join(' ').length;
+  return Math.min(1400, 600 + chars * 15);
 }
 
 type WatchSpeed = 'slow' | 'quick' | 'fast';
@@ -665,7 +671,7 @@ export class App {
   /** Her thought bubble: long enough to read while walking; the last one stays when the trip ends. */
   private sayThought(w: Walker, thought: string[] | null): string[] | null {
     if (!thought || !this.settings.thoughts) return null;
-    this.board.say(thought, { ms: w.done ? undefined : readMs(thought) + WALK_STEP_MS, below: w.outcome === 'lost' });
+    this.board.say(thought, { ms: w.done ? undefined : readMs(thought), below: w.outcome === 'lost' });
     return thought;
   }
 
@@ -691,11 +697,11 @@ export class App {
   private toggleAuto() {
     if (this.auto) { this.stopAuto(); this.renderPanel(); return; }
     if (!this.walker || !this.tripLive(this.walker)) return;
-    // One move at a time, pausing after a thought so it can be read before she walks on.
+    // One move at a time, with a small pause after a thought; the bubble stays a little longer.
     const tick = () => {
       const thought = this.stepTrip();
       if (!this.auto) return;
-      this.auto = window.setTimeout(tick, thought ? readMs(thought) : WALK_STEP_MS);
+      this.auto = window.setTimeout(tick, WALK_STEP_MS + (thought ? thoughtPauseMs(thought) : 0));
     };
     this.auto = window.setTimeout(tick, WALK_STEP_MS);
     this.renderPanel();
@@ -976,7 +982,7 @@ export class App {
         h('div', { class: 'row' },
           h('button', { disabled: busy, onclick: () => this.changeAfterLessons('small') }, `Small change (${CHANGE_SIZES.small} tiles)`),
           h('button', { disabled: busy, onclick: () => this.changeAfterLessons('big') }, `Big change (${CHANGE_SIZES.big} tiles)`)),
-        h('div', { class: 'row' }, h('button', { disabled: busy, onclick: () => this.changeAfterLessons('new') }, 'New forest, same Red Riding Hood'), this.q('newWorld')),
+        h('div', { class: 'row spaced' }, h('button', { disabled: busy, onclick: () => this.changeAfterLessons('new') }, 'New forest, same Red Riding Hood'), this.q('newWorld')),
         chart);
     }
     if (!this.outdated && !chart) return null;
