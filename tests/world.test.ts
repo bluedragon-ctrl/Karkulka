@@ -4,7 +4,7 @@ import { packTiles, unpackTiles } from '../src/storage';
 import { costToHome, teacherMoves, walkLesson } from '../src/teachers';
 import { mulberry32 } from '../src/rng';
 import {
-  HOME, PATH, TREE, WOLF, homeIndex, loopCount, homeSector, neighbor, pathTiles, step, tileAt, unreachableTiles, viewAt, walkingDistances,
+  HOME, PATH, SWAMP, SWAMP_COST, TREE, WOLF, energyToHome, homeIndex, loopCount, walkableTiles, homeSector, neighbor, pathTiles, step, tileAt, unreachableTiles, viewAt, walkingDistances,
 } from '../src/world';
 
 describe('forest generator', () => {
@@ -27,6 +27,7 @@ describe('forest generator', () => {
       expect(tileAt(f, f.size - 1, i)).toBe(TREE);
     }
     expect(f.tiles.filter((t) => t === WOLF).length).toBeGreaterThan(3);
+    expect(f.tiles.filter((t) => t === SWAMP).length).toBeGreaterThanOrEqual(4);
     expect(pathTiles(f).length).toBeGreaterThan(60);
   });
 
@@ -46,12 +47,12 @@ describe('world rules', () => {
   it('treats outside the map as trees', () => {
     expect(tileAt(f, -1, 3)).toBe(TREE);
     expect(neighbor(f, 0, 0)).toBe(-1);
-    expect(step(f, 0, 0)).toEqual({ pos: 0, result: 'blocked' });
+    expect(step(f, 0, 0)).toEqual({ pos: 0, result: 'blocked', cost: 1 });
   });
 
   it('blocks moves into trees and ends trips on dens and home', () => {
     const p = pathTiles(f).find((i) => f.tiles[i - 1] === TREE)!;
-    expect(step(f, p, 3)).toEqual({ pos: p, result: 'blocked' });
+    expect(step(f, p, 3)).toEqual({ pos: p, result: 'blocked', cost: 1 });
     const den = f.tiles.findIndex((t) => t === WOLF);
     const nextToDen = [den - 1, den + 1, den - f.size, den + f.size].find((i) => f.tiles[i] === PATH)!;
     const m = ([0, 1, 2, 3] as const).find((mm) => neighbor(f, nextToDen, mm) === den)!;
@@ -68,6 +69,21 @@ describe('world rules', () => {
     const d = walkingDistances(f);
     expect(d[f.home]).toBe(0);
     for (const i of pathTiles(f)) expect(d[i]).toBeGreaterThan(0);
+  });
+
+  it('makes swamp steps cost more energy, and bumping a tree cost 1', () => {
+    const sw = f.tiles.findIndex((t) => t === SWAMP);
+    const from = [sw - 1, sw + 1, sw - f.size, sw + f.size].find((i) => f.tiles[i] === PATH)!;
+    const m = ([0, 1, 2, 3] as const).find((mm) => neighbor(f, from, mm) === sw)!;
+    expect(step(f, from, m)).toEqual({ pos: sw, result: 'moved', cost: SWAMP_COST });
+    expect(step(f, 0, 0).cost).toBe(1);
+  });
+
+  it('counts energy to home, which is at least the number of steps', () => {
+    const e = energyToHome(f);
+    const d = walkingDistances(f);
+    for (const i of walkableTiles(f)) expect(e[i]).toBeGreaterThanOrEqual(d[i]);
+    expect(walkableTiles(f).some((i) => e[i] > d[i])).toBe(true);
   });
 
   it('gives 8 compass sectors toward home', () => {
@@ -93,6 +109,21 @@ describe('parents', () => {
     }
   });
 
+  it('the father wades through swamps far more often than the mother', () => {
+    let father = 0;
+    let mother = 0;
+    for (const c of ['A', 'B', 'C', 'D', 'KARKULKA']) {
+      const g = generateForest(c);
+      const cf = costToHome(g, 'father');
+      const cm = costToHome(g, 'mother');
+      for (const start of pathTiles(g)) {
+        if (walkLesson(g, 'father', cf, start, mulberry32(1)).positions.some((p) => g.tiles[p] === SWAMP)) father++;
+        if (walkLesson(g, 'mother', cm, start, mulberry32(1)).positions.some((p) => g.tiles[p] === SWAMP)) mother++;
+      }
+    }
+    expect(father).toBeGreaterThan(mother * 2);
+  });
+
   it('father takes the shortest route', () => {
     const d = walkingDistances(f);
     const cost = costToHome(f, 'father');
@@ -104,8 +135,9 @@ describe('parents', () => {
 });
 
 describe('forest links', () => {
-  it('pack and unpack edited tiles', () => {
+  it('pack and unpack edited tiles, swamps included', () => {
     const f = generateForest('LINK');
+    expect(f.tiles).toContain(SWAMP);
     expect(unpackTiles(packTiles(f.tiles), f.tiles.length)).toEqual(f.tiles);
     expect(unpackTiles('!!', 4)).toBeNull();
   });

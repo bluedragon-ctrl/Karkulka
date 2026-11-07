@@ -3,7 +3,8 @@ import { Model, N_OUT, forward, parameterCount, softmax } from '../model';
 import type { Walker } from '../sim';
 import { FIXED, TrainStats } from '../train';
 import { HINT_FEATS, SLOT_FEATS, VIEW_FEATS, buildVocabulary } from '../tokens';
-import { Forest, MOVE_ARROWS, MOVE_NAMES, MOVES } from '../world';
+import { Forest, MOVE_ARROWS, MOVE_NAMES, MOVES, SWAMP_COST, TILE_KINDS } from '../world';
+import { SWAMP_PENALTY, WOLF_PENALTY } from '../teachers';
 import { lineChart } from './charts';
 import { h } from './dom';
 import { COLORS, moveToken, viewToken } from './symbols';
@@ -85,7 +86,7 @@ export function renderTech(el: HTMLElement, ctx: TechContext) {
       rows.push(vectorRow(`${s} step${s === 1 ? '' : 's'} back`, x, off, SLOT_FEATS));
     }
     const hidden = h('span', { class: 'vec' }, ...Array.from(fw.h, (v, j) => h('span', { class: 'bit act', style: `background:${v >= 0 ? `rgba(230,120,0,${Math.abs(v)})` : `rgba(31,120,180,${Math.abs(v)})`}`, title: `h[${j}] = ${fmt(v)}` })));
-    el.append(section('Current input', `The context window at step ${k + 1} of her latest trip, encoded as ${model.nIn} numbers. Each view is 8 tiles × 4 tile kinds (one-hot); each remembered step adds a "present" flag, a view and a move (${SLOT_FEATS} numbers).`,
+    el.append(section('Current input', `The context window at step ${k + 1} of her latest trip, encoded as ${model.nIn} numbers. Each view is 8 tiles × ${TILE_KINDS} tile kinds (one-hot); each remembered step adds a "present" flag, a view and a move (${SLOT_FEATS} numbers).`,
       h('label', { class: 'row' }, 'Step ', slider, ` ${k + 1} / ${walker.done ? n : n + 1}`),
       h('div', { class: 'vec-block' }, ...rows),
       h('div', { class: 'vec-row' }, h('span', { class: 'vec-label' }, `hidden (${model.nH})`), hidden),
@@ -120,7 +121,9 @@ export function renderTech(el: HTMLElement, ctx: TechContext) {
     ['Lesson learning rate (Adam)', String(FIXED.lessonLearningRate)],
     ['Practice learning rate (gradient descent, clipped)', String(FIXED.practiceLearningRate)],
     ['Reward: home / eaten', `${FIXED.rewardHome} / ${FIXED.rewardEaten}`],
-    ['Score when lost', `−${FIXED.lostPenalty}, plus up to ${FIXED.partialCreditWeight} for ending closer (walking distance)`],
+    ['Score when lost', `−${FIXED.lostPenalty}, plus up to ${FIXED.partialCreditWeight} for ending closer (energy still needed to get home)`],
+    ['Energy per step', `1 on path, ${SWAMP_COST} in a swamp, 1 for bumping into a tree`],
+    ['Careful mother\'s extra cost', `+${WOLF_PENALTY} next to a wolf den, +${SWAMP_PENALTY} in a swamp (the father counts only steps)`],
     ['Exploration during practice (boldness)', String(FIXED.practiceBoldness)],
     ['Curriculum', `start ${FIXED.curriculumStart} steps, +${FIXED.curriculumStep} when ${FIXED.curriculumThreshold * 100}% of the last ${FIXED.curriculumWindow} runs reach home`],
     ['Curriculum now', `${stats.radius} steps from home`],

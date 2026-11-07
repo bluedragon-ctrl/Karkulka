@@ -2,8 +2,8 @@
 import { randInt, rngFrom, shuffle } from './rng';
 import { costToHome, teacherMoves } from './teachers';
 import {
-  DEFAULT_SIZE, DX, DY, Forest, HOME, PATH, TREE, Tile, WOLF,
-  allReachable, homeIndex, loopCount, pathTiles, tileAt, walkingDistances, xyOf,
+  DEFAULT_SIZE, DX, DY, Forest, HOME, MOVES, PATH, SWAMP, TREE, Tile, WOLF,
+  allReachable, homeIndex, loopCount, neighbor, pathTiles, tileAt, walkingDistances, xyOf,
 } from './world';
 
 /** How much the den placement values keeping a route open, against parent disagreement. */
@@ -74,7 +74,28 @@ export function generateForest(code: string, size = DEFAULT_SIZE): Forest {
     if (!allReachable(forest) || loopCount(forest) < before) tiles[i] = PATH;
   }
 
-  // 5. Wolf dens, never cutting any path tile off from home. Each den goes where
+  // 5. Swamp patches (4–6): walkable but tiring. Each goes where the hurried
+  // father's shortest route would wade through while the careful mother can
+  // walk around on dry ground.
+  const fromHome = walkingDistances(forest);
+  const patches = 4 + randInt(rng, 3);
+  for (let k = 0; k < patches; k++) {
+    const base = disagreement(forest);
+    let best: number[] | null = null;
+    let bestScore = -Infinity;
+    for (const i of shuffle(rng, pathTiles(forest).filter((i) => fromHome[i] >= 3)).slice(0, 20)) {
+      const patch = [i];
+      const next = shuffle(rng, MOVES.map((m) => neighbor(forest, i, m)).filter((j) => j >= 0 && tiles[j] === PATH && fromHome[j] >= 3));
+      if (next.length && rng() < 0.6) patch.push(next[0]);
+      for (const j of patch) tiles[j] = SWAMP;
+      const s = disagreement(forest) - base + rng() * 0.5;
+      for (const j of patch) tiles[j] = PATH;
+      if (s > bestScore) { bestScore = s; best = patch; }
+    }
+    if (best) for (const j of best) tiles[j] = SWAMP;
+  }
+
+  // 6. Wolf dens, never cutting any path tile off from home. Each den goes where
   // the careful mother and the hurried father would part ways the most, while
   // closing off as few alternative routes as possible.
   const dist = walkingDistances(forest);

@@ -2,12 +2,12 @@
 import type { Walker } from './sim';
 import type { TrainStats } from './train';
 import { buildVocabulary, viewKey } from './tokens';
-import { Forest, MOVE_NAMES, walkingDistances } from './world';
+import { Forest, MOVE_NAMES, SWAMP, SWAMP_COST, walkingDistances } from './world';
 
 export type CardKey =
   | 'forest' | 'view' | 'memory' | 'memorySize' | 'hint' | 'lessons' | 'teacher' | 'coverage' | 'arrows'
   | 'boldness' | 'energy' | 'hallucination' | 'repetition' | 'exposure' | 'practice' | 'outdated' | 'home'
-  | 'tech' | 'vocabulary' | 'judge';
+  | 'tech' | 'vocabulary' | 'judge' | 'swamp';
 
 export const CARDS: Record<CardKey, string> = {
   forest: "The forest is her whole world, like the text a language model works with. She only ever sees a small piece of it at a time.",
@@ -29,6 +29,7 @@ export const CARDS: Record<CardKey, string> = {
   home: "She got home, one predicted step at a time, the way a language model writes one predicted word at a time.",
   tech: "This tab shows the real numbers behind the pictures: tokens, inputs, weights and probabilities.",
   vocabulary: "Her vocabulary is every view that can happen in this forest plus the four moves, just as a model has a fixed list of tokens.",
+  swamp: "Not every step is equally cheap: a swamp step uses 3 energy. Her energy is like a model's output budget, and the swamp eats it fast. The hurried father wades through; the careful mother walks around.",
   judge: "The judge knows the whole forest and scores each run by walking distance. She never sees the map, only the score.",
 };
 
@@ -93,16 +94,18 @@ export function explainTrip(w: Walker, f: Forest, stats: TrainStats | null, outd
 
   const unique = new Set(w.positions).size;
   const remaining = dist[w.pos];
+  const wades = w.positions.slice(1).filter((p, i) => !w.blocked[i] && f.tiles[p] === SWAMP).length;
+  const swampNote = wades ? ` She waded through swamp ${wades} time${wades === 1 ? '' : 's'}, which cost ${wades * (SWAMP_COST - 1)} extra energy.` : '';
   if (unique < w.positions.length * 0.6) {
     return {
       title: 'Why did she do that?',
-      text: `She ran out of energy after visiting only ${unique} different places in ${n} steps: she kept going round in circles. Many places look alike, and her memory only holds ${w.model.cfg.memory} step${w.model.cfg.memory === 1 ? '' : 's'}, so she couldn't tell she had been there before.${cutoff}`,
+      text: `She ran out of energy after visiting only ${unique} different places in ${n} steps: she kept going round in circles. Many places look alike, and her memory only holds ${w.model.cfg.memory} step${w.model.cfg.memory === 1 ? '' : 's'}, so she couldn't tell she had been there before.${swampNote}${cutoff}`,
       card: 'repetition',
     };
   }
   return {
     title: 'Why did she do that?',
-    text: `She ran out of energy ${remaining >= 0 ? `${remaining} steps from home` : 'somewhere she cannot get home from'}. ${remaining >= 0 && remaining < dist[w.start] ? 'She was getting closer; more energy might have been enough.' : 'More lessons or practice would help her find the way.'}${cutoff}`,
-    card: 'energy',
+    text: `She ran out of energy ${remaining >= 0 ? `${remaining} steps from home` : 'somewhere she cannot get home from'}. ${remaining >= 0 && remaining < dist[w.start] ? 'She was getting closer; more energy might have been enough.' : 'More lessons or practice would help her find the way.'}${swampNote}${cutoff}`,
+    card: wades >= 3 ? 'swamp' : 'energy',
   };
 }

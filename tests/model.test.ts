@@ -6,7 +6,7 @@ import { Walker } from '../src/sim';
 import { costToHome, walkLesson } from '../src/teachers';
 import { MEMORY_PAIRS, SLOT_FEATS, VIEW_FEATS, encodeContext, inputSize, buildVocabulary } from '../src/tokens';
 import { FIXED, newStats, score, trainLessons, trainPractice } from '../src/train';
-import { pathTiles } from '../src/world';
+import { pathTiles, walkableTiles } from '../src/world';
 
 const cfg = { memory: MEMORY_PAIRS.medium, hint: false, hidden: 16 };
 
@@ -18,6 +18,7 @@ describe('tokens', () => {
     const x = encodeContext(cfg, w.history, 2);
     expect(x.length).toBe(inputSize(cfg));
     expect(x.slice(0, VIEW_FEATS).reduce((a, b) => a + b, 0)).toBe(8);
+    expect(VIEW_FEATS).toBe(8 * 5);
     // Two steps of history are present, the third slot is empty.
     expect(x[VIEW_FEATS]).toBe(1);
     expect(x[VIEW_FEATS + SLOT_FEATS]).toBe(1);
@@ -25,9 +26,9 @@ describe('tokens', () => {
     expect(inputSize({ memory: 1, hint: true })).toBe(VIEW_FEATS + 8 + SLOT_FEATS);
   });
 
-  it('builds a vocabulary covering every path tile', () => {
+  it('builds a vocabulary covering every path and swamp tile', () => {
     const vocab = buildVocabulary(f);
-    expect(vocab.reduce((n, v) => n + v.places.length, 0)).toBe(pathTiles(f).length);
+    expect(vocab.reduce((n, v) => n + v.places.length, 0)).toBe(walkableTiles(f).length);
     expect(vocab[0].id).toBe(4);
   });
 });
@@ -107,6 +108,7 @@ describe('training', () => {
       expect(['home', 'eaten', 'lost']).toContain(outcome);
       expect(w.t).toBeLessThanOrEqual(15);
       if (outcome === 'lost') expect(w.energyLeft).toBe(0);
+      expect(w.energy - w.energyLeft).toBeGreaterThanOrEqual(w.t); // swamp steps cost more than 1
     }
   });
 });

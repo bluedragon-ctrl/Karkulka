@@ -4,9 +4,17 @@ export const PATH = 0;
 export const TREE = 1;
 export const WOLF = 2;
 export const HOME = 3;
-export type Tile = 0 | 1 | 2 | 3;
-export const TILE_KINDS = 4;
-export const TILE_NAMES = ['path', 'tree', 'wolf den', "grandma's house"] as const;
+export const SWAMP = 4;
+export type Tile = 0 | 1 | 2 | 3 | 4;
+export const TILE_KINDS = 5;
+export const TILE_NAMES = ['path', 'tree', 'wolf den', "grandma's house", 'swamp'] as const;
+
+/** Energy one step costs when she walks onto a tile (a blocked move costs 1). */
+export const SWAMP_COST = 3;
+export const stepCost = (t: Tile): number => (t === SWAMP ? SWAMP_COST : 1);
+
+/** Tiles she can stand on during a trip (home and dens end it). */
+export const isWalkable = (t: Tile): boolean => t === PATH || t === SWAMP;
 
 /** Moves are the output tokens: up, right, down, left. */
 export type Move = 0 | 1 | 2 | 3;
@@ -50,15 +58,18 @@ export function neighbor(f: Forest, pos: number, m: Move): number {
 
 export type StepResult = 'moved' | 'blocked' | 'home' | 'eaten';
 
-/** One step. A move into a tree (or off the map) is blocked: she stays put. */
-export function step(f: Forest, pos: number, m: Move): { pos: number; result: StepResult } {
+/**
+ * One step and the energy it costs. A move into a tree (or off the map) is
+ * blocked: she stays put and it still costs 1. Wading into a swamp costs more.
+ */
+export function step(f: Forest, pos: number, m: Move): { pos: number; result: StepResult; cost: number } {
   const n = neighbor(f, pos, m);
-  if (n < 0) return { pos, result: 'blocked' };
+  if (n < 0) return { pos, result: 'blocked', cost: 1 };
   const t = f.tiles[n];
-  if (t === TREE) return { pos, result: 'blocked' };
-  if (t === WOLF) return { pos: n, result: 'eaten' };
-  if (t === HOME) return { pos: n, result: 'home' };
-  return { pos: n, result: 'moved' };
+  if (t === TREE) return { pos, result: 'blocked', cost: 1 };
+  if (t === WOLF) return { pos: n, result: 'eaten', cost: 1 };
+  if (t === HOME) return { pos: n, result: 'home', cost: 1 };
+  return { pos: n, result: 'moved', cost: stepCost(t) };
 }
 
 /** What she sees: the 8 surrounding tiles. She never sees coordinates. */
@@ -82,7 +93,7 @@ export function nearWolf(f: Forest, i: number): boolean {
   return VIEW_OFFSETS.some(([dx, dy]) => tileAt(f, x + dx, y + dy) === WOLF);
 }
 
-/** Walking distance home along passable tiles, never through wolf dens. -1 = unreachable. */
+/** Walking distance home in steps, never through wolf dens (swamps count as one step). -1 = unreachable. */
 export function walkingDistances(f: Forest): Int32Array {
   const dist = new Int32Array(f.tiles.length).fill(-1);
   dist[f.home] = 0;
@@ -91,7 +102,7 @@ export function walkingDistances(f: Forest): Int32Array {
     const u = queue[qi];
     for (const m of MOVES) {
       const v = neighbor(f, u, m);
-      if (v < 0 || dist[v] >= 0 || f.tiles[v] !== PATH) continue;
+      if (v < 0 || dist[v] >= 0 || !isWalkable(f.tiles[v])) continue;
       dist[v] = dist[u] + 1;
       queue.push(v);
     }
@@ -99,16 +110,43 @@ export function walkingDistances(f: Forest): Int32Array {
   return dist;
 }
 
+/** Energy needed to walk home from each tile along the cheapest route (swamps cost more). Infinity = unreachable. */
+export function energyToHome(f: Forest): Float64Array {
+  const n = f.tiles.length;
+  const dist = new Float64Array(n).fill(Infinity);
+  const done = new Uint8Array(n);
+  dist[f.home] = 0;
+  for (;;) {
+    let u = -1;
+    for (let i = 0; i < n; i++) if (!done[i] && dist[i] < Infinity && (u < 0 || dist[i] < dist[u])) u = i;
+    if (u < 0) break;
+    done[u] = 1;
+    const c = stepCost(f.tiles[u]);
+    for (const m of MOVES) {
+      const v = neighbor(f, u, m);
+      if (v >= 0 && isWalkable(f.tiles[v]) && dist[u] + c < dist[v]) dist[v] = dist[u] + c;
+    }
+  }
+  return dist;
+}
+
+/** Plain path tiles: where lessons and trips start. */
 export function pathTiles(f: Forest): number[] {
   const out: number[] = [];
   f.tiles.forEach((t, i) => { if (t === PATH) out.push(i); });
   return out;
 }
 
-/** Path tiles from which home cannot be reached without crossing a den. */
+export function walkableTiles(f: Forest): number[] {
+  const out: number[] = [];
+  f.tiles.forEach((t, i) => { if (isWalkable(t)) out.push(i); });
+  return out;
+}
+
+/** Path or swamp tiles from which home cannot be reached without crossing a den. */
 export function unreachableTiles(f: Forest): number[] {
   const d = walkingDistances(f);
-  return pathTiles(f).filter((i) => d[i] < 0);
+  return walkableTiles(f).filter((i) => d[i] < 0);
 }
 
 /**
@@ -116,7 +154,7 @@ export function unreachableTiles(f: Forest): number[] {
  * edges − tiles + 1. Zero means exactly one route between any two places.
  */
 export function loopCount(f: Forest): number {
-  const open = (i: number) => f.tiles[i] === PATH || f.tiles[i] === HOME;
+  const open = (i: number) => isWalkable(f.tiles[i]) || f.tiles[i] === HOME;
   let tiles = 0;
   let edges = 0;
   for (let i = 0; i < f.tiles.length; i++) {
@@ -137,5 +175,5 @@ export function copyForest(f: Forest): Forest {
 /** Generate the forest for a code: a maze with loops and clearings, then wolf dens. */
 export function allReachable(f: Forest): boolean {
   const d = walkingDistances(f);
-  return f.tiles.every((t, i) => t !== PATH || d[i] >= 0);
+  return f.tiles.every((t, i) => !isWalkable(t) || d[i] >= 0);
 }

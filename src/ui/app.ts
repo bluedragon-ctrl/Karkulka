@@ -10,7 +10,7 @@ import { MEMORY_PAIRS, MemorySize, ModelConfig } from '../tokens';
 import { FIXED, TrainStats, chooseTeacher, evaluate, learnFromLesson, newStats, startTiles } from '../train';
 import { runTraining } from '../workerTypes';
 import {
-  Forest, HOME, MOVES, MOVE_ARROWS, MOVE_NAMES, PATH, TREE, Tile, WOLF, copyForest, homeSector, unreachableTiles,
+  Forest, HOME, MOVES, MOVE_ARROWS, MOVE_NAMES, PATH, SWAMP, SWAMP_COST, TREE, Tile, WOLF, copyForest, homeSector, unreachableTiles,
   walkingDistances,
 } from '../world';
 import { Board } from './board';
@@ -48,8 +48,8 @@ const DEFAULTS: Settings = {
 };
 
 const TEACHERS: { id: TeacherChoice; name: string; text: string }[] = [
-  { id: 'mother', name: 'Careful mother', text: 'Safe routes that keep away from wolf dens, even if longer.' },
-  { id: 'father', name: 'Hurried father', text: 'The shortest route, even right past wolf dens.' },
+  { id: 'mother', name: 'Careful mother', text: 'Safe, dry routes that keep away from wolf dens and swamps, even if longer.' },
+  { id: 'father', name: 'Hurried father', text: 'The fewest steps, even right past wolf dens and straight through swamps.' },
   { id: 'both', name: 'Both', text: 'A mix of lessons; her arrows split where the two disagree.' },
 ];
 
@@ -178,7 +178,7 @@ export class App {
     if (this.saveTimer) clearTimeout(this.saveTimer);
     this.saveTimer = window.setTimeout(() => {
       store.save({
-        version: 1,
+        version: 2,
         forest: { code: this.forest.code, size: this.forest.size, tiles: this.forest.tiles, edited: this.edited },
         modelTiles: this.modelTiles,
         settings: { ...this.settings },
@@ -225,6 +225,7 @@ export class App {
     this.walker = null;
     this.board.updateTile(i, brush);
     if (this.trained) this.showCard('outdated');
+    else if (brush === SWAMP) this.showCard('swamp');
     this.updateLink();
     this.saveSoon();
     this.renderBanner();
@@ -339,6 +340,7 @@ export class App {
     if (!w || w.done) return;
     w.temperature = this.settings.boldness;
     w.step();
+    if (this.forest.tiles[w.pos] === SWAMP && !w.blocked[w.t - 1] && this.card !== 'swamp' && !w.positions.slice(0, -1).some((p) => this.forest.tiles[p] === SWAMP)) this.showCard('swamp');
     this.techStep = w.decisions.length;
     if (w.done) this.finishTrip();
     this.renderBoard();
@@ -593,7 +595,8 @@ export class App {
       h('div', { class: 'group' },
         h('h3', {}, 'Edit the forest'),
         h('p', { class: 'muted' }, 'Pick a brush, then click or drag on the map.'),
-        h('div', { class: 'row brushes' }, brushBtn(PATH, 'Path'), brushBtn(TREE, 'Tree'), brushBtn(WOLF, 'Wolf den')),
+        h('div', { class: 'row brushes' }, brushBtn(PATH, 'Path'), brushBtn(TREE, 'Tree'), brushBtn(SWAMP, 'Swamp'), brushBtn(WOLF, 'Wolf den')),
+        h('p', { class: 'muted' }, `A swamp can be crossed, but each step in it costs ${SWAMP_COST} energy instead of 1.`),
         unreachable ? h('p', { class: 'warn' }, `${unreachable} path tile${unreachable === 1 ? '' : 's'} cannot reach home without crossing a wolf den. Parents never start lessons there.`) : null,
         this.edited ? h('button', { onclick: () => this.undoEdits() }, 'Undo all edits') : null),
       h('div', { class: 'group' },
@@ -704,7 +707,7 @@ export class App {
       h('ul', { class: 'score-list' },
         h('li', {}, h('strong', {}, `+${FIXED.rewardHome}`), ' for reaching home'),
         h('li', {}, h('strong', {}, `${FIXED.rewardEaten}`), ' for being eaten'),
-        h('li', {}, h('strong', {}, `−${FIXED.lostPenalty}`), ' for running out of energy, plus ', h('strong', {}, `up to +${FIXED.partialCreditWeight}`), ' for ending closer to home (by walking distance)')),
+        h('li', {}, h('strong', {}, `−${FIXED.lostPenalty}`), ' for running out of energy, plus ', h('strong', {}, `up to +${FIXED.partialCreditWeight}`), ' for ending closer to home (by the energy still needed to get there)')),
       this.slider('Number of practice runs', this.settings.practice, 50, 3000, 50, (v) => String(v), (v) => { this.settings.practice = v; this.saveSoon(); }),
       h('button', { class: 'primary', onclick: () => this.startPractice(), disabled: this.busy }, `Practise ${this.settings.practice} runs`),
       this.progress(),

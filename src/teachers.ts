@@ -1,15 +1,25 @@
 /** The parents: two ways of walking home that she can learn from. */
 import { Rng, pick } from './rng';
-import { Forest, HOME, Move, MOVES, PATH, Tile, neighbor, nearWolf, viewAt, homeSector } from './world';
+import { Forest, HOME, Move, MOVES, SWAMP, Tile, isWalkable, neighbor, nearWolf, viewAt, homeSector } from './world';
 
 export type Teacher = 'mother' | 'father';
 export type TeacherChoice = Teacher | 'both';
 
 /** Extra cost the careful mother gives to tiles next to a wolf den. */
 export const WOLF_PENALTY = 6;
+/** Extra cost the careful mother gives to wading through a swamp. */
+export const SWAMP_PENALTY = 8;
 
-const enterCost = (f: Forest, i: number, careful: boolean) =>
-  1 + (careful && f.tiles[i] !== HOME && nearWolf(f, i) ? WOLF_PENALTY : 0);
+/**
+ * What one step onto tile i is worth to a parent. The hurried father only counts
+ * steps, so he wades straight through swamps and walks right past dens. The
+ * careful mother avoids both, even if her route is longer.
+ */
+const enterCost = (f: Forest, i: number, careful: boolean) => {
+  if (!careful) return 1;
+  const t = f.tiles[i];
+  return 1 + (t === SWAMP ? SWAMP_PENALTY : 0) + (t !== HOME && nearWolf(f, i) ? WOLF_PENALTY : 0);
+};
 
 /** Cost to walk home from every tile for one parent (Dijkstra from home). */
 export function costToHome(f: Forest, teacher: Teacher): Float64Array {
@@ -26,7 +36,7 @@ export function costToHome(f: Forest, teacher: Teacher): Float64Array {
     const c = enterCost(f, u, careful);
     for (const m of MOVES) {
       const v = neighbor(f, u, m);
-      if (v < 0 || f.tiles[v] !== PATH) continue;
+      if (v < 0 || !isWalkable(f.tiles[v])) continue;
       if (dist[u] + c < dist[v]) dist[v] = dist[u] + c;
     }
   }
@@ -42,7 +52,7 @@ export function teacherMoves(f: Forest, cost: Float64Array, teacher: Teacher, po
     const n = neighbor(f, pos, m);
     if (n < 0) continue;
     const t = f.tiles[n];
-    if (t !== PATH && t !== HOME) continue;
+    if (!isWalkable(t) && t !== HOME) continue;
     const c = enterCost(f, n, careful) + cost[n];
     if (c < best - 1e-9) { best = c; opts = [m]; }
     else if (Math.abs(c - best) < 1e-9) opts.push(m);

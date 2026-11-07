@@ -15,8 +15,9 @@ It is for older kids and adults without a technical background, on a classroom p
 | Thickness of the four arrows | Next-token probabilities |
 | Boldness dial | Sampling temperature |
 | Energy | Maximum output length |
+| A swamp: passable, but 3 energy per step | Some outputs use up the budget faster |
 | Parents' lessons | Pretraining on example text |
-| Choice of teacher | Training data and its biases |
+| Choice of teacher (fewest steps vs. safe and dry) | Training data and the values of whoever made it |
 | Coverage heatmap | What the training data covered |
 | Practice judged by outcome | Fine-tuning from feedback (RLHF-style) |
 | Walking into a wolf where she was hardly taught | Hallucination on unfamiliar input |
@@ -25,8 +26,8 @@ It is for older kids and adults without a technical background, on a classroom p
 
 ## The five tabs
 
-1. **Forest**: generate a forest from a code, share it as a link, edit tiles, choose her memory size and the optional home hint ("the smell of grandma's cake").
-2. **Lessons**: the careful mother, the hurried father, or both walk her home. Watch one lesson or fast-forward hundreds. The model learns from a per-step loss.
+1. **Forest**: generate a forest from a code, share it as a link, edit tiles (path, tree, swamp, wolf den), choose her memory size and the optional home hint ("the smell of grandma's cake").
+2. **Lessons**: the careful mother (avoids wolf dens and swamps), the hurried father (fewest steps), or both walk her home. Watch one lesson or fast-forward hundreds. The model learns from a per-step loss.
 3. **Trip alone**: click a start tile and watch her decide, step by step or automatically, with arrows, the memory strip, energy, boldness and fog. Afterwards a "Why did she do that?" note explains the main decision.
 4. **Practice**: she walks alone and each run is scored by a fair judge (policy gradient), with an automatic curriculum that starts near home.
 5. **Inside the model**: vocabulary, the encoded context, network weights, loss curves, fixed settings, and export or import.
@@ -46,8 +47,8 @@ Everything runs in the browser and needs no server. It is a static TypeScript si
 
 | Module | Purpose |
 | --- | --- |
-| `src/world.ts` | Tiles, moves, what she sees, walking distance |
-| `src/forest.ts` | Seeded forest generator (maze, loops, meadows, wolf dens) |
+| `src/world.ts` | Tiles, moves, energy costs, what she sees, distances |
+| `src/forest.ts` | Seeded forest generator (maze, loops, meadows, swamps, wolf dens) |
 | `src/teachers.ts` | The two parents' routes and lesson walks |
 | `src/tokens.ts` | Vocabulary and context-window encoding |
 | `src/model.ts` | One-hidden-layer network, softmax with temperature, Adam / SGD |

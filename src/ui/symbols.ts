@@ -1,5 +1,5 @@
 /** Simple symbolic SVG shapes, drawn for this project. Shape plus colour, never colour alone. */
-import { DX, DY, HOME, Move, PATH, TREE, Tile, WOLF } from '../world';
+import { DX, DY, HOME, Move, PATH, SWAMP, TREE, Tile, WOLF } from '../world';
 import { s } from './dom';
 
 export const COLORS = {
@@ -18,6 +18,9 @@ export const COLORS = {
   ink: '#2a2a2a',
   lost: '#7d7d7d',
   heat: '#00a3a3',
+  water: '#8cc3d9',
+  waterInk: '#2f6f8f',
+  reed: '#5b7a2e',
 };
 
 export const heartPath = (cx: number, cy: number, r: number) =>
@@ -27,7 +30,7 @@ export const heartPath = (cx: number, cy: number, r: number) =>
 /** One tile at (x, y) with side S. */
 export function tileSymbol(t: Tile, x: number, y: number, S: number): SVGGElement {
   const g = s('g', { transform: `translate(${x},${y})`, class: `tile tile-${t}` });
-  const bg = t === TREE ? COLORS.meadow : COLORS.path;
+  const bg = t === TREE ? COLORS.meadow : t === SWAMP ? COLORS.water : COLORS.path;
   g.append(s('rect', { width: S, height: S, fill: bg }));
   if (t === TREE) {
     g.append(
@@ -40,6 +43,15 @@ export function tileSymbol(t: Tile, x: number, y: number, S: number): SVGGElemen
       s('path', { d: `M ${S * 0.2} ${S * 0.82} Q ${S * 0.2} ${S * 0.22} ${S * 0.5} ${S * 0.22} Q ${S * 0.8} ${S * 0.22} ${S * 0.8} ${S * 0.82} Z`, fill: COLORS.den }),
       s('circle', { cx: S * 0.41, cy: S * 0.56, r: S * 0.05, fill: '#ffd54a' }),
       s('circle', { cx: S * 0.59, cy: S * 0.56, r: S * 0.05, fill: '#ffd54a' }),
+    );
+  } else if (t === SWAMP) {
+    // Wavy water lines plus reeds: readable by shape, not only by colour.
+    const wave = (y: number) => `M ${S * 0.12} ${y} q ${S * 0.095} ${-S * 0.08} ${S * 0.19} 0 t ${S * 0.19} 0 t ${S * 0.19} 0 t ${S * 0.19} 0`;
+    g.append(
+      s('path', { d: wave(S * 0.36), stroke: COLORS.waterInk, 'stroke-width': S * 0.045, fill: 'none', 'stroke-linecap': 'round' }),
+      s('path', { d: wave(S * 0.62), stroke: COLORS.waterInk, 'stroke-width': S * 0.045, fill: 'none', 'stroke-linecap': 'round' }),
+      s('path', { d: `M ${S * 0.78} ${S * 0.88} L ${S * 0.74} ${S * 0.5} M ${S * 0.84} ${S * 0.88} L ${S * 0.88} ${S * 0.56}`, stroke: COLORS.reed, 'stroke-width': S * 0.04, 'stroke-linecap': 'round' }),
+      s('ellipse', { cx: S * 0.74, cy: S * 0.48, rx: S * 0.03, ry: S * 0.07, fill: COLORS.trunk }),
     );
   } else if (t === HOME) {
     g.append(
@@ -102,6 +114,9 @@ function miniTile(t: Tile, x: number, y: number, c: number): SVGElement {
   else if (t === TREE) {
     g.append(s('rect', { width: c, height: c, fill: COLORS.meadow }),
       s('polygon', { points: `${c / 2},${c * 0.12} ${c * 0.9},${c * 0.85} ${c * 0.1},${c * 0.85}`, fill: COLORS.tree }));
+  } else if (t === SWAMP) {
+    g.append(s('rect', { width: c, height: c, fill: COLORS.water }),
+      s('path', { d: `M ${c * 0.1} ${c * 0.55} q ${c * 0.2} ${-c * 0.25} ${c * 0.4} 0 t ${c * 0.4} 0`, stroke: COLORS.waterInk, 'stroke-width': c * 0.16, fill: 'none' }));
   } else if (t === WOLF) {
     g.append(s('rect', { width: c, height: c, fill: COLORS.den }),
       s('rect', { x: c * 0.15, y: c * 0.15, width: c * 0.7, height: c * 0.7, fill: 'none', stroke: COLORS.danger, 'stroke-width': c * 0.18 }));

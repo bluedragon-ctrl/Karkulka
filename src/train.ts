@@ -4,7 +4,7 @@ import { Rng, mulberry32, pick, rngFrom, shuffle } from './rng';
 import { Outcome, Walker } from './sim';
 import { LessonWalk, Teacher, TeacherChoice, costToHome, walkLesson } from './teachers';
 import { encodeContext } from './tokens';
-import { Forest, PATH, walkingDistances } from './world';
+import { Forest, PATH, energyToHome, walkingDistances } from './world';
 
 /** Internals the user never sets; shown read-only in the technical tab. */
 export const FIXED = {
@@ -140,11 +140,11 @@ export function trainLessons(
   }
 }
 
-/** The fair judge: bonus for home, penalty for wolves, partial credit for getting closer by walking distance. */
+/** The fair judge: bonus for home, penalty for wolves, partial credit for ending closer (energy still needed to walk home). */
 export function score(outcome: Outcome, startDist: number, endDist: number): number {
   if (outcome === 'home') return FIXED.rewardHome;
   if (outcome === 'eaten') return FIXED.rewardEaten;
-  if (startDist <= 0 || endDist < 0) return -FIXED.lostPenalty;
+  if (startDist <= 0 || endDist < 0 || !Number.isFinite(endDist)) return -FIXED.lostPenalty;
   return FIXED.partialCreditWeight * Math.max(-1, Math.min(1, 1 - endDist / startDist)) - FIXED.lostPenalty;
 }
 
@@ -157,6 +157,7 @@ export function trainPractice(
   onChunk?: (info: ChunkInfo) => void,
 ) {
   const dist = walkingDistances(f);
+  const energyDist = energyToHome(f);
   const maxDist = Math.max(1, ...Array.from(dist));
   stats.radius = Math.min(Math.max(stats.radius, FIXED.curriculumStart), maxDist);
   let scoreSum = 0;
@@ -169,7 +170,7 @@ export function trainPractice(
     const start = pick(rng, starts);
     const w = new Walker(f, model, start, practiceEnergy(stats.radius), FIXED.practiceBoldness, walkRng);
     const outcome = w.run();
-    const s = score(outcome, dist[start], outcome === 'lost' ? dist[w.pos] : 0);
+    const s = score(outcome, energyDist[start], outcome === 'lost' ? energyDist[w.pos] : 0);
     const advantage = Math.max(-1, Math.min(1, s - stats.baseline));
     stats.baseline += FIXED.baselineSmoothing * (s - stats.baseline);
 

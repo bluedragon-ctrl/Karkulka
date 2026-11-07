@@ -1,6 +1,6 @@
 /** Tokens and the context window: how her trip is turned into numbers. */
 import type { History } from './teachers';
-import { Forest, Move, PATH, Tile, TILE_KINDS, viewAt } from './world';
+import { Forest, Move, Tile, TILE_KINDS, isWalkable, viewAt } from './world';
 
 export type MemorySize = 'short' | 'medium' | 'long';
 export const MEMORY_PAIRS: Record<MemorySize, number> = { short: 1, medium: 3, long: 6 };
@@ -13,7 +13,7 @@ export interface ModelConfig {
   hidden: number;
 }
 
-export const VIEW_FEATS = 8 * TILE_KINDS; // 8 tiles, one-hot over 4 kinds
+export const VIEW_FEATS = 8 * TILE_KINDS; // 8 tiles, one-hot over the tile kinds
 export const MOVE_FEATS = 4;
 export const HINT_FEATS = 8;
 /** One remembered pair: a "present" flag, the view, and the move. */
@@ -65,7 +65,7 @@ export const MOVE_TOKEN_IDS: Record<Move, number> = { 0: 0, 1: 1, 2: 2, 3: 3 };
 export function buildVocabulary(f: Forest): ViewToken[] {
   const byKey = new Map<string, ViewToken>();
   f.tiles.forEach((t, i) => {
-    if (t !== PATH) return;
+    if (!isWalkable(t)) return;
     const view = viewAt(f, i);
     const key = viewKey(view);
     let tok = byKey.get(key);

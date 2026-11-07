@@ -1,5 +1,5 @@
 /** The forest board: tiles, overlays, figures, arrows and fog, all in one SVG. */
-import { Forest, Move, MOVE_NAMES, Tile, xyOf } from '../world';
+import { Forest, Move, MOVE_NAMES, Tile, isWalkable, xyOf } from '../world';
 import { clear, s } from './dom';
 import { COLORS, arrowPath, heartPath, parentFigure, redFigure, tileSymbol, wolfHead } from './symbols';
 
@@ -105,7 +105,7 @@ export class Board {
       const [x, y] = xyOf(this.forest, i);
       if (i === this.forest.home) return;
       if (v <= 0) {
-        if (this.forest.tiles[i] === 0) {
+        if (isWalkable(this.forest.tiles[i])) {
           this.layers.heat.append(s('rect', { x: x * T + 3, y: y * T + 3, width: T - 6, height: T - 6, fill: 'none', stroke: COLORS.heat, 'stroke-width': 1, 'stroke-dasharray': '2 3', opacity: 0.6 }, s('title', {}, `0 ${label}`)));
         }
         return;

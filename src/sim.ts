@@ -85,7 +85,7 @@ export class Walker {
     this.blocked.push(r.result === 'blocked');
     this.pos = r.pos;
     this.positions.push(r.pos);
-    this.energyLeft--;
+    this.energyLeft = Math.max(0, this.energyLeft - r.cost);
     if (r.result === 'home') this.outcome = 'home';
     else if (r.result === 'eaten') this.outcome = 'eaten';
     else {
