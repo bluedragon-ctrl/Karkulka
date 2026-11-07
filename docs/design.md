@@ -40,7 +40,7 @@ Every feature should map to a language-model idea. This table is the map:
 | Choice of teacher (fewest steps vs. safe and dry) | Training data and the values of whoever made it |
 | The wolf in disguise as a teacher (looks like the father until a den is in sight) | Bad examples in the training data are learned just like good ones |
 | "Mother, and sometimes the wolf" (1 lesson in 5) | Data poisoning: a little bad data does a lot of harm |
-| Number of lessons | Amount of training data |
+| Lessons to add | Amount of training data |
 | Coverage heatmap | What the training data covered |
 | Practice on her own, judged by outcome | Fine-tuning from feedback (RLHF-style) |
 | One score per watched run, shared by all its moves | A reward for one whole answer: noisy alone, a clear direction over many |
@@ -127,12 +127,12 @@ One small neural network learns in two phases, mirroring how real LLMs are built
 
 - A teacher walks her from a random starting tile. A parent always walks her home from a random starting tile along a proper path. Each walk is one lesson (one "story").
 - **Per-step loss:** at every step the model predicts the next move, compares it with what the parent did, and adjusts its weights.
-- **Number of lessons** is the user's training-amount control.
+- **Lessons to add** is the user's training-amount control. It sits under a "Give her more lessons" heading and a "So far: 2586 lessons (father 2586)" line, so it is clear the slider adds on top of what she already had.
 - **Three ways to give lessons:**
   - *Watch one lesson:* one lesson, slowly, step by step (380 ms a step).
   - *Watch lessons in a row* (starts Quick, 120 ms a step): lesson after lesson up to the number of lessons, until Stop. A speed switch (Slow 380 ms, Quick 120 ms, Fast 40 ms a step, where she jumps instead of gliding) changes the speed while they play, and Pause holds her on the current step until Go on. She learns from each lesson when it ends, on the main thread through the same `learnFromLesson` as the worker, and is tested every 5 lessons and when the row ends or is stopped. Stop keeps the finished lessons; a lesson cut off half-way is not learned. After each lesson the panel says how many of the teacher's moves she guessed right (her most likely move) before learning from it, so users see her guesses improve.
-  - *Fast-forward:* all lessons at once in a Web Worker, drawing faint trails.
-  - **Run controls** (the same on Lessons and Practice): idle, a "Watch: [One lesson] [In a row]" line and the big Fast-forward button. While anything runs, those buttons are replaced in the same spot by a box with Pause / Go on (watching only), Stop and the speed switch (watching only), the progress bar on its own line below ("Lesson 13 of 100", or "412 of 1000 lessons" when fast-forwarding), then what the arrows mean and the last-lesson line. So the way to stop is right where it was started. The buttons are kept across panel redraws, so a click is never lost while she trains.
+  - *Give N more lessons:* all lessons at once in a Web Worker, drawing faint trails.
+  - **Run controls** (the same on Lessons and Practice): idle, the big "Give 540 more lessons" button with "→ she'll have 3126" beside it, and below it a smaller "Or watch them: [One lesson] [Watch all 540]" line. The numbers on the buttons follow the slider while it is dragged. While anything runs, those buttons are replaced in the same spot by a box with Pause / Go on (watching only), Stop and the speed switch (watching only), the progress bar on its own line below ("Lesson 13 of 100, 2599 so far", or "412 of 1000 lessons, 2998 so far" when running them all at once), then what the arrows mean and the last-lesson line. So the way to stop is right where it was started. The buttons are kept across panel redraws, so a click is never lost while she trains.
 - **Choice of teacher**, with a one-line explanation card for each:
   - *Careful mother:* safe, dry routes that keep away from wolf dens and swamps, even if longer.
   - *Hurried father:* the fewest steps, even right past wolf dens and straight through swamps.
@@ -155,8 +155,8 @@ One small neural network learns in two phases, mirroring how real LLMs are built
 - **Undoing the wolf's lessons with Grandma** (same setup): after "mother, and sometimes the wolf", home goes from 46% to 74% with 1000 practice runs and to 89% with 3000. After wolf-only lessons it only gets from 24% to 43% (1000) and 52% (3000). A little bad data can be fixed later; a lot is hard to undo.
 - **After practice**, the panel compares the judge's average score at the start and end of the round with her home rate on the test trips. If the score went up while she got home less often, it says so and shows the reward-hacking card; a trip alone then explains the bumping ("she walked into trees towards home…").
 - **Curriculum (automatic):** practice starts near home and moves outward as her success rate rises.
-- **Number of practice runs** is the user's control for this phase.
-- **Three ways to practise**, like the lessons: *Watch one run* (slow) and *Watch runs in a row* (starts Quick), with the same run controls (Pause, Stop, speed switch, progress bar) and a test every 5 runs; and *Practise N runs* in the Web Worker. A watched run shows her arrows at the practice boldness, the start flag and her trail inside the curriculum outline. When it ends she learns from it through the same `learnFromRun` as the worker, and the panel says how it ended and the judge's points for it ("In the last run she got home. Grandma gave it +1.00 points."). A row that ends or is stopped gets the same "What … taught her" summary as a worker round.
+- **Runs to add** is the user's control for this phase, under a "Let her practise more" heading and a "So far: N practice runs" line, as on Lessons.
+- **Three ways to practise**, like the lessons: *One run* (slow) and *Watch all N* (starts Quick), with the same run controls (Pause, Stop, speed switch, progress bar) and a test every 5 runs; and *Practise N more runs* in the Web Worker. A watched run shows her arrows at the practice boldness, the start flag and her trail inside the curriculum outline. When it ends she learns from it through the same `learnFromRun` as the worker, and the panel says how it ended and the judge's points for it ("In the last run she got home. Grandma gave it +1.00 points."). A row that ends or is stopped gets the same "What … taught her" summary as a worker round.
 
 ### After the forest changes: catch-up lessons
 
@@ -195,7 +195,7 @@ The app is a row of tabs that tells the story in order: Forest, Lessons, Trip al
 | Tab | What happens | User controls |
 | --- | --- | --- |
 | 1. Forest | Generate or edit the forest; home is fixed | New forest, a forest code to type in and Generate, all on one line (the page link always carries the forest too), tile editing (path, tree, swamp, wolf den), memory size (short / medium / long), home-hint toggle; after lessons: small change, big change, new forest with the same Red Riding Hood |
-| 2. Lessons | Parents walk her home; the model trains per step | Teacher (mother / father / both / wolf in disguise / mother and sometimes the wolf), number of lessons, play or fast-forward; after a change: 30 / 100 / 300 catch-up lessons |
+| 2. Lessons | Parents walk her home; the model trains per step | Teacher (mother / father / both / wolf in disguise / mother and sometimes the wolf), lessons to add, watch them or give them all at once; after a change: 30 / 100 / 300 catch-up lessons |
 | 3. Trip alone | She walks from a chosen start using the model | Click the start tile, energy (step budget), boldness dial, Next step, Walk through (pause any time), Instant run or Stop (end the trip now, when she goes in circles or keeps bumping into trees), fog toggle, her thoughts toggle |
 | 4. Practice (optional) | Her own runs, scored by a judge; then back to Trip alone to compare | Judge (Grandma / father / mother / crow / wolf), number of practice runs |
 | 5. Inside the model | Numbers and model details for technical users | Read-only views, export or import the model |
@@ -230,7 +230,7 @@ All pictures are simple symbolic SVG shapes drawn for this project, with no tile
 - **Energy:** a small bar; as it drops she shows a sweat drop, and at zero she sits down (lost).
 - **Coverage heatmap:** an overlay showing where lessons passed, "where she was taught".
 - **Changed tiles:** a dashed yellow-and-black edge (shape and colour, no red) on tiles that differ from the forest she was taught on.
-- **Lesson playback:** the parent walks ahead of her; in fast-forward, many faint footprint trails in the parent's colour build up.
+- **Lesson playback:** the parent walks ahead of her; when they are given all at once, many faint footprint trails in the parent's colour build up.
 - **Outcome chart:** a simple stacked chart of home, eaten and lost over the course of lessons or practice. It is friendlier than a loss curve. Each bar is the same 40 test trips from fixed starts. A job tests after every batch of 25 when short, and less often when long, so it adds about 20 bars (the last batch is always tested). Testing would otherwise take most of a long job's time.
 
 **Outcomes, kept child-friendly**
@@ -268,7 +268,7 @@ Where the "?" buttons are, and what makes them pulse:
 | 2. Lessons | Intro ("she guesses the next move…") and the "Watching…" line | Guess, compare, adjust: next-token training | Watching a lesson |
 | 2. Lessons | "The forest changed" / "Since the forest changed" | Catch-up lessons | After catch-up lessons |
 | 2. Lessons | "Who teaches her?" | The chosen teacher: training data and its values, the wolf (bad examples) or the mix (data poisoning) | Choosing a teacher; after lessons from both, the wolf or the mix |
-| 2. Lessons | Number of lessons | More training data, diminishing returns | |
+| 2. Lessons | Lessons to add | More training data, diminishing returns | |
 | 2. Lessons | Watch buttons and "She guessed … right" | Watching her learn: next-token accuracy rises with training | Stopping or finishing a row of watched lessons |
 | 2. Lessons | "That lesson came from the wolf in disguise…" (after a watched lesson that ends at a den) | Bad examples are learned too | That lesson |
 | 2. Lessons | "How she does alone" | Test trips as a benchmark | |

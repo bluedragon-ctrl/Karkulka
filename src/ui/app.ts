@@ -1049,31 +1049,35 @@ export class App {
   }
 
   /**
-   * Lessons and Practice share these controls. Idle: Watch one or in a row, and the big
-   * button that runs them all in the worker. While something runs, the same spot holds
+   * Lessons and Practice share these controls, under the "so far" line and the "to add" slider.
+   * Idle: the big button that adds them all in the worker, with the total she will have, and
+   * below it the smaller Watch one / Watch all. While something runs, the same spot holds
    * Pause and Stop (and the speed when watching), then a progress bar on its own line,
    * so the way to stop is right where it was started.
    */
   private runControls(o: {
-    what: 'lesson' | 'run'; total: number; watch: (total: number, speed: WatchSpeed) => void; watchCard: CardKey;
-    allLabel: string; all: () => void; explainCard: CardKey; last: string | Node;
+    what: 'lesson' | 'run'; total: number; sofar: number; verb: string; watch: (total: number, speed: WatchSpeed) => void; watchCard: CardKey;
+    all: () => void; explainCard: CardKey; last: string | Node;
   }) {
     const job = this.job;
     const title = `${o.what[0].toUpperCase()}${o.what.slice(1)} after ${o.what}, ${o.total} in all; pause or stop any time`;
     if (!job) {
       return h('div', { class: 'run-controls' },
         h('div', { class: 'row' },
-          h('span', { class: 'muted' }, 'Watch:'),
+          h('button', { class: 'primary', onclick: o.all }, `${o.verb} `, h('span', { class: 'n-add' }, String(o.total)), ` more ${o.what}s`),
+          h('span', { class: 'muted' }, '→ she\'ll have ', h('span', { class: 'n-after' }, String(o.sofar + o.total)))),
+        h('div', { class: 'row' },
+          h('span', { class: 'muted' }, 'Or watch them:'),
           h('button', { onclick: () => o.watch(1, 'slow'), title: `One ${o.what}, slowly` }, `One ${o.what}`),
-          h('button', { onclick: () => o.watch(o.total, 'quick'), title }, 'In a row'),
-          this.q(o.watchCard)),
-        h('div', { class: 'row' }, h('button', { class: 'primary', onclick: o.all }, o.allLabel)));
+          h('button', { onclick: () => o.watch(o.total, 'quick'), title }, 'Watch all ', h('span', { class: 'n-add' }, String(o.total))),
+          this.q(o.watchCard)));
     }
     const watching = this.watching;
     const many = job.total > 1;
     const buttons = this.jobButtons(job);
     const word = job.kind === 'practice' || job.kind === 'watchRuns' ? 'run' : 'lesson';
-    const label = watching ? `${word[0].toUpperCase()}${word.slice(1)} ${Math.min(job.done + 1, job.total)} of ${job.total}` : `${job.done} of ${job.total} ${word}s`;
+    const step = watching ? `${word[0].toUpperCase()}${word.slice(1)} ${Math.min(job.done + 1, job.total)} of ${job.total}` : `${job.done} of ${job.total} ${word}s`;
+    const label = `${step}, ${o.sofar} so far`;
     return h('div', { class: 'run-controls running' },
       buttons,
       many ? h('div', { class: 'progress' },
@@ -1081,6 +1085,16 @@ export class App {
         h('span', {}, label)) : null,
       watching ? h('p', { class: 'muted' }, this.hq(`${job.paused ? 'Paused. ' : ''}${this.watchText()}`, o.explainCard, 'watch')) : null,
       watching && many && o.last ? h('p', {}, o.last) : null);
+  }
+
+  /** Slider for how many lessons or runs to add: keeps the button and "she'll have" numbers in step while dragging. */
+  private addSlider(label: string, value: number, min: number, max: number, step: number, sofar: number, set: (v: number) => void, card?: CardKey) {
+    const el = this.slider(label, value, min, max, step, (v) => String(v), (v) => {
+      set(v); this.saveSoon();
+      el.closest('.panel-body')?.querySelectorAll('.n-add').forEach((x) => { x.textContent = String(v); });
+      el.closest('.panel-body')?.querySelectorAll('.n-after').forEach((x) => { x.textContent = String(sofar + v); });
+    }, undefined, card);
+    return el;
   }
 
   private guessLine() {
@@ -1168,14 +1182,15 @@ export class App {
           this.settings.teacher = id as TeacherChoice; this.saveSoon(); this.showCard(teacherCard(this.settings.teacher)); this.renderPanel();
         }, icon, this.hq(t.text, teacherCard(t.id), 'chosen'));
       })(),
-      this.slider('Number of lessons', this.settings.lessons, 10, 2000, 10, (v) => String(v), (v) => { this.settings.lessons = v; this.saveSoon(); }, undefined, 'moreData'),
+      h('h3', {}, 'Give her more lessons'),
+      h('p', {}, st.lessons ? `So far: ${st.lessons} lesson${st.lessons === 1 ? '' : 's'} (${(['mother', 'father', 'wolf'] as Teacher[]).filter((t) => st.teacherCounts[t]).map((t) => `${t} ${st.teacherCounts[t]}`).join(', ')})` : 'So far: no lessons yet'),
+      this.addSlider('Lessons to add', this.settings.lessons, 10, 2000, 10, st.lessons, (v) => { this.settings.lessons = v; }, 'moreData'),
       this.runControls({
-        what: 'lesson', total: this.settings.lessons, watch: (n, sp) => this.watchLessons(n, sp), watchCard: 'watchMany',
-        allLabel: `Fast-forward ${this.settings.lessons} lessons`, all: () => this.startLessons(), explainCard: 'guess', last: this.guessLine(),
+        what: 'lesson', total: this.settings.lessons, sofar: st.lessons, verb: 'Give', watch: (n, sp) => this.watchLessons(n, sp), watchCard: 'watchMany',
+        all: () => this.startLessons(), explainCard: 'guess', last: this.guessLine(),
       }),
       this.lastGuess && !(this.job?.kind === 'watch' && this.job.total > 1) ? h('p', {}, this.guessLine()) : null,
       this.watchedDen && !busy ? h('p', { class: 'warn' }, this.hq('That lesson came from the wolf in disguise: it ended at a wolf den, and she learned from it all the same.', 'wolfTeacher', 'watched')) : null,
-      h('p', {}, st.lessons ? `She has had ${st.lessons} lesson${st.lessons === 1 ? '' : 's'} (mother ${st.teacherCounts.mother}, father ${st.teacherCounts.father}${st.teacherCounts.wolf ? `, wolf ${st.teacherCounts.wolf}` : ''}).` : 'No lessons yet.'),
       h('h3', {}, this.hq('How she does alone', 'testTrips')),
       outcomeChart(st.lessonEval, 'lessons'),
       h('p', { class: 'muted' }, 'Now and then she walks the same test trips alone, to see how much she has improved.'),
@@ -1295,14 +1310,15 @@ export class App {
       this.chooser('Judge', JUDGES.map((j) => [j, JUDGE_INFO[j].name]), this.settings.judge, this.busy, (id) => {
         this.settings.judge = id as Judge; this.saveSoon(); this.showCard(JUDGE_INFO[this.settings.judge].card); this.renderPanel();
       }, judgeIcon(this.settings.judge), this.hq(JUDGE_INFO[this.settings.judge].text, JUDGE_INFO[this.settings.judge].card)),
-      this.slider('Number of practice runs', this.settings.practice, 50, 3000, 50, (v) => String(v), (v) => { this.settings.practice = v; this.saveSoon(); }),
+      h('h3', {}, 'Let her practise more'),
+      h('p', {}, st.practiceRuns ? `So far: ${st.practiceRuns} practice run${st.practiceRuns === 1 ? '' : 's'}` : 'So far: no practice runs yet'),
+      this.addSlider('Runs to add', this.settings.practice, 50, 3000, 50, st.practiceRuns, (v) => { this.settings.practice = v; }),
       this.runControls({
-        what: 'run', total: this.settings.practice, watch: (n, sp) => this.watchRuns(n, sp), watchCard: 'runScore',
-        allLabel: `Practise ${this.settings.practice} runs`, all: () => this.startPractice(), explainCard: 'sampling', last: this.runLine(),
+        what: 'run', total: this.settings.practice, sofar: st.practiceRuns, verb: 'Practise', watch: (n, sp) => this.watchRuns(n, sp), watchCard: 'runScore',
+        all: () => this.startPractice(), explainCard: 'sampling', last: this.runLine(),
       }),
       this.lastRun && !(this.job?.kind === 'watchRuns' && this.job.total > 1) ? h('p', {}, this.runLine()) : null,
       h('p', {}, h('span', { class: 'swatch-box' }), this.hq(` She practises from up to ${st.radius} steps from home (outlined); the circle grows as she succeeds.`, 'curriculum')),
-      st.practiceRuns ? h('p', {}, `${st.practiceRuns} practice runs so far.`) : null,
       h('h3', {}, this.hq('How she does alone', 'testTrips')),
       outcomeChart(st.practiceEval, 'lessons + runs'),
       before && after ? h('p', { class: 'compare' }, this.hq(`On the same test trips: after lessons ${pct(before.home)} home, ${pct(before.eaten)} eaten; after practice ${pct(after.home)} home, ${pct(after.eaten)} eaten.`, 'recipe')) : null,
