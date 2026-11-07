@@ -34,6 +34,7 @@ Every feature should map to a language-model idea. This table is the map:
 | Energy (step budget) | Maximum output length |
 | A swamp: passable, but 3 energy per step | Some outputs use up the output budget faster |
 | Walking into a tree ("Ouch!"): a step of energy spent, no move | A wrong guess wastes output on a mistake |
+| Her thoughts ("Scary wolf to the south! Let's go south."), made up after the move is picked | Models narrating their steps ("First I'll check…"). Theirs come before the answer and help, because they join the context; hers come after and do not. Either way, an account of one's reasons is more generated words, not a look at how the choice was made. "Definitely" or "maybe" follow the probability |
 | Lessons from a teacher | Pretraining on example text |
 | Choice of teacher (fewest steps vs. safe and dry) | Training data and the values of whoever made it |
 | The wolf in disguise as a teacher (looks like the father until a den is in sight) | Bad examples in the training data are learned just like good ones |
@@ -167,6 +168,10 @@ One small neural network learns in two phases, mirroring how real LLMs are built
 - The user clicks a starting tile.
 - At each step the model gives probabilities; the **boldness** dial (temperature) reshapes them, and one move is sampled.
 - The trip ends at home, eaten or lost (energy reached zero).
+- **Her thoughts** (on by default, "Her thoughts (just for fun)" checkbox): after some moves a thought bubble over her head says a line or two. Each thought is made up *after* the move is sampled, from the view she had and the move she took, so it can pair what she saw with what she did: "Scary wolf to the south! Let's go south." Her confidence words follow the boldness-adjusted probability of the move she took: "definitely" from 75%, "probably" from 40%, "maybe" below. Code: `src/thoughts.ts`.
+  - She speaks about events, roughly in this order: the trip's end (always: "Made it!", "I need a nap…", or the wolf line before she is eaten), walking into a tree (often), a wolf den she has not thought about yet (always, with the move), grandma's house coming into view (once), energy falling to half, a quarter and a tenth (once each), stepping into a swamp, standing where she has been twice before ("Am I going in circles?"), the smell of cake when the home hint is on, and now and then just the move ("Probably south.").
+  - She waits at least 2 steps after a thought before the next event thought, and 6 before plain chatter, so most steps stay quiet. Each line is picked at random from a few variants, never the same one twice in a row.
+  - The bubble lasts 3 seconds while walking; the last thought of a trip stays until the next trip. Instant run shows only the last one. Thoughts use their own randomness, so they never change her walk.
 
 ### Fixed internals (never user-set)
 
@@ -182,7 +187,7 @@ The app is a row of tabs that tells the story in order: Forest, Lessons, Trip al
 | --- | --- | --- |
 | 1. Forest | Generate or edit the forest; home is fixed | New forest, forest code or link, tile editing (path, tree, swamp, wolf den), memory size (short / medium / long), home-hint toggle; after lessons: small change, big change, new forest with the same Red Riding Hood |
 | 2. Lessons | Parents walk her home; the model trains per step | Teacher (mother / father / both / wolf in disguise / mother and sometimes the wolf), number of lessons, play or fast-forward; after a change: 30 / 100 / 300 catch-up lessons |
-| 3. Trip alone | She walks from a chosen start using the model | Click the start tile, energy (step budget), boldness dial, Next step, Walk through (pause any time) or Instant run, fog toggle |
+| 3. Trip alone | She walks from a chosen start using the model | Click the start tile, energy (step budget), boldness dial, Next step, Walk through (pause any time) or Instant run, fog toggle, her thoughts toggle |
 | 4. Practice (optional) | Her own runs, scored by a judge; then back to Trip alone to compare | Judge (Grandma / father / mother / crow / wolf), number of practice runs |
 | 5. Inside the model | Numbers and model details for technical users | Read-only views, export or import the model |
 
@@ -210,6 +215,7 @@ All pictures are simple symbolic SVG shapes drawn for this project, with no tile
 - **Memory strip:** along the bottom, small tiles alternating between view and move, sliding as she walks. Tiles fade out at the edge of her memory size.
 - **Fog toggle:** hides everything except her 3 × 3 window, to show what she actually sees.
 - **Bumps and splashes:** on Next step and Walk through, walking into a tree pops up a small "Ouch!" with a yellow bump star at the tree, and a swamp step sends up a few water drops around her feet. Both are just for fun and vanish within a second; Instant run skips them.
+- **Thought bubble:** a white rounded bubble with two small circles trailing to her head, following her as she walks and kept inside the board (below her near the top edge, and when she sits down lost, so it does not cover the "lost in the woods" note). It is drawn above the fog and the outcome pictures.
 - **Energy:** a small bar; as it drops she shows a sweat drop, and at zero she sits down (lost).
 - **Coverage heatmap:** an overlay showing where lessons passed, "where she was taught".
 - **Changed tiles:** a dashed yellow-and-black edge (shape and colour, no red) on tiles that differ from the forest she was taught on.
@@ -256,6 +262,7 @@ Where the "?" buttons are, and what makes them pulse:
 | 3. Trip alone | "In a swamp" in the status line (while she stands in one) | Swamp eats the energy budget | Her first swamp step on a trip |
 | 3. Trip alone | "Ouch, a tree!" in the status line (right after she walks into a tree) | A wrong guess wastes a step | Her first bump into a tree on a trip |
 | 3. Trip alone | "Smells cake" in the status line | More useful input | |
+| 3. Trip alone | "Her thoughts" checkbox | Big models narrate their steps too, before the answer (which helps); hers come after. Either way, a stated reason is not a look inside | Her first thought in a session (unless another card just pulsed); toggling it |
 | 3. Trip alone | "Why did she do that?" | The card that fits the trip: home, hallucination, temperature, repetition, energy, swamp, reward hacking, the wolf's lessons or practice | The trip ends |
 | 3. Trip alone | "How was the trip for her?" | Answers are rated on more than being right | |
 | 3. Trip alone | "Her next move" (while walking) | Next-token probabilities | Choosing a start |

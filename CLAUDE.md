@@ -29,6 +29,7 @@ Game logic has no DOM dependencies and is tested directly; the UI lives in `src/
 | `src/model.ts` | One-hidden-layer network, softmax with temperature, Adam and SGD |
 | `src/sim.ts` | A trip alone: the `Walker` samples one move at a time |
 | `src/train.ts` | Lessons (imitation), practice (policy gradient), evaluation; fixed internals in `FIXED` |
+| `src/thoughts.ts` | Her thought bubbles on a trip alone ("Scary wolf to the south! Let's go south."), made up after each move |
 | `src/explain.ts` | "Why did she do that?" notes and LM corner card texts |
 | `src/insights.ts` | "How big models do it" dialog texts: each tab's ideas mapped to real large language models |
 | `src/storage.ts` | Browser save, forest links, model export and import |

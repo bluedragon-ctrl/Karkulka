@@ -56,10 +56,12 @@ input[type="text"] { font: inherit; font-size: 0.92rem; padding: 0.35em 0.5em; b
 .float-heart { animation: float 1.6s ease-out both; }
 .fx-ouch { animation: ouch 1s ease-out both; }
 @keyframes ouch { 0% { transform: scale(0.2); opacity: 0; } 20% { transform: scale(1.15); opacity: 1; } 70% { transform: scale(1) translateY(-3px); opacity: 1; } 100% { transform: translateY(-8px); opacity: 0; } }
+.fx-talk { animation: talk 0.25s ease-out both; }
+@keyframes talk { from { transform: scale(0.6); opacity: 0; } to { transform: scale(1); opacity: 1; } }
 .fx-drop { animation: drop 0.8s ease-out both; }
 @keyframes drop { from { transform: translateY(6px) scale(0.4); opacity: 0; } 20% { opacity: 1; } 70% { opacity: 1; } to { transform: translateY(-6px) scale(1); opacity: 0; } }
 @keyframes float { from { transform: translateY(10px); opacity: 0; } 30% { opacity: 1; } to { transform: translateY(-30px); opacity: 0; } }
-@media (prefers-reduced-motion: reduce) { .actor, .fx-wolf .pop, .float-heart, .fx-ouch, .fx-drop { transition: none; animation: none; } }
+@media (prefers-reduced-motion: reduce) { .actor, .fx-wolf .pop, .float-heart, .fx-ouch, .fx-drop, .fx-talk { transition: none; animation: none; } }
 
 .panel { background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 1rem; display: flex; flex-direction: column; gap: 0.8rem; position: sticky; top: 0.6rem; max-height: calc(100vh - 1.2rem); overflow: auto; }
 .panel-body > * + * { margin-top: 0.55rem; }

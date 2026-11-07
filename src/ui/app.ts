@@ -5,6 +5,7 @@ import { CHANGE_SIZES, changeForest, generateForest } from '../forest';
 import { Adam, Model, createAdam, createModel, modelFromJSON, modelToJSON } from '../model';
 import { mulberry32, normalizeCode, pick, randomCode } from '../rng';
 import { Outcome, Walker, predictAt } from '../sim';
+import { Thoughts } from '../thoughts';
 import * as store from '../storage';
 import { LessonWalk, Teacher, TeacherChoice, costToHome, endsAtDen, teacherMoves, walkLesson } from '../teachers';
 import { MEMORY_PAIRS, MemorySize, ModelConfig } from '../tokens';
@@ -41,13 +42,15 @@ interface Settings {
   energy: number;
   boldness: number;
   fog: boolean;
+  /** Her little thought bubbles on a trip alone. */
+  thoughts: boolean;
   heat: boolean;
   brush: Tile;
 }
 
 const DEFAULTS: Settings = {
   memory: 'medium', hint: false, teacher: 'mother', lessons: 100, practice: 1000, judge: 'grandma',
-  energy: 80, boldness: 0.7, fog: false, heat: true, brush: TREE,
+  energy: 80, boldness: 0.7, fog: false, thoughts: true, heat: true, brush: TREE,
 };
 
 const TEACHERS: { id: TeacherChoice; name: string; text: string }[] = [
@@ -169,6 +172,8 @@ export class App {
   tab: TabId = 'forest';
   job: Job | null = null;
   walker: Walker | null = null;
+  private thoughts: Thoughts | null = null;
+  private thoughtSeen = false;
   watch: { walk: LessonWalk; k: number } | null = null;
   techStep = 0;
   /** The card whose "?" pulses: something just happened that it explains. */
@@ -617,6 +622,7 @@ export class App {
     if (this.forest.tiles[i] !== PATH) return;
     this.stopTrip();
     this.walker = new Walker(this.forest, this.model, i, this.settings.energy, this.settings.boldness, this.rng);
+    this.thoughts = new Thoughts(Math.random, this.model.cfg.hint);
     this.why = null;
     this.techStep = 0;
     this.board.clearFx();
@@ -624,23 +630,29 @@ export class App {
     this.render();
   }
 
-  /** One sampled move, without redrawing. */
-  private advanceTrip(w: Walker) {
+  /** One sampled move, without redrawing. Returns her thought about it, if any. */
+  private advanceTrip(w: Walker): string[] | null {
     w.temperature = this.settings.boldness;
     w.step();
     const bumped = w.blocked[w.t - 1];
     if (bumped && this.fresh !== 'tree' && w.blocked.filter(Boolean).length === 1) this.showCard('tree');
     if (this.forest.tiles[w.pos] === SWAMP && !bumped && this.fresh !== 'swamp' && !w.positions.slice(0, -1).some((p) => this.forest.tiles[p] === SWAMP)) this.showCard('swamp');
+    // Made up after the move is picked, so she can comment on the move she just took.
+    return this.thoughts?.after(w) ?? null;
   }
 
-  /** Next step or Walk through: one move, with a little "Ouch!" or splash on the board. */
+  /** Next step or Walk through: one move, with a little "Ouch!", splash or thought on the board. */
   private stepTrip() {
     const w = this.walker;
     if (!w || w.done) return;
-    this.advanceTrip(w);
+    const fresh = this.fresh;
+    const thought = this.advanceTrip(w);
     if (w.blocked[w.t - 1]) this.board.showOuch(w.pos, w.history.moves[w.t - 1]);
     else if (this.forest.tiles[w.pos] === SWAMP) this.board.showSplash(w.pos);
+    // Her first thought of the session makes the "?" by "Her thoughts" pulse, unless something else just did.
+    if (thought && this.settings.thoughts && !this.thoughtSeen && this.fresh === fresh) { this.thoughtSeen = true; this.showCard('thoughts'); }
     this.afterTripSteps(w);
+    this.sayThought(w, thought);
   }
 
   /** The whole rest of the trip at once, drawn only at the end. */
@@ -648,8 +660,16 @@ export class App {
     const w = this.walker;
     if (!w || w.done) return;
     this.stopAuto();
-    while (!w.done) this.advanceTrip(w);
+    let thought: string[] | null = null;
+    while (!w.done) thought = this.advanceTrip(w);
     this.afterTripSteps(w);
+    this.sayThought(w, thought);
+  }
+
+  /** Her thought bubble: a moment while walking; the last one stays when the trip ends. */
+  private sayThought(w: Walker, thought: string[] | null) {
+    if (!thought || !this.settings.thoughts) return;
+    this.board.say(thought, { ms: w.done ? undefined : 3000, below: w.outcome === 'lost' });
   }
 
   private afterTripSteps(w: Walker) {
@@ -790,6 +810,7 @@ export class App {
     if (this.busy || this.locked(id)) return;
     this.stopAuto();
     if (this.tab === 'forest') this.checkEdits();
+    if (id !== this.tab) this.board.say(null);
     this.tab = id;
     this.watchedDen = false;
     this.board.clearTrails();
@@ -1173,6 +1194,9 @@ export class App {
         this.settings.boldness = v; this.saveSoon(); this.renderBoard(); this.refreshProbs(probsBox); if (this.fresh !== 'boldness') this.showCard('boldness');
       }, ['careful', 'bold'], 'boldness'),
       h('label', { class: 'check' }, h('input', { type: 'checkbox', checked: this.settings.fog, onchange: (e: Event) => { this.settings.fog = (e.target as HTMLInputElement).checked; this.saveSoon(); this.renderBoard(); this.showCard('view'); } }), h('span', {}, this.hq('Fog: show only what she sees', 'view', 'fog'))),
+      h('label', { class: 'check' }, h('input', { type: 'checkbox', checked: this.settings.thoughts, onchange: (e: Event) => {
+        this.settings.thoughts = (e.target as HTMLInputElement).checked; this.saveSoon(); if (!this.settings.thoughts) this.board.say(null); this.showCard('thoughts');
+      } }), h('span', {}, this.hq('Her thoughts (just for fun)', 'thoughts'))),
       h('div', { class: 'row' }, this.next('Practice', 'practice'), this.next('Inside the model', 'inside')),
     );
   }
