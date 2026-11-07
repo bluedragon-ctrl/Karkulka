@@ -190,6 +190,8 @@ export class App {
   /** The running job's buttons, kept across redraws (see `jobButtons`). */
   private jobRow: { job: Job; el: HTMLElement; pause: HTMLButtonElement | null; speeds: HTMLButtonElement[] } | null = null;
   walker: Walker | null = null;
+  /** The trip alone was cut short with Stop (she is still standing where she was). */
+  private tripStopped = false;
   private thoughts: Thoughts | null = null;
   private thoughtSeen = false;
   watch: { walk: LessonWalk; k: number } | null = null;
@@ -646,6 +648,7 @@ export class App {
     if (this.forest.tiles[i] !== PATH) return;
     this.stopTrip();
     this.walker = new Walker(this.forest, this.model, i, this.settings.energy, this.settings.boldness, this.rng);
+    this.tripStopped = false;
     this.thoughts = new Thoughts(Math.random, this.model.cfg.hint);
     this.why = null;
     this.techStep = 0;
@@ -671,7 +674,7 @@ export class App {
    */
   private stepTrip(): string[] | null {
     const w = this.walker;
-    if (!w || w.done) return null;
+    if (!w || !this.tripLive(w)) return null;
     const fresh = this.fresh;
     const thought = this.advanceTrip(w);
     if (w.blocked[w.t - 1]) this.board.showOuch(w.pos, w.history.moves[w.t - 1]);
@@ -685,7 +688,7 @@ export class App {
   /** The whole rest of the trip at once, drawn only at the end, with no thought bubbles. */
   private instantTrip() {
     const w = this.walker;
-    if (!w || w.done) return;
+    if (!w || !this.tripLive(w)) return;
     this.stopAuto();
     this.board.say(null);
     while (!w.done) this.advanceTrip(w);
@@ -720,7 +723,7 @@ export class App {
 
   private toggleAuto() {
     if (this.auto) { this.stopAuto(); this.renderPanel(); return; }
-    if (!this.walker || this.walker.done) return;
+    if (!this.walker || !this.tripLive(this.walker)) return;
     // One move at a time, pausing after a thought so it can be read before she walks on.
     const tick = () => {
       const thought = this.stepTrip();
@@ -729,6 +732,22 @@ export class App {
     };
     this.auto = window.setTimeout(tick, WALK_STEP_MS);
     this.renderPanel();
+  }
+
+  /** Still walking: not at the end of the trip and not stopped. */
+  private tripLive(w: Walker): boolean {
+    return !w.done && !this.tripStopped;
+  }
+
+  /** Stop: cut the trip short when she goes in circles or keeps bumping into trees. */
+  private stopWalk() {
+    const w = this.walker;
+    if (!w || !this.tripLive(w)) return;
+    this.stopAuto();
+    this.tripStopped = true;
+    this.board.say(null);
+    this.showCard('stop');
+    this.render();
   }
 
   private stopAuto() {
@@ -956,8 +975,8 @@ export class App {
       b.setStart(w.start);
       b.setTrace(w.positions);
       b.setRed(w.pos, { energy: w.energyLeft / w.energy, sitting: w.outcome === 'lost', animate: w.t > 0 });
-      if (!w.done) b.setArrows(w.pos, w.tempered(), this.tints(w.pos));
-      if (this.settings.fog && !w.done) b.setFog(w.pos);
+      if (this.tripLive(w)) b.setArrows(w.pos, w.tempered(), this.tints(w.pos));
+      if (this.settings.fog && this.tripLive(w)) b.setFog(w.pos);
     }
     if (this.tab === 'practice') {
       const d = walkingDistances(this.forest);
@@ -1194,7 +1213,7 @@ export class App {
   private tripPanel(body: HTMLElement) {
     const w = this.walker;
     const probsBox = h('div', { class: 'probs' });
-    if (w && !w.done) {
+    if (w && this.tripLive(w)) {
       const raw = w.decide().raw;
       const tp = w.tempered();
       for (const m of MOVES) {
@@ -1203,10 +1222,12 @@ export class App {
           h('span', { class: 'pbar' }, h('span', { style: `width:${tp[m] * 100}%` })), h('span', { class: 'pct' }, `${Math.round(tp[m] * 100)}%`)));
       }
     }
-    const walking = !!w && !w.done;
+    const walking = !!w && this.tripLive(w);
     const status: (string | Node)[] = !w
       ? ['Click a path tile on the map to choose where she starts.']
-      : w.done
+      : this.tripStopped && !w.done
+        ? [this.hq(`Stopped after ${w.t} steps.`, 'stop', 'status')]
+        : w.done
         ? [{ home: `Home after ${w.t} steps!`, eaten: `Eaten by a wolf at step ${w.t}.`, lost: `Lost: out of energy after ${w.t} steps.` }[w.outcome!]]
         : [
           `Step ${w.t + 1} · energy ${w.energyLeft} / ${w.energy}`,
@@ -1225,8 +1246,9 @@ export class App {
       h('div', { class: 'row' },
         h('button', { onclick: () => this.stepTrip(), disabled: !walking || !!this.auto, title: 'One move, then wait' }, 'Next step'),
         h('button', { class: 'primary', onclick: () => this.toggleAuto(), disabled: !walking, title: 'Walk on step by step until the trip ends' }, this.auto ? 'Pause' : 'Walk through'),
-        h('button', { onclick: () => this.instantTrip(), disabled: !walking, title: 'Finish the whole trip at once' }, 'Instant run')),
-      w?.done ? h('p', { class: 'muted' }, 'Click a path tile to start a new trip; the same tile again gives a different walk.') : null,
+        h('button', { onclick: () => this.instantTrip(), disabled: !walking, title: 'Finish the whole trip at once' }, 'Instant run'),
+        h('button', { onclick: () => this.stopWalk(), disabled: !walking, title: 'End this trip now, for example when she walks in circles or keeps bumping into trees' }, 'Stop')),
+      w && !walking ? h('p', { class: 'muted' }, 'Click a path tile to start a new trip; the same tile again gives a different walk.') : null,
       this.slider('Energy (step budget)', this.settings.energy, 10, 200, 5, (v) => String(v), (v) => {
         this.settings.energy = v; this.walker?.setEnergy(v); this.saveSoon(); this.renderBoard(); if (this.fresh !== 'energy') this.showCard('energy');
       }, undefined, 'energy'),

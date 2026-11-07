@@ -7,7 +7,7 @@ import { Forest, MOVE_NAMES, SWAMP, SWAMP_COST, VIEW_OFFSETS, WOLF, tileAt, walk
 export type CardKey =
   | 'forest' | 'view' | 'memory' | 'memorySize' | 'hint' | 'lessons' | 'teacher' | 'coverage' | 'arrows'
   | 'boldness' | 'energy' | 'hallucination' | 'repetition' | 'exposure' | 'practice' | 'outdated' | 'home'
-  | 'tech' | 'vocabulary' | 'judge' | 'swamp' | 'tree' | 'thoughts'
+  | 'tech' | 'vocabulary' | 'judge' | 'swamp' | 'tree' | 'thoughts' | 'stop'
   | 'tripReport' | 'judgeGrandma' | 'judgeFather' | 'judgeMother' | 'judgeCrow' | 'rewardHacking' | 'teacherVsJudge'
   | 'wolfTeacher' | 'poisonedData' | 'judgeWolf' | 'fixBadData'
   | 'newWorld' | 'catchUp' | 'forestCode' | 'editForest' | 'recipe'
@@ -44,7 +44,8 @@ export const CARDS: Record<CardKey, string> = {
   tech: "This tab shows the real numbers behind the pictures: tokens, inputs, weights and probabilities. Her brain has a few thousand numbers and trains in seconds. A chatbot's has billions and trains for months in huge computer halls. The idea is the same.",
   vocabulary: "Her vocabulary is every view that can happen in this forest plus the four moves: a fixed list of tokens. A chatbot's list is much longer: tens of thousands of words and word pieces.",
   tree: "Ouch! She walked into a tree. She gave that move a small chance, and this time chance picked it. A wasted step, like a language model wasting words on a wrong guess.",
-  thoughts: "Her thoughts are made up after each move is picked, so she can say \"Scary wolf to the south! Let's go south.\" They sound like reasons, but the move came first. Chatbots often write out their steps before answering, which helps them, but those steps are just more words, not a look inside.",
+  thoughts: "Her thoughts are made up after each move is picked, so she can say \"Scary wolf below me! Let's go down.\" They sound like reasons, but the move came first. Chatbots often write out their steps before answering, which helps them, but those steps are just more words, not a look inside.",
+  stop: "You stopped her trip. She can get stuck going in circles or bumping into the same tree, because each step only follows from what she sees and remembers. Chatbots can get stuck too, repeating the same words, so they have a Stop button and a limit on how long an answer may get.",
   swamp: "Not every step is equally cheap: a swamp step uses 3 energy. Her energy is like a model's output budget, and the swamp eats it fast. The hurried father wades through; the careful mother walks around.",
   judge: "The judge knows the whole forest; she never sees the map, only the scores. Whoever judges decides what she learns. A chatbot's judges are people who rate its answers, or a check like \"is the sum right?\". Their taste becomes its taste.",
   tripReport: "Getting home is not all that counts: how tired, wet, scared and bumped she got matters too. A language model's answers are also judged on more than being right, such as length and safety.",

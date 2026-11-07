@@ -1,11 +1,12 @@
 /**
  * Her little thoughts on a trip alone, just for fun: a line or two after some moves.
  * They are made up after each move is already picked, from what she saw and how likely
- * the move was, so she can say "Scary wolf to the south! Let's go south."
+ * the move was, so she can say "Scary wolf below me! Let's go down."
+ * She speaks in up, down, left and right, like the move arrows: up is north on the map.
  */
 import type { Rng } from './rng';
 import type { Outcome } from './sim';
-import { DX, DY, Forest, HOME, Move, SWAMP, VIEW_OFFSETS, WOLF, tileAt, xyOf } from './world';
+import { DX, DY, Forest, HOME, MOVE_NAMES, Move, SWAMP, VIEW_OFFSETS, WOLF, tileAt, xyOf } from './world';
 
 /** What a thought needs to know about the trip so far (a `Walker` fits). */
 export interface TripState {
@@ -32,8 +33,8 @@ export const SURE_FROM = 0.75;
 export const LIKELY_FROM = 0.4;
 
 export const WOLF_LINES: readonly Line[] = [
-  (d) => `Scary wolf to the ${d}!`, 'Beware of the wolf!', (d) => `A wolf den, ${d}! Eek!`, (d) => `Monster to the ${d}!`,
-  'Eek, a wolf den!', (d) => `Something growls to the ${d}…`,
+  (d) => `Scary wolf ${d}!`, 'Beware of the wolf!', (d) => `A wolf den ${d}! Eek!`, (d) => `Monster ${d}!`,
+  'Eek, a wolf den!', (d) => `Something growls ${d}…`,
 ];
 /** Only when the den lies the way she is going. */
 const WOLF_AHEAD: readonly Line[] = ['Wolf ahead!'];
@@ -52,13 +53,15 @@ export const HOME_LINES: readonly Line[] = ['Finally!', 'Hello, Grandma!', 'Made
 export const LOST_LINES: readonly Line[] = ['I need a nap…', "I'll just sit here a bit.", 'Too tired to walk on…', 'Zzz…'];
 export const EATEN_LINES: readonly Line[] = ['Uh-oh…', 'Oh no!'];
 
-/** A compass word for a step or a view offset: north is up on the map. */
-export function dirWord(dx: number, dy: number): string {
-  const ns = dy < 0 ? 'north' : dy > 0 ? 'south' : '';
-  const ew = dx > 0 ? 'east' : dx < 0 ? 'west' : '';
-  return ns && ew ? `${ns}-${ew}` : ns || ew;
+/** Where a view offset lies from her, in the words of the move arrows (up is north on the map). */
+export function placeWord(dx: number, dy: number): string {
+  const side = dx > 0 ? 'right' : dx < 0 ? 'left' : '';
+  if (dy === 0) return `to my ${side}`;
+  const ud = dy < 0 ? 'up' : 'down';
+  return side ? `${ud} on my ${side}` : dy < 0 ? 'above me' : 'below me';
 }
-export const moveWord = (m: Move): string => dirWord(DX[m], DY[m]);
+/** The move's own name: up, right, down or left. */
+export const moveWord = (m: Move): string => MOVE_NAMES[m];
 
 /** Compass sector (0 = east, counter-clockwise, as in `homeSector`) of each move. */
 const MOVE_SECTOR = [2, 0, 6, 4] as const;
@@ -142,7 +145,7 @@ export class Thoughts {
 
   private wolfLine(m: Move, dx: number, dy: number): string {
     const lines = sameWay(m, dx, dy) ? [...WOLF_LINES, ...WOLF_AHEAD] : WOLF_LINES;
-    return this.say(lines, dirWord(dx, dy), WOLF_LINES);
+    return this.say(lines, placeWord(dx, dy), WOLF_LINES);
   }
 
   /** A random line from the list, never the same as the last one picked from it. */
