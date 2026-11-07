@@ -5,8 +5,8 @@ import { COLORS, arrowPath, heartPath, parentFigure, redFigure, tileSymbol, wolf
 
 export const T = 40;
 
-type Layer = 'tiles' | 'heat' | 'radius' | 'changed' | 'trails' | 'trace' | 'marks' | 'actors' | 'arrows' | 'fog' | 'fx';
-const LAYERS: Layer[] = ['tiles', 'heat', 'radius', 'changed', 'trails', 'trace', 'marks', 'actors', 'arrows', 'fog', 'fx'];
+type Layer = 'tiles' | 'heat' | 'radius' | 'changed' | 'trails' | 'trace' | 'marks' | 'actors' | 'arrows' | 'fog' | 'fx' | 'talk';
+const LAYERS: Layer[] = ['tiles', 'heat', 'radius', 'changed', 'trails', 'trace', 'marks', 'actors', 'arrows', 'fog', 'fx', 'talk'];
 
 export class Board {
   readonly svg: SVGSVGElement;
@@ -20,6 +20,14 @@ export class Board {
   private parent: SVGGElement | null = null;
   private parentWho: 'mother' | 'father' | 'wolf' | null = null;
   private painting = false;
+  private redPos = -1;
+  /** Her thought bubble: follows her, drawn above everything (fog and outcome pictures too). */
+  private talk: SVGGElement;
+  private talkLines: string[] | null = null;
+  private talkBelow = false;
+  private talkTimer = 0;
+  /** Where the bubble was laid out (it keeps inside the board, so it depends on where she is). */
+  private talkAt = -1;
   private hoverEl: SVGRectElement;
 
   onTileDown?: (i: number) => void;
@@ -39,6 +47,8 @@ export class Board {
     this.energyBar = s('g', { transform: `translate(${-T * 0.4},${-T * 0.52})` });
     this.red.append(this.redInner, this.sweat, this.energyBar);
     this.layers.actors.append(this.red);
+    this.talk = s('g', { class: 'actor', visibility: 'hidden', 'pointer-events': 'none' });
+    this.layers.talk.append(this.talk);
     parent.append(this.svg);
 
     this.svg.addEventListener('pointerdown', (e) => {
@@ -165,11 +175,16 @@ export class Board {
   }
 
   setRed(i: number | null, opts: { energy?: number; sitting?: boolean; animate?: boolean } = {}) {
-    if (i === null) { this.red.setAttribute('visibility', 'hidden'); return; }
+    if (i === null) { this.red.setAttribute('visibility', 'hidden'); this.redPos = -1; this.talk.setAttribute('visibility', 'hidden'); return; }
     const [cx, cy] = this.center(i);
     this.red.classList.toggle('no-anim', opts.animate === false);
     this.red.style.transform = `translate(${cx}px, ${cy}px)`;
     this.red.setAttribute('visibility', 'visible');
+    this.redPos = i;
+    this.talk.classList.toggle('no-anim', opts.animate === false);
+    this.talk.style.transform = `translate(${cx}px, ${cy}px)`;
+    if (this.talkLines && this.talkAt !== i) this.drawTalk(false);
+    else this.talk.setAttribute('visibility', this.talkLines ? 'visible' : 'hidden');
     this.redInner.setAttribute('transform', opts.sitting ? `translate(0 ${T * 0.12}) scale(1 0.75)` : '');
     clear(this.energyBar);
     if (opts.energy !== undefined) {
@@ -225,7 +240,54 @@ export class Board {
     );
   }
 
+  /**
+   * Her thought, in a bubble over her head (or below her, near the top edge or when asked).
+   * Call it after `setRed` has placed her. It follows her as she walks; after `ms` it goes
+   * away, and with no `ms` it stays until the next thought or `clearFx`.
+   */
+  say(lines: string[] | null, opts: { ms?: number; below?: boolean } = {}) {
+    clearTimeout(this.talkTimer);
+    this.talkLines = lines?.length ? lines : null;
+    this.talkBelow = !!opts.below;
+    this.drawTalk(true);
+    if (this.talkLines && opts.ms) this.talkTimer = window.setTimeout(() => this.say(null), opts.ms);
+  }
+
+  private drawTalk(fresh = false) {
+    const lines = this.talkLines;
+    this.talkAt = -1;
+    if (!lines || this.redPos < 0) { this.talk.setAttribute('visibility', 'hidden'); if (!lines) clear(this.talk); return; }
+    this.talkAt = this.redPos;
+    const [cx, cy] = this.center(this.redPos);
+    const px = this.forest.size * T;
+    const fs = 14, lh = 17, pad = 7;
+    const text = s('text', { 'font-size': fs, 'text-anchor': 'middle', fill: COLORS.ink });
+    lines.forEach((l, k) => text.append(s('tspan', { x: 0, y: k * lh }, l)));
+    clear(this.talk);
+    const body = s('g', fresh ? { class: 'fx-talk' } : {});
+    this.talk.append(body);
+    body.append(text);
+    let tw = 0;
+    try { tw = text.getBBox().width; } catch { /* not laid out yet */ }
+    if (!tw) tw = Math.max(...lines.map((l) => l.length)) * fs * 0.52;
+    const w = tw + pad * 2;
+    const hgt = lines.length * lh + pad * 2 - 4;
+    // Keep the bubble inside the board.
+    let left = T * 0.15 - w / 2;
+    left = Math.min(Math.max(left, 2 - cx), px - 2 - w - cx);
+    const below = this.talkBelow || cy - T * 0.88 - hgt < 2;
+    const top = below ? T * 0.8 : -T * 0.88 - hgt;
+    const dots = below ? [[4, T * 0.56, 2.2], [8, T * 0.68, 3.2]] : [[4, -T * 0.56, 2.2], [8, -T * 0.7, 3.2]];
+    const shape = { fill: '#fff', stroke: COLORS.ink, 'stroke-width': 1.3 };
+    body.prepend(
+      ...dots.map(([x, y, r]) => s('circle', { cx: x, cy: y, r, ...shape })),
+      s('rect', { x: left, y: top, width: w, height: hgt, rx: 9, ...shape }));
+    text.setAttribute('transform', `translate(${left + w / 2},${top + pad + fs - 2})`);
+    this.talk.setAttribute('visibility', 'visible');
+  }
+
   clearFx() {
+    this.say(null);
     for (const c of [...this.layers.fx.children]) if (c !== this.hoverEl) c.remove();
     this.svg.classList.remove('faded');
   }
