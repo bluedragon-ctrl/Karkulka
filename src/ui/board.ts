@@ -1,5 +1,5 @@
 /** The forest board: tiles, overlays, figures, arrows and fog, all in one SVG. */
-import { Forest, Move, MOVE_NAMES, Tile, isWalkable, xyOf } from '../world';
+import { DX, DY, Forest, Move, MOVE_NAMES, Tile, isWalkable, xyOf } from '../world';
 import { clear, s } from './dom';
 import { COLORS, arrowPath, heartPath, parentFigure, redFigure, tileSymbol, wolfHead } from './symbols';
 
@@ -245,6 +245,38 @@ export class Board {
       g.append(s('path', { d: heartPath(Math.cos(a) * T * 0.9, Math.sin(a) * T * 0.9, T * 0.18), fill: k % 2 ? COLORS.home : '#e86a8a', class: 'float-heart', style: `animation-delay:${k * 80}ms` }));
     }
     this.layers.fx.append(g);
+  }
+
+  /** A little "Ouch!" with a bump star where she walked into a tree. Gone after a moment. */
+  showOuch(i: number, m: Move) {
+    const [cx, cy] = this.center(i);
+    const x = cx + DX[m] * T * 0.45;
+    const y = cy + DY[m] * T * 0.45 - T * 0.35;
+    const star = 'M 0 -9 L 2.6 -3.6 8.6 -2.8 4.2 1.4 5.3 7.3 0 4.5 -5.3 7.3 -4.2 1.4 -8.6 -2.8 -2.6 -3.6 Z';
+    const g = s('g', { transform: `translate(${x},${y})`, 'pointer-events': 'none' },
+      s('g', { class: 'fx-ouch' },
+        s('path', { d: star, transform: 'scale(1.3)', fill: '#f2c14e', stroke: COLORS.ink, 'stroke-width': 1 }),
+        s('text', { x: 0, y: -13, 'text-anchor': 'middle', 'font-size': 14, 'font-weight': 700, fill: COLORS.ink, stroke: '#fff', 'stroke-width': 3, 'paint-order': 'stroke' }, 'Ouch!')));
+    this.flash(g, 1000);
+  }
+
+  /** A splash of water drops around her feet in a swamp. Gone after a moment. */
+  showSplash(i: number) {
+    const [cx, cy] = this.center(i);
+    const g = s('g', { transform: `translate(${cx},${cy + T * 0.3})`, 'pointer-events': 'none' });
+    for (let k = 0; k < 5; k++) {
+      const a = -Math.PI / 2 + (k - 2) * 0.62;
+      const dx = Math.cos(a) * T * 0.62;
+      const dy = Math.sin(a) * T * 0.5;
+      g.append(s('g', { transform: `translate(${dx.toFixed(1)},${dy.toFixed(1)})` },
+        s('path', { d: 'M 0 -7 Q 5 0 5 2 A 5 5 0 0 1 -5 2 Q -5 0 0 -7 Z', fill: '#4aa3df', stroke: COLORS.waterInk, 'stroke-width': 1.2, class: 'fx-drop', style: `animation-delay:${k * 40}ms` })));
+    }
+    this.flash(g, 800);
+  }
+
+  private flash(g: SVGElement, ms: number) {
+    this.layers.fx.append(g);
+    setTimeout(() => g.remove(), ms);
   }
 
   showLostNote(i: number) {

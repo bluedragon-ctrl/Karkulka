@@ -624,12 +624,35 @@ export class App {
     this.render();
   }
 
+  /** One sampled move, without redrawing. */
+  private advanceTrip(w: Walker) {
+    w.temperature = this.settings.boldness;
+    w.step();
+    const bumped = w.blocked[w.t - 1];
+    if (bumped && this.fresh !== 'tree' && w.blocked.filter(Boolean).length === 1) this.showCard('tree');
+    if (this.forest.tiles[w.pos] === SWAMP && !bumped && this.fresh !== 'swamp' && !w.positions.slice(0, -1).some((p) => this.forest.tiles[p] === SWAMP)) this.showCard('swamp');
+  }
+
+  /** Next step or Walk through: one move, with a little "Ouch!" or splash on the board. */
   private stepTrip() {
     const w = this.walker;
     if (!w || w.done) return;
-    w.temperature = this.settings.boldness;
-    w.step();
-    if (this.forest.tiles[w.pos] === SWAMP && !w.blocked[w.t - 1] && this.fresh !== 'swamp' && !w.positions.slice(0, -1).some((p) => this.forest.tiles[p] === SWAMP)) this.showCard('swamp');
+    this.advanceTrip(w);
+    if (w.blocked[w.t - 1]) this.board.showOuch(w.pos, w.history.moves[w.t - 1]);
+    else if (this.forest.tiles[w.pos] === SWAMP) this.board.showSplash(w.pos);
+    this.afterTripSteps(w);
+  }
+
+  /** The whole rest of the trip at once, drawn only at the end. */
+  private instantTrip() {
+    const w = this.walker;
+    if (!w || w.done) return;
+    this.stopAuto();
+    while (!w.done) this.advanceTrip(w);
+    this.afterTripSteps(w);
+  }
+
+  private afterTripSteps(w: Walker) {
     this.techStep = w.decisions.length;
     if (w.done) this.finishTrip();
     this.renderBoard();
@@ -1126,6 +1149,7 @@ export class App {
         ? [{ home: `Home after ${w.t} steps!`, eaten: `Eaten by a wolf at step ${w.t}.`, lost: `Lost: out of energy after ${w.t} steps.` }[w.outcome!]]
         : [
           `Step ${w.t + 1} · energy ${w.energyLeft} / ${w.energy}`,
+          w.t > 0 && w.blocked[w.t - 1] ? h('span', { class: 'nowrap' }, this.hq(' · ouch, a tree!', 'tree', 'status')) : null,
           this.forest.tiles[w.pos] === SWAMP ? h('span', { class: 'nowrap' }, this.hq(` · in a swamp (${SWAMP_COST} energy a step)`, 'swamp', 'status')) : null,
           this.settings.hint ? h('span', { class: 'nowrap' }, this.hq(` · smells cake to the ${SECTOR_WORDS[homeSector(this.forest, w.pos)]}`, 'hint')) : null,
         ].filter((x): x is string | HTMLElement => !!x);
@@ -1138,9 +1162,10 @@ export class App {
       walking ? h('h3', {}, this.hq('Her next move', 'arrows')) : null,
       probsBox,
       h('div', { class: 'row' },
-        h('button', { onclick: () => this.stepTrip(), disabled: !w || w.done || !!this.auto }, 'Step'),
-        h('button', { class: 'primary', onclick: () => this.toggleAuto(), disabled: !w || w.done }, this.auto ? 'Pause' : 'Auto'),
-        h('button', { onclick: () => w && this.chooseStart(w.start), disabled: !w }, 'Again from here')),
+        h('button', { onclick: () => this.stepTrip(), disabled: !walking || !!this.auto, title: 'One move, then wait' }, 'Next step'),
+        h('button', { class: 'primary', onclick: () => this.toggleAuto(), disabled: !walking, title: 'Walk on step by step until the trip ends' }, this.auto ? 'Pause' : 'Walk through'),
+        h('button', { onclick: () => this.instantTrip(), disabled: !walking, title: 'Finish the whole trip at once' }, 'Instant run')),
+      w?.done ? h('p', { class: 'muted' }, 'Click a path tile to start a new trip; the same tile again gives a different walk.') : null,
       this.slider('Energy (step budget)', this.settings.energy, 10, 200, 5, (v) => String(v), (v) => {
         this.settings.energy = v; this.walker?.setEnergy(v); this.saveSoon(); this.renderBoard(); if (this.fresh !== 'energy') this.showCard('energy');
       }, undefined, 'energy'),
