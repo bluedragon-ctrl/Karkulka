@@ -295,7 +295,7 @@ Where the "?" buttons are, and what makes them pulse:
 | 5. Inside the model | Title | The real numbers | Entering the tab |
 | 5. Inside the model | Vocabulary, Training data, Look-alike tokens, Current input, Her latest trip, Network, Loss curves, Training compute, Fixed settings, Export and import | Vocabulary, token frequency, context-dependent tokens, one-hot inputs, uncertainty and sampling, weights, loss, training cost, hyperparameters, shared model files | |
 
-After a trip, the "Why did she do that?" note sits right under the result line. When she walks into a den after wolf lessons or wolf practice, it says the wolf taught her.
+After a trip, the "Why did she do that?" text is a small note at the bottom of "How was the trip for her?", with its "?" for the card that fits. When she is eaten there is no trip report, so it stands on its own under the result line. When she walks into a den after wolf lessons or wolf practice, it says the wolf taught her.
 
 
 **Layout.** Designed for a wide screen first: the forest large in the centre, a narrow side panel with the current tab's controls, and the memory strip at the bottom. A phone layout can come later.

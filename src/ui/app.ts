@@ -1239,8 +1239,9 @@ export class App {
       h('h2', {}, this.hq('Trip alone', 'view')),
       h('p', {}, this.hq('At each step she looks at her memory strip, decides how likely each move is, and then picks one by chance, like rolling a dice.', 'sampling')),
       h('p', { class: 'status' }, ...status),
-      this.why ? h('div', { class: 'why' }, h('h3', {}, this.why.card ? this.hq(this.why.title, this.why.card, 'why') : this.why.title), h('p', {}, this.why.text)) : null,
-      w && w.done && w.outcome !== 'eaten' ? this.reportBox(w) : null,
+      w && w.done && w.outcome !== 'eaten'
+        ? this.reportBox(w, this.why)
+        : this.why ? h('div', { class: 'why' }, h('h3', {}, this.why.card ? this.hq(this.why.title, this.why.card, 'why') : this.why.title), h('p', {}, this.why.text)) : null,
       walking ? h('h3', {}, this.hq('Her next move', 'arrows')) : null,
       probsBox,
       h('div', { class: 'row' },
@@ -1264,7 +1265,7 @@ export class App {
   }
 
   /** Tired, wet and scared: how the trip went for her, not just where it ended. */
-  private reportBox(w: Walker): HTMLElement {
+  private reportBox(w: Walker, why: Explanation | null): HTMLElement {
     const r = tripReport(w, this.forest);
     const icon = (...kids: SVGElement[]) => { const svg = s('svg', { width: 26, height: 26, viewBox: '-13 -13 26 26', 'aria-hidden': 'true' }); svg.append(...kids); return svg; };
     const fill = Math.max(0, 1 - r.energyUsed / Math.max(1, r.energy));
@@ -1288,6 +1289,8 @@ export class App {
       row(wetIcon, 'Wet', r.wet, r.swampSteps ? `waded through swamp ${times(r.swampSteps, 'time', 'times')}` : 'never stepped into a swamp'),
       row(scaredIcon, 'Scared', r.scared, r.wolvesSeen ? `saw ${times(r.wolvesSeen, 'wolf den', 'wolf dens')} on the way` : 'saw no wolf dens'),
       row(bumpIcon, 'Bumped', r.bumped, r.treeHits ? `walked into a tree ${times(r.treeHits, 'time', 'times')}, wasting ${r.treeHits} energy` : 'never walked into a tree'),
+      // "Why did she do that?" as a small note at the bottom.
+      why ? h('p', { class: 'report-note' }, why.card ? this.hq(why.text, why.card, 'why') : why.text) : null,
     );
   }
 
