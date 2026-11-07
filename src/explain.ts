@@ -9,7 +9,8 @@ export type CardKey =
   | 'boldness' | 'energy' | 'hallucination' | 'repetition' | 'exposure' | 'practice' | 'outdated' | 'home'
   | 'tech' | 'vocabulary' | 'judge' | 'swamp'
   | 'tripReport' | 'judgeGrandma' | 'judgeFather' | 'judgeMother' | 'judgeCrow' | 'rewardHacking' | 'teacherVsJudge'
-  | 'wolfTeacher' | 'poisonedData' | 'judgeWolf' | 'fixBadData';
+  | 'wolfTeacher' | 'poisonedData' | 'judgeWolf' | 'fixBadData'
+  | 'newWorld' | 'catchUp';
 
 export const CARDS: Record<CardKey, string> = {
   forest: "The forest is her whole world, like the text a language model works with. She only ever sees a small piece of it at a time.",
@@ -27,7 +28,9 @@ export const CARDS: Record<CardKey, string> = {
   repetition: "She went round in circles. With a short memory, look-alike places all seem the same, like a model repeating itself when its context is too short.",
   exposure: "Lessons were always perfect, so she never learned how to recover after a wrong step. Practice on her own fixes that.",
   practice: "Practice is fine-tuning from feedback: she tries on her own and each whole run is judged, like RLHF judging a model's answers.",
-  outdated: "The forest changed after her lessons, but she didn't. That's a knowledge cutoff: the world moved on, the model did not.",
+  outdated: "The forest changed after her lessons, but she didn't. That's a knowledge cutoff: the world moved on, the model did not. Where the forest is new she still walks as she was taught, and makes confident mistakes.",
+  newWorld: "She has never seen this forest, but she still walks with confidence. A language model asked about something far from its training data also answers confidently, and is often wrong.",
+  catchUp: "Catch-up lessons in the changed forest bring her up to date without starting over, like training a model further on new data. Most of what she knew still works, so a few lessons already help a lot.",
   home: "She got home, one predicted step at a time, the way a language model writes one predicted word at a time.",
   tech: "This tab shows the real numbers behind the pictures: tokens, inputs, weights and probabilities.",
   vocabulary: "Her vocabulary is every view that can happen in this forest plus the four moves, just as a model has a fixed list of tokens.",

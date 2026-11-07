@@ -120,3 +120,29 @@ export function generateForest(code: string, size = DEFAULT_SIZE): Forest {
   return forest;
 }
 
+
+/** The forest-change buttons: how many tiles a small and a big change touch. */
+export const CHANGE_SIZES = { small: 5, big: 15 } as const;
+
+/**
+ * Change `count` random tiles (never home) into another kind of tile, keeping every
+ * path and swamp able to reach home. Seeded by `seed`, so the same forest and seed
+ * always give the same change. Returns the changed forest and the changed tiles.
+ */
+export function changeForest(f: Forest, count: number, seed: string): { forest: Forest; changed: number[] } {
+  const rng = rngFrom(`change:${seed}`);
+  const tiles = f.tiles.slice();
+  const g: Forest = { ...f, tiles };
+  const kinds: Tile[] = [PATH, TREE, WOLF, SWAMP];
+  const changed: number[] = [];
+  for (let tries = 0; changed.length < count && tries < 5000; tries++) {
+    const i = randInt(rng, tiles.length);
+    if (i === f.home || changed.includes(i)) continue;
+    const old = tiles[i];
+    const options = kinds.filter((t) => t !== old);
+    tiles[i] = options[randInt(rng, options.length)];
+    if (allReachable(g)) changed.push(i);
+    else tiles[i] = old;
+  }
+  return { forest: g, changed };
+}

@@ -1,20 +1,20 @@
 /** The app: five tabs that tell the story in order. */
 import { CARDS, CardKey, explainTrip, tripReport } from '../explain';
-import { generateForest } from '../forest';
+import { CHANGE_SIZES, changeForest, generateForest } from '../forest';
 import { Adam, Model, createAdam, createModel, modelFromJSON, modelToJSON } from '../model';
 import { mulberry32, normalizeCode, pick, randomCode } from '../rng';
 import { Outcome, Walker, predictAt } from '../sim';
 import * as store from '../storage';
 import { LessonWalk, Teacher, TeacherChoice, costToHome, endsAtDen, teacherMoves, walkLesson } from '../teachers';
 import { MEMORY_PAIRS, MemorySize, ModelConfig } from '../tokens';
-import { FIXED, JUDGES, Judge, TrainStats, chooseTeacher, learnFromLesson, newStats, recordLessonBatch, startTiles } from '../train';
+import { FIXED, JUDGES, Judge, TrainStats, chooseTeacher, homeShare, learnFromLesson, newStats, recordLessonBatch, startTiles } from '../train';
 import { WorkerRequest, runTraining } from '../workerTypes';
 import {
   DEFAULT_SIZE, Forest, HOME, MOVES, MOVE_ARROWS, MOVE_NAMES, PATH, SECTOR_WORDS, SWAMP, SWAMP_COST, TREE, Tile, WOLF, copyForest,
   forestFromTiles, homeSector, unreachableTiles, walkingDistances,
 } from '../world';
 import { Board } from './board';
-import { outcomeChart } from './charts';
+import { changeChart, outcomeChart } from './charts';
 import { add, clear, h, s } from './dom';
 import { renderStrip } from './strip';
 import { COLORS, crowFigure, grandmaFigure, parentFigure, tileSymbol, wolfHead } from './symbols';
@@ -112,6 +112,14 @@ interface PracticeSummary { judge: Judge; scoreBefore: number; scoreAfter: numbe
 
 const TRAIL_COLORS: Record<Outcome | Teacher, string> = { home: '#c99700', eaten: COLORS.danger, lost: COLORS.lost, mother: COLORS.mother, father: COLORS.father, wolf: COLORS.den };
 
+/** One point of the "since the forest changed" chart: home on test trips after a change or catch-up. */
+export interface ChangePoint { label: string; home: number }
+/** Catch-up lesson buttons after the forest changed. */
+const CATCH_UP = [30, 100, 300];
+/** Above this many changed tiles the board doesn't mark them (a brand new forest). */
+const MAX_MARKED = 60;
+const MAX_CHANGE_POINTS = 8;
+
 interface Job { kind: 'lessons' | 'practice' | 'watch'; done: number; total: number; cancel: () => void }
 
 export class App {
@@ -119,6 +127,10 @@ export class App {
   edited = false;
   /** The forest tiles she was taught on (to spot a knowledge cutoff). */
   modelTiles = '';
+  /** Home on test trips since the forest changed after her lessons. */
+  changeLog: ChangePoint[] = [];
+  /** Hand edits made since the last check of how she does. */
+  private uncheckedEdits = false;
   settings: Settings = { ...DEFAULTS };
   model: Model | null = null;
   opt: Adam | null = null;
@@ -172,6 +184,67 @@ export class App {
   get outdated() { return this.trained && this.modelTiles !== store.packTiles(this.forest.tiles); }
 
   private markTrained() { this.modelTiles = store.packTiles(this.forest.tiles); }
+
+  /** Tiles that differ from the forest she was taught on. */
+  get changedTiles(): number[] {
+    if (!this.trained || !this.modelTiles) return [];
+    const old = store.unpackTiles(this.modelTiles, this.forest.tiles.length);
+    if (!old) return [];
+    const out: number[] = [];
+    this.forest.tiles.forEach((t, i) => { if (t !== old[i]) out.push(i); });
+    return out;
+  }
+
+  /** Test her in the current forest and add the result to the change chart. */
+  private logCheck(label: string) {
+    if (!this.model) return;
+    this.changeLog.push({ label, home: homeShare(this.model, this.forest) });
+    if (this.changeLog.length > MAX_CHANGE_POINTS) this.changeLog.splice(1, 1); // keep "before"
+    this.uncheckedEdits = false;
+  }
+
+  /** Before the first change after her lessons: start a new chart with how she does now. */
+  private logBeforeChange() {
+    if (this.trained && !this.outdated) {
+      this.changeLog = [];
+      this.logCheck('Before the change');
+    }
+  }
+
+  private checkEdits() {
+    if (this.uncheckedEdits && this.outdated) this.logCheck('After your edits');
+    this.uncheckedEdits = false;
+  }
+
+  /** A small or big random change, or a brand new forest, keeping what she learned. */
+  private changeAfterLessons(kind: 'small' | 'big' | 'new') {
+    if (!this.trained || this.busy) return;
+    this.checkEdits();
+    this.logBeforeChange();
+    this.stopTrip();
+    this.walker = null;
+    this.why = null;
+    if (kind === 'new') {
+      this.forest = generateForest(randomCode(this.rng));
+      this.edited = false;
+      this.stats.coverage = new Array(this.forest.tiles.length).fill(0); // she was taught nowhere here
+      this.board.setForest(this.forest);
+      this.logCheck('Brand new forest');
+      this.showCard('newWorld');
+    } else {
+      const n = CHANGE_SIZES[kind];
+      const { forest, changed } = changeForest(this.forest, n, `${this.forest.code}:${store.packTiles(this.forest.tiles)}`);
+      this.forest.tiles = forest.tiles;
+      this.edited = true;
+      for (const i of changed) this.board.updateTile(i, forest.tiles[i]);
+      this.logCheck(`${kind === 'small' ? 'Small' : 'Big'} change (${changed.length} tiles)`);
+      this.showCard('outdated');
+    }
+    this.board.clearTrails();
+    this.updateLink();
+    this.saveSoon();
+    this.render();
+  }
   get busy() { return this.job !== null; }
 
   private configFromSettings(): ModelConfig {
@@ -194,6 +267,8 @@ export class App {
     this.stats = newStats(this.forest);
     this.walker = null;
     this.why = null;
+    this.changeLog = [];
+    this.uncheckedEdits = false;
     this.board.clearTrails();
   }
 
@@ -210,6 +285,7 @@ export class App {
       forest = tiles.length === size * size ? forestFromTiles(code, size, tiles) : generateForest(code, size);
       this.edited = saved.forest.edited;
       this.modelTiles = saved.modelTiles ?? '';
+      this.changeLog = Array.isArray(saved.changeLog) ? saved.changeLog : [];
       try {
         this.model = saved.model ? modelFromJSON(saved.model) : null;
         this.opt = this.model ? createAdam(this.model) : null;
@@ -244,6 +320,7 @@ export class App {
         version: store.SAVE_VERSION,
         forest: { code: this.forest.code, size: this.forest.size, tiles: this.forest.tiles, edited: this.edited },
         modelTiles: this.modelTiles,
+        changeLog: this.model ? this.changeLog : [],
         settings: { ...this.settings },
         model: this.model ? modelToJSON(this.model) : null,
         stats: this.model ? this.stats : null,
@@ -283,10 +360,13 @@ export class App {
   private paint(i: number) {
     const brush = this.settings.brush;
     if (i === this.forest.home || this.forest.tiles[i] === brush) return;
+    this.logBeforeChange();
     this.forest.tiles[i] = brush;
+    if (this.trained) this.uncheckedEdits = true;
     this.edited = true;
     this.walker = null;
     this.board.updateTile(i, brush);
+    this.renderChanged();
     if (this.trained) this.showCard('outdated');
     else if (brush === SWAMP) this.showCard('swamp');
     this.updateLink();
@@ -299,6 +379,8 @@ export class App {
     this.forest.tiles = generateForest(this.forest.code, this.forest.size).tiles;
     this.edited = false;
     this.walker = null;
+    this.uncheckedEdits = false;
+    if (this.changeLog.length) this.logCheck('Edits undone');
     this.board.setForest(this.forest);
     this.updateLink();
     this.saveSoon();
@@ -343,16 +425,20 @@ export class App {
 
   private seed() { return (this.rng() * 2 ** 32) >>> 0; }
 
-  private startLessons() {
+  private startLessons(count = this.settings.lessons) {
     const model = this.ensureModel();
     this.stopTrip();
+    this.checkEdits();
+    const catchUp = this.outdated;
     this.runJob(
-      { kind: 'lessons', model, forest: copyForest(this.forest), stats: this.stats, count: this.settings.lessons, seed: this.seed(), teacher: this.settings.teacher },
+      { kind: 'lessons', model, forest: copyForest(this.forest), stats: this.stats, count, seed: this.seed(), teacher: this.settings.teacher },
       0.1,
       () => {
         this.markTrained();
+        if (this.changeLog.length) this.logCheck(`+${count} new lesson${count === 1 ? '' : 's'}`);
         const t = this.settings.teacher;
-        this.showCard(t === 'both' || t === 'wolf' || t === 'motherWolf' ? teacherCard(t) : 'coverage');
+        if (catchUp) this.showCard('catchUp');
+        else this.showCard(t === 'both' || t === 'wolf' || t === 'motherWolf' ? teacherCard(t) : 'coverage');
       },
     );
     this.render();
@@ -489,6 +575,7 @@ export class App {
   private goTab(id: TabId) {
     if (this.busy || this.locked(id)) return;
     this.stopAuto();
+    if (this.tab === 'forest') this.checkEdits();
     this.tab = id;
     this.board.clearTrails();
     const cards: Record<TabId, CardKey> = { forest: 'forest', lessons: 'lessons', trip: 'view', practice: 'exposure', inside: 'tech' };
@@ -532,7 +619,7 @@ export class App {
     this.banner.hidden = !this.outdated;
     clear(this.banner);
     if (this.outdated) {
-      this.banner.append(h('strong', {}, 'Her lessons are outdated. '), 'The forest was edited after she was taught, so she still remembers the old forest, like a language model\'s knowledge cutoff. Give her new lessons to catch up.');
+      this.banner.append(h('strong', {}, 'Her lessons are outdated. '), 'The forest changed after she was taught, so she still remembers the old forest, like a language model\'s knowledge cutoff. ', this.changedTiles.length <= MAX_MARKED ? 'Changed tiles have a dashed yellow edge. ' : 'This whole forest is new to her. ', 'Catch-up lessons (tab 2) bring her up to date.');
     }
   }
 
@@ -583,6 +670,7 @@ export class App {
     b.setRadius(null);
     b.setParent(null);
     b.setRed(null);
+    this.renderChanged();
     b.setHeat(this.tab === 'lessons' && this.settings.heat && this.stats.lessons > 0 ? this.stats.coverage : null);
 
     if (this.tab === 'lessons' && this.watch && this.model) {
@@ -612,6 +700,34 @@ export class App {
       d.forEach((v, i) => { if (v >= 1 && v <= this.stats.radius) set.add(i); });
       b.setRadius(set);
     }
+  }
+
+  private renderChanged() {
+    const changed = this.changedTiles;
+    this.board.setChanged(changed.length && changed.length <= MAX_MARKED ? changed : null);
+  }
+
+  /** The "since the forest changed" box: buttons to change it and the before/after chart. */
+  private changeBox(where: 'forest' | 'lessons'): HTMLElement | null {
+    if (!this.trained) return null;
+    const busy = this.busy;
+    const chart = this.changeLog.length ? h('div', {}, h('h4', {}, 'Getting home since the forest changed'), changeChart(this.changeLog)) : null;
+    if (where === 'forest') {
+      return h('div', { class: 'group' },
+        h('h3', {}, 'Change the forest after her lessons'),
+        h('p', { class: 'muted' }, 'She keeps what she learned. See how she copes, then give her catch-up lessons.'),
+        h('div', { class: 'row' },
+          h('button', { disabled: busy, onclick: () => this.changeAfterLessons('small') }, `Small change (${CHANGE_SIZES.small} tiles)`),
+          h('button', { disabled: busy, onclick: () => this.changeAfterLessons('big') }, `Big change (${CHANGE_SIZES.big} tiles)`)),
+        h('div', { class: 'row' }, h('button', { disabled: busy, onclick: () => this.changeAfterLessons('new') }, 'New forest, same Red Riding Hood')),
+        chart);
+    }
+    if (!this.outdated && !chart) return null;
+    return h('div', { class: 'group catch-up' },
+      this.outdated ? h('h3', {}, 'The forest changed') : null,
+      this.outdated ? h('p', { class: 'muted' }, `Catch-up lessons from the ${TEACHERS.find((t) => t.id === this.settings.teacher)?.name.toLowerCase() ?? 'teacher'} in the changed forest, on top of what she knows.`) : null,
+      this.outdated ? h('div', { class: 'row' }, ...CATCH_UP.map((n) => h('button', { disabled: busy, onclick: () => this.startLessons(n) }, `${n} catch-up lessons`))) : null,
+      chart);
   }
 
   private renderPanel() {
@@ -674,6 +790,7 @@ export class App {
         h('p', { class: 'muted' }, `A swamp can be crossed, but each step in it costs ${SWAMP_COST} energy instead of 1.`),
         unreachable ? h('p', { class: 'warn' }, `${unreachable} path tile${unreachable === 1 ? '' : 's'} cannot reach home without crossing a wolf den. Parents never start lessons there.`) : null,
         this.edited ? h('button', { onclick: () => this.undoEdits() }, 'Undo all edits') : null),
+      this.changeBox('forest'),
       h('div', { class: 'group' },
         h('h3', {}, 'Her memory'),
         h('div', { class: 'radios' }, ...(['short', 'medium', 'long'] as MemorySize[]).map((m) => h('label', { class: 'radio' },
@@ -698,6 +815,7 @@ export class App {
     add(body,
       h('h2', {}, 'Lessons'),
       h('p', {}, 'A teacher walks her from a random spot. At every step she guesses the next move, compares it with what the teacher did, and adjusts.'),
+      this.changeBox('lessons'),
       h('div', { class: 'group teachers', role: 'radiogroup', 'aria-label': 'Teacher' }, ...TEACHERS.map((t) => {
         const icon = s('svg', { width: 30, height: 30, viewBox: '-20 -24 40 44' });
         if (t.id === 'both') icon.append(s('g', { transform: 'translate(-7 0) scale(.8)' }, parentFigure(40, 'mother')), s('g', { transform: 'translate(7 0) scale(.8)' }, parentFigure(40, 'father')));
@@ -879,6 +997,7 @@ export class App {
       this.model = model;
       this.opt = createAdam(model);
       this.markTrained();
+      this.changeLog = [];
       this.stats = data.stats;
       this.settings.memory = mem;
       this.settings.hint = model.cfg.hint;

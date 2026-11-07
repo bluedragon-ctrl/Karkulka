@@ -10,6 +10,8 @@ export interface SavedState {
   version: typeof SAVE_VERSION;
   forest: { code: string; size: number; tiles: Tile[]; edited: boolean };
   modelTiles: string;
+  /** Home on test trips since the forest changed (missing in older saves). */
+  changeLog?: { label: string; home: number }[];
   settings: Record<string, unknown>;
   model: ModelJSON | null;
   stats: TrainStats | null;

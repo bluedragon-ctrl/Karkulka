@@ -36,6 +36,8 @@ export const FIXED = {
   curriculumWindow: 30,
   evalStarts: 40,
   evalBoldness: 0.5,
+  /** Rounds of test trips for the before/after check when the forest changes. */
+  checkRounds: 3,
   evalEnergy: 100,
   /** About this many rounds of test trips per job, so long jobs don't spend most of their time testing. */
   evalPoints: 20,
@@ -110,6 +112,13 @@ export function evaluate(model: Model, f: Forest, x: number): EvalPoint {
   for (const s of starts) counts[new Walker(f, model, s, FIXED.evalEnergy, FIXED.evalBoldness, rng).run()]++;
   const n = Math.max(1, starts.length);
   return { x, home: counts.home / n, eaten: counts.eaten / n, lost: counts.lost / n };
+}
+
+/** Share of test trips that end at home, over a few rounds of the fixed test trips (steadier than one round). */
+export function homeShare(model: Model, f: Forest, rounds = FIXED.checkRounds): number {
+  let sum = 0;
+  for (let k = 0; k < rounds; k++) sum += evaluate(model, f, -1 - k).home;
+  return sum / rounds;
 }
 
 /** Train on one lesson: per-step loss against what the parent did. Returns mean loss. */
