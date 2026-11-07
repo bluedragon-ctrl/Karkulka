@@ -30,7 +30,7 @@ Game logic has no DOM dependencies and is tested directly; the UI lives in `src/
 | `src/sim.ts` | A trip alone: the `Walker` samples one move at a time |
 | `src/train.ts` | Lessons (imitation), practice (policy gradient), evaluation; fixed internals in `FIXED` |
 | `src/thoughts.ts` | Her thought bubbles on a trip alone ("Scary wolf to the south! Let's go south."), made up after each move |
-| `src/explain.ts` | "Why did she do that?" notes, LM corner card texts (`CARDS`) and their "In a big model" parts (`BIG`) |
+| `src/explain.ts` | "Why did she do that?" notes, LM corner card texts (`CARDS`), each with its real-chatbot comparison |
 | `src/measures.ts` | Numbers for Inside the model: training compute, token counts in lessons, look-alike tokens that need memory, trip uncertainty |
 | `src/storage.ts` | Browser save, forest links, model export and import |
 | `src/worker.ts`, `src/workerTypes.ts` | Training in a Web Worker |
@@ -38,7 +38,7 @@ Game logic has no DOM dependencies and is tested directly; the UI lives in `src/
 
 ## Conventions
 
-- **Every feature maps to a language-model idea.** Add it to the mapping table in `docs/design.md`, and give it an LM corner card in `src/explain.ts` where it teaches something (and an "In a big model" part in `BIG` when there is a real-scale counterpart worth telling), opened by a "?" next to it (`this.q()` / `this.hq()` in `app.ts`; list it in the "?" table in the design doc).
+- **Every feature maps to a language-model idea.** Add it to the mapping table in `docs/design.md`, and give it an LM corner card in `src/explain.ts` where it teaches something (going on to how a real chatbot does it when there is a real-scale counterpart worth telling, in the same text), opened by a "?" next to it (`this.q()` / `this.hq()` in `app.ts`; list it in the "?" table in the design doc).
 - **Original art only:** simple symbolic SVG shapes drawn in code (`src/ui/symbols.ts`). No tile packs, external images or resemblance to existing games.
 - **Shape plus colour, never colour alone.** Red is reserved for her and for danger.
 - **Child-friendly outcomes:** nothing graphic.
