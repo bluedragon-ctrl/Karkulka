@@ -2,13 +2,13 @@
 import type { Walker } from './sim';
 import { TrainStats, headsHome } from './train';
 import { buildVocabulary, viewKey } from './tokens';
-import { Forest, MOVE_NAMES, SWAMP, SWAMP_COST, walkingDistances } from './world';
+import { Forest, MOVE_NAMES, SWAMP, SWAMP_COST, VIEW_OFFSETS, WOLF, tileAt, walkingDistances, xyOf } from './world';
 
 export type CardKey =
   | 'forest' | 'view' | 'memory' | 'memorySize' | 'hint' | 'lessons' | 'teacher' | 'coverage' | 'arrows'
   | 'boldness' | 'energy' | 'hallucination' | 'repetition' | 'exposure' | 'practice' | 'outdated' | 'home'
   | 'tech' | 'vocabulary' | 'judge' | 'swamp'
-  | 'judgeGrandma' | 'judgeFather' | 'judgeMother' | 'judgeCrow' | 'rewardHacking' | 'teacherVsJudge';
+  | 'tripReport' | 'judgeGrandma' | 'judgeFather' | 'judgeMother' | 'judgeCrow' | 'rewardHacking' | 'teacherVsJudge';
 
 export const CARDS: Record<CardKey, string> = {
   forest: "The forest is her whole world, like the text a language model works with. She only ever sees a small piece of it at a time.",
@@ -32,6 +32,7 @@ export const CARDS: Record<CardKey, string> = {
   vocabulary: "Her vocabulary is every view that can happen in this forest plus the four moves, just as a model has a fixed list of tokens.",
   swamp: "Not every step is equally cheap: a swamp step uses 3 energy. Her energy is like a model's output budget, and the swamp eats it fast. The hurried father wades through; the careful mother walks around.",
   judge: "The judge knows the whole forest; she never sees the map, only the scores. Whoever judges decides what she learns, like the people who rate a model's answers.",
+  tripReport: "Getting home is not all that counts: how tired, wet and scared she got matters too. A language model's answers are also rated on more than being right, such as length and safety. The hurried father minds the tiredness; the careful mother minds the wet feet and the wolves.",
   judgeGrandma: "Grandma only cares that she gets home. Judging only the result is simple and hard to fool, but it says nothing about how she walked.",
   judgeFather: "The father takes a point off for every step, so practice teaches her shortcuts. The people who rate a model's answers pass on their own values, just as teachers do.",
   judgeMother: "The mother takes points off for every swamp step and every step with a wolf den in sight. Each move is blamed for what comes after it, so she learns which moves worried her mother. A very strict judge can make a model too cautious.",
@@ -39,6 +40,37 @@ export const CARDS: Record<CardKey, string> = {
   rewardHacking: "Her score went up, but she got home less often. She learned to please the crow, not to get home. That is reward hacking: a model learns what its judge measures, not what was meant.",
   teacherVsJudge: "Her lessons came from one parent, but now the other one judges her. Fine-tuning can pull a model away from what it learned in pretraining.",
 };
+
+/** How the trip went for her: tired (energy used), wet (swamp steps) and scared (wolf dens seen). */
+export interface TripReport {
+  energyUsed: number;
+  energy: number;
+  swampSteps: number;
+  wolvesSeen: number;
+  tired: string;
+  wet: string;
+  scared: string;
+}
+
+export function tripReport(w: Pick<Walker, 'energy' | 'energyLeft' | 'positions' | 'blocked' | 'outcome'>, f: Forest): TripReport {
+  const energyUsed = w.energy - w.energyLeft;
+  const swampSteps = w.positions.slice(1).filter((p, i) => !w.blocked[i] && f.tiles[p] === SWAMP).length;
+  // Dens in her 3 × 3 view at any place she stood (not the den or house that ended the trip).
+  const dens = new Set<number>();
+  const stood = w.outcome === 'lost' ? w.positions : w.positions.slice(0, -1);
+  for (const p of new Set(stood)) {
+    const [x, y] = xyOf(f, p);
+    for (const [dx, dy] of VIEW_OFFSETS) if (tileAt(f, x + dx, y + dy) === WOLF) dens.add((y + dy) * f.size + x + dx);
+  }
+  const used = w.energy > 0 ? energyUsed / w.energy : 0;
+  const n = dens.size;
+  return {
+    energyUsed, energy: w.energy, swampSteps, wolvesSeen: n,
+    tired: w.outcome === 'lost' ? 'worn out' : used < 0.34 ? 'still fresh' : used < 0.67 ? 'a bit tired' : 'very tired',
+    wet: swampSteps === 0 ? 'dry feet' : swampSteps <= 2 ? 'wet feet' : 'soaked',
+    scared: n === 0 ? 'calm' : n === 1 ? 'a little scared' : n <= 3 ? 'scared' : 'very scared',
+  };
+}
 
 export interface Explanation { title: string; text: string; card?: CardKey }
 

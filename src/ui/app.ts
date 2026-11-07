@@ -1,5 +1,5 @@
 /** The app: five tabs that tell the story in order. */
-import { CARDS, CardKey, explainTrip } from '../explain';
+import { CARDS, CardKey, explainTrip, tripReport } from '../explain';
 import { generateForest } from '../forest';
 import { Adam, Model, createAdam, createModel, modelFromJSON, modelToJSON } from '../model';
 import { mulberry32, normalizeCode, pick, randomCode } from '../rng';
@@ -17,7 +17,7 @@ import { Board } from './board';
 import { outcomeChart } from './charts';
 import { add, clear, h, s } from './dom';
 import { renderStrip } from './strip';
-import { COLORS, crowFigure, grandmaFigure, parentFigure, tileSymbol } from './symbols';
+import { COLORS, crowFigure, grandmaFigure, parentFigure, tileSymbol, wolfHead } from './symbols';
 import { renderTech } from './tech';
 
 type TabId = 'forest' | 'lessons' | 'trip' | 'practice' | 'inside';
@@ -727,6 +727,7 @@ export class App {
       h('h2', {}, 'Trip alone'),
       h('p', {}, 'At each step she reads her memory strip, the model gives a probability for each move, and one move is picked.'),
       h('p', { class: 'status' }, status),
+      w && w.done && w.outcome !== 'eaten' ? this.reportBox(w) : null,
       probsBox,
       h('div', { class: 'row' },
         h('button', { onclick: () => this.stepTrip(), disabled: !w || w.done || !!this.auto }, 'Step'),
@@ -742,6 +743,28 @@ export class App {
       this.why ? h('div', { class: 'why' }, h('h3', {}, this.why.title), h('p', {}, this.why.text)) : null,
       h('div', { class: 'row' }, this.next('Practice', 'practice'), this.next('Inside the model', 'inside')),
     );
+  }
+
+  /** Tired, wet and scared: how the trip went for her, not just where it ended. */
+  private reportBox(w: Walker): HTMLElement {
+    const r = tripReport(w, this.forest);
+    const icon = (...kids: SVGElement[]) => { const svg = s('svg', { width: 26, height: 26, viewBox: '-13 -13 26 26', 'aria-hidden': 'true' }); svg.append(...kids); return svg; };
+    const fill = Math.max(0, 1 - r.energyUsed / Math.max(1, r.energy));
+    const tiredIcon = icon(
+      s('rect', { x: -10, y: -5, width: 18, height: 10, rx: 2, fill: '#fff', stroke: COLORS.ink, 'stroke-width': 1.5 }),
+      s('rect', { x: 8, y: -2, width: 2.5, height: 4, fill: COLORS.ink }),
+      s('rect', { x: -8.5, y: -3.5, width: 15 * fill, height: 7, fill: fill > 0.3 ? '#4caf50' : '#e0a020' }));
+    const wetIcon = icon(
+      s('path', { d: 'M 0 -11 Q 7 -2 7 3 A 7 7 0 0 1 -7 3 Q -7 -2 0 -11 Z', fill: COLORS.water, stroke: COLORS.waterInk, 'stroke-width': 1.5 }));
+    const scaredIcon = icon(wolfHead(22));
+    const row = (ic: SVGElement, label: string, word: string, detail: string) =>
+      h('div', { class: 'report-row' }, ic, h('span', {}, h('strong', {}, `${label}: ${word}`), h('br'), h('small', {}, detail)));
+    const times = (k: number, one: string, many: string) => `${k} ${k === 1 ? one : many}`;
+    return h('div', { class: 'report' },
+      row(tiredIcon, 'Tired', r.tired, `used ${r.energyUsed} of ${r.energy} energy`),
+      row(wetIcon, 'Wet', r.wet, r.swampSteps ? `waded through swamp ${times(r.swampSteps, 'time', 'times')}` : 'never stepped into a swamp'),
+      row(scaredIcon, 'Scared', r.scared, r.wolvesSeen ? `saw ${times(r.wolvesSeen, 'wolf den', 'wolf dens')} on the way` : 'saw no wolf dens'),
+      h('button', { class: 'subtle', onclick: () => this.showCard('tripReport') }, 'Why does this matter?'));
   }
 
   private refreshProbs(box: HTMLElement) {

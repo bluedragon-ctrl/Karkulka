@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { generateForest } from '../src/forest';
+import { tripReport } from '../src/explain';
 import { accumulate, createAdam, createModel, forward, modelFromJSON, modelToJSON, softmax, zeroGrads } from '../src/model';
 import { mulberry32 } from '../src/rng';
 import { Walker } from '../src/sim';
@@ -214,4 +215,35 @@ describe('test trips during training', () => {
     expect(stats.lessonEval.length).toBe(13); // every 2nd batch, plus the last
     expect(stats.lessonEval.at(-1)!.x).toBe(610);
   }, 20000);
+});
+
+describe('trip report', () => {
+  // A 9 × 9 open field with home at (5, 3), a swamp at (3, 3) and a den at (1, 1).
+  const size = 9;
+  const tiles: Tile[] = new Array(size * size).fill(PATH);
+  const at = (x: number, y: number) => y * size + x;
+  const field = forestFromTiles('TEST', size, tiles);
+  tiles[field.home] = 3 as Tile;
+  tiles[at(3, 3)] = SWAMP;
+  tiles[at(1, 1)] = WOLF;
+  tiles[at(1, 5)] = WOLF;
+
+  it('counts energy, swamp steps and distinct dens seen', () => {
+    // (2,2) sees the den at (1,1); then down, through the swamp, home.
+    const positions = [at(2, 2), at(2, 3), at(3, 3), at(4, 3), at(5, 3)];
+    const r = tripReport({ energy: 12, energyLeft: 6, positions, blocked: [false, false, false, false], outcome: 'home' }, field);
+    expect(r.energyUsed).toBe(6);
+    expect(r.swampSteps).toBe(1);
+    expect(r.wolvesSeen).toBe(1);
+    expect(r.wet).toBe('wet feet');
+    expect(r.tired).toBe('a bit tired');
+  });
+
+  it('counts a den once, however often she sees it, and is calm and dry far from danger', () => {
+    const near = [at(2, 2), at(2, 1), at(2, 2), at(2, 1)];
+    expect(tripReport({ energy: 10, energyLeft: 0, positions: near, blocked: [false, false, false], outcome: 'lost' }, field).wolvesSeen).toBe(1);
+    const far = [at(7, 7), at(7, 6), at(7, 5), at(6, 5), at(6, 4), at(5, 4), at(5, 3)];
+    const r = tripReport({ energy: 80, energyLeft: 74, positions: far, blocked: far.slice(1).map(() => false), outcome: 'home' }, field);
+    expect([r.scared, r.wet, r.tired]).toEqual(['calm', 'dry feet', 'still fresh']);
+  });
 });
