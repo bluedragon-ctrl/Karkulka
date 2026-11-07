@@ -118,6 +118,8 @@ One small neural network learns in two phases, mirroring how real LLMs are built
 
 Learning rate, network size, reward values, curriculum pace and exploration during practice are fixed. They are shown read-only in the technical tab. The values live in `FIXED` in `src/train.ts`.
 
+**Optimizer memory is not kept.** Lessons use Adam, which keeps running averages of past gradients. These start fresh with every round of lessons, after a reload and after an import; only the weights are kept. Each round therefore starts with a short warm-up of larger steps. This keeps saves and model files to the weights alone.
+
 ## User flow
 
 The app is a row of tabs that tells the story in order: Forest, Lessons, Trip alone, Practice, Inside the model. Later tabs unlock when the earlier step is done, and the user can always go back. Practice is optional and sends her back to Trip alone, so users can compare her before and after.
@@ -156,7 +158,7 @@ All pictures are simple symbolic SVG shapes drawn for this project, with no tile
 - **Energy:** a small bar; as it drops she shows a sweat drop, and at zero she sits down (lost).
 - **Coverage heatmap:** an overlay showing where lessons passed, "where she was taught".
 - **Lesson playback:** the parent walks ahead of her; in fast-forward, many faint footprint trails in the parent's colour build up.
-- **Outcome chart:** a simple stacked chart of home, eaten and lost over the course of lessons or practice. It is friendlier than a loss curve.
+- **Outcome chart:** a simple stacked chart of home, eaten and lost over the course of lessons or practice. It is friendlier than a loss curve. Each bar is the same 40 test trips from fixed starts. A job tests after every batch of 25 when short, and less often when long, so it adds about 20 bars (the last batch is always tested). Testing would otherwise take most of a long job's time.
 
 **Outcomes, kept child-friendly**
 
@@ -216,6 +218,7 @@ A static TypeScript site hosted on GitHub Pages, with everything (generation, tr
 
 ### Open questions
 
+- Whether to keep Adam's running averages with the model (smoother training across rounds and "Watch one lesson", but bigger saves and model files and a save-version bump), or keep resetting them each round as now.
 - Exact default grid size and the three memory-size values, to be tuned once it runs.
 - Pacing of the outcome animations and how long LM corner cards stay on screen.
 - Whether a teacher's guide (one page of lesson flow for presenters) belongs in the repo.

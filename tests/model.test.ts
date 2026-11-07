@@ -5,7 +5,7 @@ import { mulberry32 } from '../src/rng';
 import { Walker } from '../src/sim';
 import { costToHome, walkLesson } from '../src/teachers';
 import { MEMORY_PAIRS, SLOT_FEATS, VIEW_FEATS, encodeContext, inputSize, buildVocabulary } from '../src/tokens';
-import { FIXED, newStats, score, trainLessons, trainPractice } from '../src/train';
+import { FIXED, evalEvery, newStats, score, trainLessons, trainPractice } from '../src/train';
 import { pathTiles, walkableTiles } from '../src/world';
 
 const cfg = { memory: MEMORY_PAIRS.medium, hint: false, hidden: 16 };
@@ -127,4 +127,23 @@ describe('practice reuses the walk', () => {
       expect(d.tempered).toEqual(softmax(fw.logits, FIXED.practiceBoldness));
     });
   });
+});
+
+describe('test trips during training', () => {
+  it('tests every batch in short jobs and about 20 times in long ones', () => {
+    expect(evalEvery(100)).toBe(1);
+    expect(evalEvery(500)).toBe(1);
+    expect(evalEvery(2000)).toBe(4);
+    expect(evalEvery(3000)).toBe(6);
+  });
+
+  it('always tests after the last batch', () => {
+    const f = generateForest('KARKULKA');
+    const model = createModel(cfg, mulberry32(1));
+    const stats = newStats(f);
+    trainLessons(model, createAdam(model), f, 'mother', 610, stats, mulberry32(2));
+    expect(stats.lessonLoss.length).toBe(25); // 24 full batches and one of 10
+    expect(stats.lessonEval.length).toBe(13); // every 2nd batch, plus the last
+    expect(stats.lessonEval.at(-1)!.x).toBe(610);
+  }, 20000);
 });

@@ -635,7 +635,7 @@ export class App {
       h('p', {}, st.lessons ? `She has had ${st.lessons} lesson${st.lessons === 1 ? '' : 's'} (mother ${st.teacherCounts.mother}, father ${st.teacherCounts.father}).` : 'No lessons yet.'),
       h('h3', {}, 'How she does alone'),
       outcomeChart(st.lessonEval, 'lessons'),
-      h('p', { class: 'muted' }, `Measured on ${FIXED.evalStarts} test trips after each batch of lessons.`),
+      h('p', { class: 'muted' }, `Measured on the same ${FIXED.evalStarts} test trips about ${FIXED.evalPoints} times per round of lessons.`),
       h('label', { class: 'check' }, h('input', { type: 'checkbox', checked: this.settings.heat, onchange: (e: Event) => { this.settings.heat = (e.target as HTMLInputElement).checked; this.showCard('coverage'); this.renderBoard(); this.saveSoon(); } }), 'Show where she was taught (heatmap)'),
       h('p', { class: 'note' }, h('strong', {}, 'Known weakness: '), 'lessons are always correct, so she never learns how to recover after a wrong step. Practice (tab 4) fixes this.'),
       this.model ? h('button', { class: 'subtle', disabled: busy, onclick: () => { if (confirm('Start over with a new Red Riding Hood? All her lessons and practice will be forgotten.')) { this.resetModel(); this.saveSoon(); this.render(); } } }, 'Start over with a new Red Riding Hood') : null,

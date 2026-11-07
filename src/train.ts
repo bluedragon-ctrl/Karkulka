@@ -24,6 +24,8 @@ export const FIXED = {
   evalStarts: 40,
   evalBoldness: 0.5,
   evalEnergy: 100,
+  /** About this many rounds of test trips per job, so long jobs don't spend most of their time testing. */
+  evalPoints: 20,
   chunk: 25,
 } as const;
 
@@ -71,6 +73,16 @@ export function evalStarts(f: Forest): number[] {
   return shuffle(rngFrom(`eval:${f.code}`), all).slice(0, FIXED.evalStarts);
 }
 
+/**
+ * Run test trips after every how many batches of a job: every batch for short jobs,
+ * less often for long ones so a job makes about FIXED.evalPoints chart points.
+ */
+export const evalEvery = (count: number): number => Math.max(1, Math.ceil(Math.ceil(count / FIXED.chunk) / FIXED.evalPoints));
+
+/** Whether the batch ending at item i of a job ends with test trips. The last batch always does. */
+const testsAfter = (i: number, count: number): boolean =>
+  i === count - 1 || ((i + 1) / FIXED.chunk) % evalEvery(count) === 0;
+
 /** How she does alone from a fixed set of starts. */
 export function evaluate(model: Model, f: Forest, x: number): EvalPoint {
   const starts = evalStarts(f);
@@ -101,10 +113,10 @@ export function learnFromLesson(model: Model, opt: Adam, walk: LessonWalk, stats
   return steps ? loss / steps : 0;
 }
 
-/** Record one batch of lessons for the charts: its mean loss and a round of test trips. */
-export function recordLessonBatch(model: Model, f: Forest, stats: TrainStats, meanLoss: number) {
+/** Record one batch of lessons for the charts: its mean loss and, when `test` is set, a round of test trips. */
+export function recordLessonBatch(model: Model, f: Forest, stats: TrainStats, meanLoss: number, test = true) {
   stats.lessonLoss.push({ x: stats.lessons, y: meanLoss });
-  stats.lessonEval.push(evaluate(model, f, stats.lessons));
+  if (test) stats.lessonEval.push(evaluate(model, f, stats.lessons));
 }
 
 export function chooseTeacher(choice: TeacherChoice, rng: Rng): Teacher {
@@ -133,7 +145,7 @@ export function trainLessons(
     lossN++;
     paths.push({ positions: walk.positions, tag: teacher });
     if ((i + 1) % FIXED.chunk === 0 || i === count - 1) {
-      recordLessonBatch(model, f, stats, lossSum / lossN);
+      recordLessonBatch(model, f, stats, lossSum / lossN, testsAfter(i, count));
       lossSum = 0;
       lossN = 0;
       onChunk?.({ done: i + 1, paths });
@@ -211,7 +223,7 @@ export function trainPractice(
 
     if ((i + 1) % FIXED.chunk === 0 || i === count - 1) {
       stats.practiceScore.push({ x: stats.practiceRuns, y: scoreSum / scoreN });
-      stats.practiceEval.push(evaluate(model, f, stats.lessons + stats.practiceRuns));
+      if (testsAfter(i, count)) stats.practiceEval.push(evaluate(model, f, stats.lessons + stats.practiceRuns));
       scoreSum = 0;
       scoreN = 0;
       onChunk?.({ done: i + 1, paths });
