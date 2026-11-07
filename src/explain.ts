@@ -8,7 +8,8 @@ export type CardKey =
   | 'forest' | 'view' | 'memory' | 'memorySize' | 'hint' | 'lessons' | 'teacher' | 'coverage' | 'arrows'
   | 'boldness' | 'energy' | 'hallucination' | 'repetition' | 'exposure' | 'practice' | 'outdated' | 'home'
   | 'tech' | 'vocabulary' | 'judge' | 'swamp'
-  | 'tripReport' | 'judgeGrandma' | 'judgeFather' | 'judgeMother' | 'judgeCrow' | 'rewardHacking' | 'teacherVsJudge';
+  | 'tripReport' | 'judgeGrandma' | 'judgeFather' | 'judgeMother' | 'judgeCrow' | 'rewardHacking' | 'teacherVsJudge'
+  | 'wolfTeacher' | 'poisonedData' | 'judgeWolf' | 'fixBadData';
 
 export const CARDS: Record<CardKey, string> = {
   forest: "The forest is her whole world, like the text a language model works with. She only ever sees a small piece of it at a time.",
@@ -16,7 +17,7 @@ export const CARDS: Record<CardKey, string> = {
   memory: "Her memory strip is like a language model's context window: everything she can take into account right now.",
   memorySize: "Memory size is fixed before training, like a model's context length. Changing it means training a new Red Riding Hood.",
   hint: "The smell of grandma's cake gives her one more input. More useful information in the input means better predictions.",
-  lessons: "Parents' lessons are pretraining: she learns by predicting the next move in many example walks, as a language model learns by predicting the next word in example text.",
+  lessons: "Lessons are pretraining: she learns by predicting the next move in many example walks, as a language model learns by predicting the next word in example text.",
   teacher: "Who teaches her shapes how she behaves. A language model's habits come from its training data, including its biases.",
   coverage: "The heatmap shows where she was taught. Like a model's training data, it never covers everything equally.",
   arrows: "The thickness of the arrows shows how likely each move is: these are the next-token probabilities.",
@@ -39,6 +40,10 @@ export const CARDS: Record<CardKey, string> = {
   judgeCrow: "The crow judges from the sky, as the crow flies. It gives points for every step towards home, even straight into a tree, and hardly checks whether she arrives. A judge that measures the wrong thing can be fooled.",
   rewardHacking: "Her score went up, but she got home less often. She learned to please the crow, not to get home. That is reward hacking: a model learns what its judge measures, not what was meant.",
   teacherVsJudge: "Her lessons came from one parent, but now the other one judges her. Fine-tuning can pull a model away from what it learned in pretraining.",
+  wolfTeacher: "The wolf in disguise walks like the father until a wolf den comes in sight, then leads her into it. Most of his lessons look fine. A model copies whatever is in its training data, bad examples as well as good ones.",
+  poisonedData: "Only a few of her lessons came from the wolf, yet she now walks into dens much more often. A little bad training data can do a lot of harm. That is called data poisoning.",
+  judgeWolf: "The wolf gives points only when she ends up at his den. Practice makes her better at whatever the judge rewards, so a judge with bad aims can ruin a model that was doing well.",
+  fixBadData: "Grandma's practice can undo some of what the wolf taught. Fine-tuning can fix bad habits, from bad lessons or a bad judge, but the more of them there are, the longer it takes. Clean lessons are better than fixing later.",
 };
 
 /** How the trip went for her: tired (energy used), wet (swamp steps) and scared (wolf dens seen). */
@@ -115,6 +120,18 @@ export function explainTrip(w: Walker, f: Forest, stats: TrainStats | null, outd
         title: 'Why did she do that?',
         text: `At step ${t + 1} she stepped ${MOVE_NAMES[chosen]} into a wolf den. The model gave that move only ${pct(raw)}, but boldness ${d.temperature.toFixed(1)} made it ${pct(d.tempered[chosen])}, and the dice landed on it.${cutoff}`,
         card: 'boldness',
+      };
+    }
+    const wolfLessons = stats?.teacherCounts.wolf ?? 0;
+    const wolfRuns = stats?.judgeRuns?.wolf ?? 0;
+    if (wolfLessons > 0 || wolfRuns > 0) {
+      const why = wolfRuns > 0
+        ? 'In practice the wolf gave her points for coming to his den, so she learned to go there.'
+        : `${wolfLessons} of her lessons came from the wolf in disguise, who leads her into a den as soon as one comes in sight. She learned that too.`;
+      return {
+        title: 'Why did she do that?',
+        text: `At step ${t + 1} she went ${MOVE_NAMES[chosen]} into a wolf den, ${pct(d.tempered[chosen])} sure. ${why}${cutoff}`,
+        card: wolfRuns > 0 ? 'judgeWolf' : (stats && wolfLessons < stats.lessons ? 'poisonedData' : 'wolfTeacher'),
       };
     }
     if (taught <= 2) {

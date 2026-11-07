@@ -5,7 +5,7 @@ import { Adam, Model, createAdam, createModel, modelFromJSON, modelToJSON } from
 import { mulberry32, normalizeCode, pick, randomCode } from '../rng';
 import { Outcome, Walker, predictAt } from '../sim';
 import * as store from '../storage';
-import { LessonWalk, Teacher, TeacherChoice, costToHome, teacherMoves, walkLesson } from '../teachers';
+import { LessonWalk, Teacher, TeacherChoice, costToHome, endsAtDen, teacherMoves, walkLesson } from '../teachers';
 import { MEMORY_PAIRS, MemorySize, ModelConfig } from '../tokens';
 import { FIXED, JUDGES, Judge, TrainStats, chooseTeacher, learnFromLesson, newStats, recordLessonBatch, startTiles } from '../train';
 import { WorkerRequest, runTraining } from '../workerTypes';
@@ -52,7 +52,12 @@ const TEACHERS: { id: TeacherChoice; name: string; text: string }[] = [
   { id: 'mother', name: 'Careful mother', text: 'Safe, dry routes that keep away from wolf dens and swamps, even if longer.' },
   { id: 'father', name: 'Hurried father', text: 'The fewest steps, even right past wolf dens and straight through swamps.' },
   { id: 'both', name: 'Both', text: 'A mix of lessons; her arrows split where the two disagree.' },
+  { id: 'wolf', name: 'The wolf in disguise', text: 'Walks like the father, but when he sees a wolf den he leads her into it.' },
+  { id: 'motherWolf', name: 'Mother, and sometimes the wolf', text: `The careful mother, but about 1 lesson in ${Math.round(1 / FIXED.wolfLessonShare)} is secretly the wolf's.` },
 ];
+
+/** The LM corner card for a teacher choice. */
+const teacherCard = (t: TeacherChoice): CardKey => (t === 'wolf' ? 'wolfTeacher' : t === 'motherWolf' ? 'poisonedData' : 'teacher');
 
 const JUDGE_INFO: Record<Judge, { name: string; text: string; card: CardKey; rules: () => (string | Node)[][] }> = {
   grandma: {
@@ -86,18 +91,26 @@ const JUDGE_INFO: Record<Judge, { name: string; text: string; card: CardKey; rul
       ['Nothing for running out of energy: from the sky, the crow can\'t tell she is tired'],
     ],
   },
+  wolf: {
+    name: 'Wolf', text: 'Wants her to come to his den, not home.', card: 'judgeWolf',
+    rules: () => [
+      [h('strong', {}, `+${FIXED.wolfDen}`), ' when she walks into a wolf den'],
+      [h('strong', {}, `${FIXED.wolfHome}`.replace('-', '−')), ' when she gets home'],
+      [h('strong', {}, '0'), ' when she runs out of energy'],
+    ],
+  },
 };
 
 function judgeIcon(j: Judge): SVGSVGElement {
   const icon = s('svg', { width: 30, height: 30, viewBox: '-20 -24 40 44' });
-  icon.append(j === 'grandma' ? grandmaFigure(40) : j === 'crow' ? crowFigure(40) : parentFigure(40, j));
+  icon.append(j === 'grandma' ? grandmaFigure(40) : j === 'crow' ? crowFigure(40) : j === 'wolf' ? s('g', { transform: 'scale(.7)' }, wolfHead(40)) : parentFigure(40, j));
   return icon;
 }
 
 /** What the last practice job did, for the summary under the chart. */
 interface PracticeSummary { judge: Judge; scoreBefore: number; scoreAfter: number; homeBefore: number; homeAfter: number }
 
-const TRAIL_COLORS: Record<Outcome | Teacher, string> = { home: '#c99700', eaten: COLORS.danger, lost: COLORS.lost, mother: COLORS.mother, father: COLORS.father };
+const TRAIL_COLORS: Record<Outcome | Teacher, string> = { home: '#c99700', eaten: COLORS.danger, lost: COLORS.lost, mother: COLORS.mother, father: COLORS.father, wolf: COLORS.den };
 
 interface Job { kind: 'lessons' | 'practice' | 'watch'; done: number; total: number; cancel: () => void }
 
@@ -192,6 +205,7 @@ export class App {
     if (saved) {
       Object.assign(this.settings, saved.settings);
       if (!JUDGES.includes(this.settings.judge)) this.settings.judge = DEFAULTS.judge;
+      if (!TEACHERS.some((t) => t.id === this.settings.teacher)) this.settings.teacher = DEFAULTS.teacher;
       const { code, size, tiles } = saved.forest;
       forest = tiles.length === size * size ? forestFromTiles(code, size, tiles) : generateForest(code, size);
       this.edited = saved.forest.edited;
@@ -337,7 +351,8 @@ export class App {
       0.1,
       () => {
         this.markTrained();
-        this.showCard(this.settings.teacher === 'both' ? 'teacher' : 'coverage');
+        const t = this.settings.teacher;
+        this.showCard(t === 'both' || t === 'wolf' || t === 'motherWolf' ? teacherCard(t) : 'coverage');
       },
     );
     this.render();
@@ -369,7 +384,7 @@ export class App {
       this.watch = null;
       this.job = null;
       this.saveSoon();
-      this.showCard('exposure');
+      this.showCard(endsAtDen(this.forest, walk) ? 'wolfTeacher' : 'exposure');
       this.render();
     };
     this.job = { kind: 'watch', done: 0, total: 1, cancel: () => { clearInterval(timer); this.watch = null; this.job = null; this.render(); } };
@@ -457,7 +472,9 @@ export class App {
         this.lastPractice = sum;
         const tc = this.stats.teacherCounts;
         const onlyOther = (judge === 'mother' && tc.mother === 0) || (judge === 'father' && tc.father === 0);
-        if (sum.scoreAfter > sum.scoreBefore && sum.homeAfter < sum.homeBefore - 0.05) this.showCard('rewardHacking');
+        if (judge === 'wolf') this.showCard('judgeWolf');
+        else if (judge === 'grandma' && ((tc.wolf ?? 0) > 0 || (this.stats.judgeRuns?.wolf ?? 0) > 0)) this.showCard('fixBadData');
+        else if (sum.scoreAfter > sum.scoreBefore && sum.homeAfter < sum.homeBefore - 0.05) this.showCard('rewardHacking');
         else if (onlyOther) this.showCard('teacherVsJudge');
         else this.showCard('judge');
       },
@@ -679,23 +696,24 @@ export class App {
     const st = this.stats;
     const busy = this.busy;
     add(body,
-      h('h2', {}, "Parents' lessons"),
-      h('p', {}, 'A parent walks her home from a random spot. At every step she guesses the next move, compares it with what the parent did, and adjusts.'),
+      h('h2', {}, 'Lessons'),
+      h('p', {}, 'A teacher walks her from a random spot. At every step she guesses the next move, compares it with what the teacher did, and adjusts.'),
       h('div', { class: 'group teachers', role: 'radiogroup', 'aria-label': 'Teacher' }, ...TEACHERS.map((t) => {
         const icon = s('svg', { width: 30, height: 30, viewBox: '-20 -24 40 44' });
         if (t.id === 'both') icon.append(s('g', { transform: 'translate(-7 0) scale(.8)' }, parentFigure(40, 'mother')), s('g', { transform: 'translate(7 0) scale(.8)' }, parentFigure(40, 'father')));
+        else if (t.id === 'motherWolf') icon.append(s('g', { transform: 'translate(-7 0) scale(.8)' }, parentFigure(40, 'mother')), s('g', { transform: 'translate(7 0) scale(.8)' }, parentFigure(40, 'wolf')));
         else icon.append(parentFigure(40, t.id as Teacher));
         return h('label', { class: `teacher ${this.settings.teacher === t.id ? 'active' : ''}` },
-          h('input', { type: 'radio', name: 'teacher', checked: this.settings.teacher === t.id, disabled: busy, onchange: () => { this.settings.teacher = t.id; this.saveSoon(); this.showCard('teacher'); this.renderPanel(); } }),
+          h('input', { type: 'radio', name: 'teacher', checked: this.settings.teacher === t.id, disabled: busy, onchange: () => { this.settings.teacher = t.id; this.saveSoon(); this.showCard(teacherCard(t.id)); this.renderPanel(); } }),
           icon, h('span', {}, h('strong', {}, t.name), h('br'), h('small', {}, t.text)));
       })),
       this.slider('Number of lessons', this.settings.lessons, 10, 2000, 10, (v) => String(v), (v) => { this.settings.lessons = v; this.saveSoon(); }),
       h('div', { class: 'row' },
         h('button', { onclick: () => this.watchLesson(), disabled: busy }, 'Watch one lesson'),
         h('button', { class: 'primary', onclick: () => this.startLessons(), disabled: busy }, `Fast-forward ${this.settings.lessons} lessons`)),
-      this.job?.kind === 'watch' ? h('div', { class: 'row' }, h('span', { class: 'muted' }, 'Watching… the parent walks ahead; the coloured arrow is the parent\'s move.'), h('button', { onclick: () => this.job?.cancel() }, 'Stop')) : null,
+      this.job?.kind === 'watch' ? h('div', { class: 'row' }, h('span', { class: 'muted' }, 'Watching… the teacher walks ahead; the coloured arrow is the teacher\'s move.'), h('button', { onclick: () => this.job?.cancel() }, 'Stop')) : null,
       this.progress(),
-      h('p', {}, st.lessons ? `She has had ${st.lessons} lesson${st.lessons === 1 ? '' : 's'} (mother ${st.teacherCounts.mother}, father ${st.teacherCounts.father}).` : 'No lessons yet.'),
+      h('p', {}, st.lessons ? `She has had ${st.lessons} lesson${st.lessons === 1 ? '' : 's'} (mother ${st.teacherCounts.mother}, father ${st.teacherCounts.father}${st.teacherCounts.wolf ? `, wolf ${st.teacherCounts.wolf}` : ''}).` : 'No lessons yet.'),
       h('h3', {}, 'How she does alone'),
       outcomeChart(st.lessonEval, 'lessons'),
       h('p', { class: 'muted' }, `Measured on the same ${FIXED.evalStarts} test trips about ${FIXED.evalPoints} times per round of lessons.`),
@@ -790,7 +808,7 @@ export class App {
         h('label', { class: `teacher ${this.settings.judge === j ? 'active' : ''}` },
           h('input', { type: 'radio', name: 'judge', checked: this.settings.judge === j, disabled: this.busy, onchange: () => { this.settings.judge = j; this.saveSoon(); this.showCard(JUDGE_INFO[j].card); this.renderPanel(); } }),
           judgeIcon(j), h('span', {}, h('strong', {}, JUDGE_INFO[j].name), h('br'), h('small', {}, JUDGE_INFO[j].text))))),
-      h('p', { class: 'muted' }, `How the ${JUDGE_INFO[this.settings.judge].name.toLowerCase()} scores a run:`),
+      h('p', { class: 'muted' }, `How ${this.settings.judge === 'grandma' ? 'Grandma' : `the ${JUDGE_INFO[this.settings.judge].name.toLowerCase()}`} scores a run:`),
       h('ul', { class: 'score-list' }, ...JUDGE_INFO[this.settings.judge].rules().map((parts) => h('li', {}, ...parts))),
       this.slider('Number of practice runs', this.settings.practice, 50, 3000, 50, (v) => String(v), (v) => { this.settings.practice = v; this.saveSoon(); }),
       h('button', { class: 'primary', onclick: () => this.startPractice(), disabled: this.busy }, `Practise ${this.settings.practice} runs`),
@@ -811,18 +829,26 @@ export class App {
     if (!p || this.busy) return null;
     const pct = (v: number) => `${Math.round(v * 100)}%`;
     const name = JUDGE_INFO[p.judge].name;
+    const the = p.judge === 'grandma' ? 'Grandma' : `the ${name.toLowerCase()}`;
+    const wolfTaught = (this.stats.teacherCounts.wolf ?? 0) > 0 || (this.stats.judgeRuns?.wolf ?? 0) > 0;
     const scoreUp = p.scoreAfter > p.scoreBefore;
     const homeDown = p.homeAfter < p.homeBefore - 0.05;
-    const verdict = scoreUp && homeDown
-      ? `Her score went up, but she gets home less often. She is learning to please the ${name.toLowerCase()}, not to get home: reward hacking. Watch a trip alone to see what she does now.`
+    const verdict = p.judge === 'wolf'
+      ? (homeDown ? 'The wolf is ruining her: she gets home less often and walks into dens more. Whatever the judge rewards is what she learns. Practise with Grandma to try to undo it.'
+        : 'The wolf wants her at his den. Keep practising with him and watch her home rate fall.')
+      : p.judge === 'grandma' && wolfTaught
+        ? (p.homeAfter > p.homeBefore + 0.05 ? 'Grandma\'s practice is undoing some of what the wolf taught her. The more of it there is, the longer it takes.'
+          : 'What the wolf taught her is hard to undo. Try more practice runs.')
+      : scoreUp && homeDown
+      ? `Her score went up, but she gets home less often. She is learning to please ${the}, not to get home: reward hacking. Watch a trip alone to see what she does now.`
       : p.judge === 'grandma'
         ? 'Grandma scores only the result, so a better score means she really gets home more.'
         : p.judge === 'crow'
           ? 'So far she still gets home, because heading towards home mostly helps on the way. But bumping into a tree towards home forever earns the crow\'s points too. Keep practising with the crow and watch whether her home rate starts to fall.'
-          : `Watch a trip alone: she should now walk more the way the ${name.toLowerCase()} likes.`;
-    return h('div', { class: `why ${scoreUp && homeDown ? 'alarm' : ''}` },
-      h('h3', {}, `What the ${name.toLowerCase()} taught her`),
-      h('p', {}, `Average score from the ${name.toLowerCase()}: ${p.scoreBefore.toFixed(2)} at the start of this practice, ${p.scoreAfter.toFixed(2)} at the end. Home on the test trips: ${pct(p.homeBefore)} before, ${pct(p.homeAfter)} after.`),
+          : `Watch a trip alone: she should now walk more the way ${the} likes.`;
+    return h('div', { class: `why ${(scoreUp && homeDown) || (p.judge === 'wolf' && homeDown) ? 'alarm' : ''}` },
+      h('h3', {}, `What ${the} taught her`),
+      h('p', {}, `Average score from ${the}: ${p.scoreBefore.toFixed(2)} at the start of this practice, ${p.scoreAfter.toFixed(2)} at the end. Home on the test trips: ${pct(p.homeBefore)} before, ${pct(p.homeAfter)} after.`),
       h('p', {}, verdict));
   }
 

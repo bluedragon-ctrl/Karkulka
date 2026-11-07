@@ -1,9 +1,14 @@
-/** The parents: two ways of walking home that she can learn from. */
+/**
+ * The teachers: two parents who walk her home their own way, and the wolf in
+ * disguise, whose lessons look like the father's until a den comes in sight.
+ */
 import { Rng, pick } from './rng';
-import { Forest, HOME, Move, MOVES, SWAMP, Tile, cheapestToHome, isWalkable, neighbor, nearWolf, viewAt, homeSector } from './world';
+import { Forest, HOME, Move, MOVES, SWAMP, Tile, WOLF, cheapestTo, cheapestToHome, isWalkable, neighbor, nearWolf, tilesWhere, viewAt, homeSector } from './world';
 
-export type Teacher = 'mother' | 'father';
-export type TeacherChoice = Teacher | 'both';
+export type Teacher = 'mother' | 'father' | 'wolf';
+export const TEACHER_KINDS: readonly Teacher[] = ['mother', 'father', 'wolf'];
+/** "both" mixes the parents half and half; "motherWolf" is the mother with a few of the wolf's lessons slipped in. */
+export type TeacherChoice = Teacher | 'both' | 'motherWolf';
 
 /** Extra cost the careful mother gives to tiles next to a wolf den. */
 export const WOLF_PENALTY = 6;
@@ -21,13 +26,30 @@ const enterCost = (f: Forest, i: number, careful: boolean) => {
   return 1 + (t === SWAMP ? SWAMP_PENALTY : 0) + (t !== HOME && nearWolf(f, i) ? WOLF_PENALTY : 0);
 };
 
-/** Cost to walk home from every tile for one parent. */
+/** Cost to walk home from every tile for one teacher (the wolf pretends to be the hurried father). */
 export function costToHome(f: Forest, teacher: Teacher): Float64Array {
   const careful = teacher === 'mother';
   return cheapestToHome(f, (i) => enterCost(f, i, careful));
 }
 
-/** All moves a parent considers best from a tile (ties are possible). */
+/** Steps to the nearest wolf den from every tile: where the wolf really leads her. */
+export const costToDen = (f: Forest): Float64Array => cheapestTo(f, tilesWhere(f, (t) => t === WOLF), () => 1);
+
+/** The wolf's moves once a den is in sight: the quickest way into it. */
+export function denMoves(f: Forest, denCost: Float64Array, pos: number): Move[] {
+  let best = Infinity;
+  let opts: Move[] = [];
+  for (const m of MOVES) {
+    const n = neighbor(f, pos, m);
+    if (n < 0) continue;
+    const c = f.tiles[n] === WOLF ? 0 : isWalkable(f.tiles[n]) ? denCost[n] : Infinity;
+    if (c < best) { best = c; opts = [m]; }
+    else if (c === best && c < Infinity) opts.push(m);
+  }
+  return best < Infinity ? opts : [];
+}
+
+/** All moves a teacher considers best on the way home from a tile (ties are possible). */
 export function teacherMoves(f: Forest, cost: Float64Array, teacher: Teacher, pos: number): Move[] {
   const careful = teacher === 'mother';
   let best = Infinity;
@@ -56,19 +78,29 @@ export interface LessonWalk {
   history: History;
 }
 
-/** A parent walks her home from a start tile: one lesson, one "story". */
-export function walkLesson(f: Forest, teacher: Teacher, cost: Float64Array, start: number, rng: Rng): LessonWalk {
+/** Whether a lesson walk ended at a wolf den (only the wolf's lessons can). */
+export const endsAtDen = (f: Forest, walk: LessonWalk): boolean => f.tiles[walk.positions[walk.positions.length - 1]] === WOLF;
+
+/**
+ * A teacher walks her from a start tile: one lesson, one "story". The parents walk
+ * home. The wolf walks home like the father until a den comes in sight, then leads
+ * her into it. `denCost` (from `costToDen`) is only needed for the wolf.
+ */
+export function walkLesson(f: Forest, teacher: Teacher, cost: Float64Array, start: number, rng: Rng, denCost?: Float64Array): LessonWalk {
   const positions = [start];
   const history: History = { views: [viewAt(f, start)], moves: [], sectors: [homeSector(f, start)] };
+  const toDen = teacher === 'wolf' ? denCost ?? costToDen(f) : null;
+  let hunting = false;
   let pos = start;
-  for (let guard = 0; guard < f.tiles.length * 2 && pos !== f.home; guard++) {
-    const opts = teacherMoves(f, cost, teacher, pos);
+  for (let guard = 0; guard < f.tiles.length * 2 && pos !== f.home && f.tiles[pos] !== WOLF; guard++) {
+    if (toDen && !hunting && nearWolf(f, pos) && denMoves(f, toDen, pos).length) hunting = true;
+    const opts = hunting && toDen ? denMoves(f, toDen, pos) : teacherMoves(f, cost, teacher, pos);
     if (!opts.length) break;
     const m = pick(rng, opts);
     pos = neighbor(f, pos, m);
     history.moves.push(m);
     positions.push(pos);
-    if (pos !== f.home) {
+    if (pos !== f.home && f.tiles[pos] !== WOLF) {
       history.views.push(viewAt(f, pos));
       history.sectors.push(homeSector(f, pos));
     }

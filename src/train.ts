@@ -2,7 +2,7 @@
 import { Adam, Model, accumulate, adamStep, forward, sgdStep, softmax, zeroGrads } from './model';
 import { Rng, mulberry32, pick, rngFrom, shuffle } from './rng';
 import { Outcome, Walker } from './sim';
-import { LessonWalk, Teacher, TeacherChoice, costToHome, walkLesson } from './teachers';
+import { LessonWalk, Teacher, TeacherChoice, costToDen, costToHome, walkLesson } from './teachers';
 import { encodeContext } from './tokens';
 import { DX, DY, Forest, Move, PATH, SWAMP, energyToHome, nearWolf, tilesWhere, walkingDistances, xyOf } from './world';
 
@@ -23,6 +23,11 @@ export const FIXED = {
   /** Crow judge: points for each move that heads towards home as the crow flies (even into a tree), off for the others. */
   crowHeading: 0.08,
   crowHomeBonus: 0.2,
+  /** Wolf judge: a prize when she walks into a den, points off when she gets home. */
+  wolfDen: 1,
+  wolfHome: -0.5,
+  /** "Mother and the wolf": share of lessons the wolf in disguise slips in. */
+  wolfLessonShare: 0.2,
   practiceBoldness: 0.7,
   baselineSmoothing: 0.05,
   curriculumStart: 3,
@@ -60,7 +65,7 @@ export const newStats = (f: Forest): TrainStats => ({
   lessons: 0,
   practiceRuns: 0,
   coverage: new Array(f.tiles.length).fill(0),
-  teacherCounts: { mother: 0, father: 0 },
+  teacherCounts: { mother: 0, father: 0, wolf: 0 },
   lessonLoss: [],
   lessonEval: [],
   practiceScore: [],
@@ -71,8 +76,11 @@ export const newStats = (f: Forest): TrainStats => ({
   baseline: 0,
 });
 
-export interface Teachers { mother: Float64Array; father: Float64Array }
-export const teacherCosts = (f: Forest): Teachers => ({ mother: costToHome(f, 'mother'), father: costToHome(f, 'father') });
+export interface Teachers { mother: Float64Array; father: Float64Array; wolf: Float64Array; den: Float64Array }
+export const teacherCosts = (f: Forest): Teachers => {
+  const father = costToHome(f, 'father');
+  return { mother: costToHome(f, 'mother'), father, wolf: father, den: costToDen(f) };
+};
 
 /** Starting tiles: path tiles that can reach home. */
 export function startTiles(f: Forest, minDist = 1, maxDist = Infinity, dist = walkingDistances(f)): number[] {
@@ -118,7 +126,7 @@ export function learnFromLesson(model: Model, opt: Adam, walk: LessonWalk, stats
     accumulate(model, g, fw, p);
   }
   for (const pos of walk.positions) stats.coverage[pos]++;
-  stats.teacherCounts[walk.teacher]++;
+  stats.teacherCounts[walk.teacher] = (stats.teacherCounts[walk.teacher] ?? 0) + 1;
   stats.lessons++;
   if (steps) adamStep(model, opt, g, FIXED.lessonLearningRate, 1 / steps);
   return steps ? loss / steps : 0;
@@ -131,7 +139,9 @@ export function recordLessonBatch(model: Model, f: Forest, stats: TrainStats, me
 }
 
 export function chooseTeacher(choice: TeacherChoice, rng: Rng): Teacher {
-  return choice === 'both' ? (rng() < 0.5 ? 'mother' : 'father') : choice;
+  if (choice === 'both') return rng() < 0.5 ? 'mother' : 'father';
+  if (choice === 'motherWolf') return rng() < FIXED.wolfLessonShare ? 'wolf' : 'mother';
+  return choice;
 }
 
 export interface ChunkInfo {
@@ -151,7 +161,7 @@ export function trainLessons(
   let paths: ChunkInfo['paths'] = [];
   for (let i = 0; i < count; i++) {
     const teacher = chooseTeacher(choice, rng);
-    const walk = walkLesson(f, teacher, costs[teacher], pick(rng, starts), rng);
+    const walk = walkLesson(f, teacher, costs[teacher], pick(rng, starts), rng, costs.den);
     lossSum += learnFromLesson(model, opt, walk, stats);
     lossN++;
     paths.push({ positions: walk.positions, tag: teacher });
@@ -168,10 +178,11 @@ export function trainLessons(
 /**
  * Who scores practice runs. Grandma only cares that she gets home. The parents also
  * score the way she walks. The crow measures closeness in a straight line, which
- * she can game: that is reward hacking.
+ * she can game: that is reward hacking. The wolf wants her at his den: a judge
+ * with bad aims ruins a model that was doing well.
  */
-export type Judge = 'grandma' | 'father' | 'mother' | 'crow';
-export const JUDGES: readonly Judge[] = ['grandma', 'father', 'mother', 'crow'];
+export type Judge = 'grandma' | 'father' | 'mother' | 'crow' | 'wolf';
+export const JUDGES: readonly Judge[] = ['grandma', 'father', 'mother', 'crow', 'wolf'];
 
 /** Distances the judges measure with; they know the whole forest. */
 export interface JudgeMaps {
@@ -238,9 +249,11 @@ export function judgeRewards(judge: Judge, f: Forest, maps: JudgeMaps, run: Run)
       if (maps.wolfInSight[to]) r[t] -= FIXED.motherWolfPenalty;
     } else if (judge === 'crow') r[t] += headsHome(f, from, run.moves[t]) ? FIXED.crowHeading : -FIXED.crowHeading;
   }
+  const end = run.outcome;
   // The crow watches from the sky: it sees a wolf, and the house, but not whether she is tired out.
-  r[n - 1] += judge !== 'crow' ? outcomeScore(maps, run)
-    : run.outcome === 'eaten' ? FIXED.rewardEaten : run.outcome === 'home' ? FIXED.crowHomeBonus : 0;
+  if (judge === 'crow') r[n - 1] += end === 'eaten' ? FIXED.rewardEaten : end === 'home' ? FIXED.crowHomeBonus : 0;
+  else if (judge === 'wolf') r[n - 1] += end === 'eaten' ? FIXED.wolfDen : end === 'home' ? FIXED.wolfHome : 0;
+  else r[n - 1] += outcomeScore(maps, run);
   return r;
 }
 

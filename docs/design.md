@@ -33,15 +33,19 @@ Every feature should map to a language-model idea. This table is the map:
 | Boldness dial | Sampling temperature |
 | Energy (step budget) | Maximum output length |
 | A swamp: passable, but 3 energy per step | Some outputs use up the output budget faster |
-| Parents' lessons | Pretraining on example text |
+| Lessons from a teacher | Pretraining on example text |
 | Choice of teacher (fewest steps vs. safe and dry) | Training data and the values of whoever made it |
+| The wolf in disguise as a teacher (looks like the father until a den is in sight) | Bad examples in the training data are learned just like good ones |
+| "Mother, and sometimes the wolf" (1 lesson in 5) | Data poisoning: a little bad data does a lot of harm |
 | Number of lessons | Amount of training data |
 | Coverage heatmap | What the training data covered |
 | Practice on her own, judged by outcome | Fine-tuning from feedback (RLHF-style) |
 | Tired, wet and scared after a trip | Answers are rated on more than being right: length, safety |
-| Choice of judge (Grandma, father, mother, crow) | Whoever rates the answers shapes the fine-tuned model, values included |
+| Choice of judge (Grandma, father, mother, crow, wolf) | Whoever rates the answers shapes the fine-tuned model, values included |
 | The crow judge, scoring "as the crow flies" | Reward hacking: the model learns what the judge measures, not what was meant |
 | Taught by one parent, judged by the other | Fine-tuning pulling a model away from its pretraining |
+| The wolf as a judge (points for coming to his den) | A reward with bad aims ruins a good model |
+| Grandma's practice after the wolf's lessons | Fine-tuning can fix some bad training data, but the more there was, the harder it is |
 | Confidently walking into a wolf in an unfamiliar spot | Hallucination on out-of-distribution input |
 | Looping at look-alike places with short memory | Repetition caused by a short context |
 | Forest edited after training | Knowledge cutoff: the world changed, the model did not |
@@ -93,15 +97,18 @@ One small neural network learns in two phases, mirroring how real LLMs are built
 
 **Memory size.** Chosen before training as short, medium or long: 1, 3 or 6 view–move pairs. Changing it means training a new Red Riding Hood, as with real models.
 
-### Phase 1: parents' lessons (pretraining)
+### Phase 1: lessons (pretraining)
 
-- A parent walks her home from a random starting tile along a proper path. Each walk is one lesson (one "story").
+- A teacher walks her from a random starting tile. A parent always walks her home from a random starting tile along a proper path. Each walk is one lesson (one "story").
 - **Per-step loss:** at every step the model predicts the next move, compares it with what the parent did, and adjusts its weights.
 - **Number of lessons** is the user's training-amount control.
 - **Choice of teacher**, with a one-line explanation card for each:
   - *Careful mother:* safe, dry routes that keep away from wolf dens and swamps, even if longer.
   - *Hurried father:* the fewest steps, even right past wolf dens and straight through swamps.
   - *Both:* a mix of lessons; her arrows visibly split where the two disagree.
+  - *The wolf in disguise:* walks the father's route until a wolf den comes into her 3 × 3 view, then takes the quickest way into it. About two thirds of his lessons end at a den (measured over 16 forest codes); the rest look exactly like the father's. Drawn in grandma's shawl and bonnet with grey ears and snout showing; his lesson trail is den brown.
+  - *Mother, and sometimes the wolf:* the careful mother, with 1 lesson in 5 secretly the wolf's (data poisoning).
+- **Measured effect** (16 forest codes, 300 lessons, medium memory, 120 test trips each): mother only: home 81%, eaten 14%. Mother and sometimes the wolf: home 46%, eaten 50%. Wolf only: home 24%, eaten 75%.
 - **Known weakness, shown on purpose:** lessons are always correct, so she never learns how to recover after a wrong step (exposure bias). Phase 2 fixes this.
 
 ### Phase 2: practice on her own (fine-tuning, optional)
@@ -113,6 +120,8 @@ One small neural network learns in two phases, mirroring how real LLMs are built
   - *Hurried father:* Grandma's points, and −0.05 for every step.
   - *Careful mother:* Grandma's points, and −0.3 for every step into a swamp and −0.25 for every step with a wolf den in sight.
   - *Crow:* judges from the sky, as the crow flies. +0.08 for every move that heads towards home in a straight line, even into a tree, −0.08 for any other move; +0.2 for reaching home, −1 for being eaten, nothing for running out of energy (from the sky it can't tell she is tired). Bumping towards home forever earns more than walking home, so with enough practice she learns to walk into trees: reward hacking, shown on purpose.
+  - *Wolf:* wants her at his den, not home. +1 for walking into a den, −0.5 for getting home, 0 for running out of energy. Practice with the wolf ruins a good model on purpose: after the mother's 300 lessons, 1000 runs with the wolf take her from 81% home to 9% (eaten 68%). An earlier version also paid +0.1 for every step with a den in sight; she then mostly loitered near dens until her energy ran out (53% lost), which told the story less clearly, so it was dropped.
+- **Undoing the wolf's lessons with Grandma** (same setup): after "mother, and sometimes the wolf", home goes from 46% to 74% with 1000 practice runs and to 89% with 3000. After wolf-only lessons it only gets from 24% to 43% (1000) and 52% (3000). A little bad data can be fixed later; a lot is hard to undo.
 - **After practice**, the panel compares the judge's average score at the start and end of the round with her home rate on the test trips. If the score went up while she got home less often, it says so and shows the reward-hacking card; a trip alone then explains the bumping ("she walked into trees towards home…").
 - **Curriculum (automatic):** practice starts near home and moves outward as her success rate rises.
 - **Number of practice runs** is the user's control for this phase.
@@ -136,9 +145,9 @@ The app is a row of tabs that tells the story in order: Forest, Lessons, Trip al
 | Tab | What happens | User controls |
 | --- | --- | --- |
 | 1. Forest | Generate or edit the forest; home is fixed | New forest, forest code or link, tile editing (path, tree, swamp, wolf den), memory size (short / medium / long), home-hint toggle |
-| 2. Lessons | Parents walk her home; the model trains per step | Teacher (mother / father / both), number of lessons, play or fast-forward |
+| 2. Lessons | Parents walk her home; the model trains per step | Teacher (mother / father / both / wolf in disguise / mother and sometimes the wolf), number of lessons, play or fast-forward |
 | 3. Trip alone | She walks from a chosen start using the model | Click the start tile, energy (step budget), boldness dial, step-by-step or auto, fog toggle |
-| 4. Practice (optional) | Her own runs, scored by a judge; then back to Trip alone to compare | Judge (Grandma / father / mother / crow), number of practice runs |
+| 4. Practice (optional) | Her own runs, scored by a judge; then back to Trip alone to compare | Judge (Grandma / father / mother / crow / wolf), number of practice runs |
 | 5. Inside the model | Numbers and model details for technical users | Read-only views, export or import the model |
 
 **Rules between tabs**
@@ -157,7 +166,7 @@ All pictures are simple symbolic SVG shapes drawn for this project, with no tile
 - One clear shape per tile type: a triangle tree, a plain path, a marked wolf den, a small house with a heart for grandma, wavy blue water with reeds for a swamp, and a red hooded figure for Red Riding Hood (an original design).
 - Shape plus colour, never colour alone, so colour-blind viewers can tell tiles apart.
 - Symbols must read at small sizes, because the same symbols appear as tokens in the memory strip.
-- Limited palette: greens and browns for the forest, red only for her and for danger, warm yellow for home, blue for swamp water. Each parent gets its own colour. The judges are figures too: Grandma (white bun, glasses, blue-grey shawl), the parents, and a black crow with a yellow beak.
+- Limited palette: greens and browns for the forest, red only for her and for danger, warm yellow for home, blue for swamp water. Each parent gets its own colour. The judges are figures too: Grandma (white bun, glasses, blue-grey shawl), the parents, a black crow with a yellow beak, and the wolf (his head as a judge; in grandma's shawl and bonnet as a teacher).
 
 **Core displays**
 
@@ -176,7 +185,7 @@ All pictures are simple symbolic SVG shapes drawn for this project, with no tile
 - Lost: she sits down, and a "lost in the woods" note appears.
 - **How the trip went:** when she gets home or runs out of energy, the result also says how *tired* she is (energy used of her budget: still fresh, a bit tired, very tired, or worn out when lost), how *wet* (swamp steps: dry feet, wet feet, soaked) and how *scared* (different wolf dens she saw on the way: calm, a little scared, scared, very scared). Each has its own symbol (a battery, a water drop, a wolf head). A "Why does this matter?" button shows the trip report card.
 
-**LM corner cards.** Small cards appear at key moments, each giving one sentence of analogy, for example "Her memory strip is like a language model's context window." After a trip, a short "Why did she do that?" note explains the main decision. These cards carry the teaching for non-technical users. Choosing a judge shows that judge's card; after practice comes the reward-hacking card (score up, home rate down), the teacher-versus-judge card (taught only by the other parent), or the general judge card.
+**LM corner cards.** Small cards appear at key moments, each giving one sentence of analogy, for example "Her memory strip is like a language model's context window." After a trip, a short "Why did she do that?" note explains the main decision. These cards carry the teaching for non-technical users. Choosing a judge shows that judge's card; after practice comes the reward-hacking card (score up, home rate down), the teacher-versus-judge card (taught only by the other parent), or the general judge card. After practice with the wolf comes the bad-judge card; after Grandma's practice on a model that had the wolf's lessons, the fixing-bad-data card. Choosing the wolf teacher or the mixed option shows the bad-data or data-poisoning card, as does a watched lesson that ends at a den. When she walks into a den after wolf lessons or wolf practice, the "Why did she do that?" note says the wolf taught her.
 
 **Layout.** Designed for a wide screen first: the forest large in the centre, a narrow side panel with the current tab's controls, and the memory strip at the bottom. A phone layout can come later.
 
@@ -212,12 +221,12 @@ A static TypeScript site hosted on GitHub Pages, with everything (generation, tr
 - Forest generation, forest codes, tile editing, fixed home
 - More routes per forest, and swamps that cost extra energy
 - Memory size choice and the home-hint toggle
-- Parents' lessons with the three teacher options
+- Lessons with five teacher options, including the wolf in disguise and the mother mixed with a few wolf lessons
 - Trip alone with arrows, memory strip, energy, boldness, fog and step or auto playback
 - Practice phase with automatic curriculum
 - Coverage heatmap, outcome chart, LM corner cards
 - Technical tab, browser save, export and import
-- Four practice judges (Grandma, father, mother, crow), with reward hacking from the crow
+- Five practice judges (Grandma, father, mother, crow, wolf), with reward hacking from the crow and a ruined model from the wolf
 
 ### Later
 

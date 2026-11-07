@@ -81,7 +81,8 @@ export function redFigure(S: number): SVGGElement {
 }
 
 /** A parent: mother has a long skirt, father a hat. */
-export function parentFigure(S: number, who: 'mother' | 'father'): SVGGElement {
+export function parentFigure(S: number, who: 'mother' | 'father' | 'wolf'): SVGGElement {
+  if (who === 'wolf') return wolfInDisguise(S);
   const c = who === 'mother' ? COLORS.mother : COLORS.father;
   const g = s('g', { class: 'parent-figure' });
   if (who === 'mother') {
@@ -121,6 +122,22 @@ export function crowFigure(S: number): SVGGElement {
     s('circle', { cx: S * 0.25, cy: -S * 0.15, r: S * 0.03, fill: '#fff' }),
     s('line', { x1: -S * 0.04, y1: S * 0.25, x2: -S * 0.06, y2: S * 0.38, stroke: COLORS.beak, 'stroke-width': S * 0.03 }),
     s('line', { x1: S * 0.06, y1: S * 0.25, x2: S * 0.06, y2: S * 0.38, stroke: COLORS.beak, 'stroke-width': S * 0.03 }),
+  );
+}
+
+/** The wolf in grandma's clothes, centred on (0, 0): her shawl, a frilled white bonnet, grey ears and snout poking out. */
+export function wolfInDisguise(S: number): SVGGElement {
+  const fur = '#8a8a92';
+  return s('g', { class: 'wolf-disguise' },
+    s('path', { d: `M ${-S * 0.28} ${S * 0.38} Q ${-S * 0.3} ${-S * 0.1} 0 ${-S * 0.12} Q ${S * 0.3} ${-S * 0.1} ${S * 0.28} ${S * 0.38} Z`, fill: COLORS.grandma }),
+    s('polygon', { points: `${-S * 0.15},${-S * 0.36} ${-S * 0.2},${-S * 0.56} ${-S * 0.04},${-S * 0.42}`, fill: '#6d6d74' }),
+    s('polygon', { points: `${S * 0.15},${-S * 0.36} ${S * 0.2},${-S * 0.56} ${S * 0.04},${-S * 0.42}`, fill: '#6d6d74' }),
+    s('ellipse', { cx: 0, cy: -S * 0.26, rx: S * 0.15, ry: S * 0.14, fill: fur }),
+    s('path', { d: `M ${-S * 0.19} ${-S * 0.24} Q ${-S * 0.2} ${-S * 0.46} 0 ${-S * 0.46} Q ${S * 0.2} ${-S * 0.46} ${S * 0.19} ${-S * 0.24} Q 0 ${-S * 0.36} ${-S * 0.19} ${-S * 0.24} Z`, fill: '#fff', stroke: '#9a9a9a', 'stroke-width': S * 0.02 }),
+    s('ellipse', { cx: 0, cy: -S * 0.17, rx: S * 0.08, ry: S * 0.06, fill: '#d9d9de' }),
+    s('circle', { cx: -S * 0.06, cy: -S * 0.26, r: S * 0.025, fill: '#ffd54a', stroke: COLORS.ink, 'stroke-width': S * 0.01 }),
+    s('circle', { cx: S * 0.06, cy: -S * 0.26, r: S * 0.025, fill: '#ffd54a', stroke: COLORS.ink, 'stroke-width': S * 0.01 }),
+    s('ellipse', { cx: 0, cy: -S * 0.19, rx: S * 0.03, ry: S * 0.022, fill: COLORS.ink }),
   );
 }
 

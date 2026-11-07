@@ -4,9 +4,9 @@ import { tripReport } from '../src/explain';
 import { accumulate, createAdam, createModel, forward, modelFromJSON, modelToJSON, softmax, zeroGrads } from '../src/model';
 import { mulberry32 } from '../src/rng';
 import { Walker } from '../src/sim';
-import { costToHome, walkLesson } from '../src/teachers';
+import { costToHome, endsAtDen, walkLesson } from '../src/teachers';
 import { MEMORY_PAIRS, SLOT_FEATS, VIEW_FEATS, encodeContext, inputSize, buildVocabulary } from '../src/tokens';
-import { FIXED, JUDGES, Run, evalEvery, headsHome, judgeMaps, judgeRewards, judgeScore, newStats, trainLessons, trainPractice } from '../src/train';
+import { FIXED, JUDGES, Run, chooseTeacher, evalEvery, headsHome, judgeMaps, judgeRewards, judgeScore, newStats, trainLessons, trainPractice } from '../src/train';
 import { Forest, Move, PATH, SWAMP, TREE, Tile, WOLF, forestFromTiles, neighbor, pathTiles, walkableTiles } from '../src/world';
 
 const cfg = { memory: MEMORY_PAIRS.medium, hint: false, hidden: 16 };
@@ -157,6 +157,32 @@ describe('judges', () => {
     expect(judgeScore('grandma', field, maps, bumping)).toBeLessThan(0);
     expect(headsHome(field, at(5, 6), U)).toBe(true);
     expect(headsHome(field, at(5, 6), D)).toBe(false);
+  });
+
+  it('the wolf pays for his den and takes points off for getting home', () => {
+    expect(judgeScore('wolf', field, maps, walk(at(2, 2), [L], 'eaten'))).toBe(FIXED.wolfDen);
+    expect(judgeScore('wolf', field, maps, straight)).toBe(FIXED.wolfHome);
+    expect(judgeScore('wolf', field, maps, walk(at(3, 1), [L, D], 'lost'))).toBe(0);
+  });
+
+  it('the wolf in disguise walks like the father until a den is in sight, then into it', () => {
+    // From (7,1) the father goes down to home without seeing the den at (1,1): a clean lesson.
+    const clean = walkLesson(field, 'wolf', costToHome(field, 'wolf'), at(7, 1), mulberry32(1));
+    expect(clean.positions.at(-1)).toBe(field.home);
+    expect(endsAtDen(field, clean)).toBe(false);
+    // From (2,0) the den at (1,1) is in sight at once, so he leads her into it.
+    const bad = walkLesson(field, 'wolf', costToHome(field, 'wolf'), at(2, 0), mulberry32(1));
+    expect(endsAtDen(field, bad)).toBe(true);
+    expect(bad.positions.at(-1)).toBe(at(1, 1));
+    expect(bad.history.views.length).toBe(bad.history.moves.length);
+  });
+
+  it('"mother, and sometimes the wolf" slips in about one lesson in five', () => {
+    const rng = mulberry32(4);
+    let wolf = 0;
+    for (let i = 0; i < 2000; i++) if (chooseTeacher('motherWolf', rng) === 'wolf') wolf++;
+    expect(wolf / 2000).toBeGreaterThan(FIXED.wolfLessonShare - 0.04);
+    expect(wolf / 2000).toBeLessThan(FIXED.wolfLessonShare + 0.04);
   });
 
   it('each move gets its own points; they add up to the score', () => {
