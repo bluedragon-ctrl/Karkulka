@@ -1,13 +1,14 @@
 /** The "Why did she do that?" note after a trip, and the LM corner cards. */
 import type { Walker } from './sim';
-import { TrainStats, headsHome } from './train';
+import { FIXED, TrainStats, headsHome } from './train';
 import { buildVocabulary, viewKey } from './tokens';
+import { SWAMP_PENALTY, WOLF_PENALTY } from './teachers';
 import { Forest, MOVE_NAMES, SWAMP, SWAMP_COST, VIEW_OFFSETS, WOLF, tileAt, walkingDistances, xyOf } from './world';
 
 export type CardKey =
   | 'forest' | 'view' | 'memory' | 'memorySize' | 'hint' | 'lessons' | 'teacher' | 'coverage' | 'arrows'
   | 'boldness' | 'energy' | 'hallucination' | 'repetition' | 'exposure' | 'practice' | 'outdated' | 'home'
-  | 'tech' | 'vocabulary' | 'judge' | 'swamp' | 'tree' | 'thoughts'
+  | 'tech' | 'vocabulary' | 'judge' | 'swamp' | 'tree' | 'thoughts' | 'stop'
   | 'tripReport' | 'judgeGrandma' | 'judgeFather' | 'judgeMother' | 'judgeCrow' | 'rewardHacking' | 'teacherVsJudge'
   | 'wolfTeacher' | 'poisonedData' | 'judgeWolf' | 'fixBadData'
   | 'newWorld' | 'catchUp' | 'forestCode' | 'editForest' | 'recipe'
@@ -44,7 +45,8 @@ export const CARDS: Record<CardKey, string> = {
   tech: "This tab shows the real numbers behind the pictures: tokens, inputs, weights and probabilities. Her brain has a few thousand numbers and trains in seconds. A chatbot's has billions and trains for months in huge computer halls. The idea is the same.",
   vocabulary: "Her vocabulary is every view that can happen in this forest plus the four moves: a fixed list of tokens. A chatbot's list is much longer: tens of thousands of words and word pieces.",
   tree: "Ouch! She walked into a tree. She gave that move a small chance, and this time chance picked it. A wasted step, like a language model wasting words on a wrong guess.",
-  thoughts: "Her thoughts are made up after each move is picked, so she can say \"Scary wolf to the south! Let's go south.\" They sound like reasons, but the move came first. Chatbots often write out their steps before answering, which helps them, but those steps are just more words, not a look inside.",
+  thoughts: "Her thoughts are made up after each move is picked, so she can say \"Scary wolf below me! Let's go down.\" They sound like reasons, but the move came first. Chatbots often write out their steps before answering, which helps them, but those steps are just more words, not a look inside.",
+  stop: "You stopped her trip. She can get stuck going in circles or bumping into the same tree, because each step only follows from what she sees and remembers. Chatbots can get stuck too, repeating the same words, so they have a Stop button and a limit on how long an answer may get.",
   swamp: "Not every step is equally cheap: a swamp step uses 3 energy. Her energy is like a model's output budget, and the swamp eats it fast. The hurried father wades through; the careful mother walks around.",
   judge: "The judge knows the whole forest; she never sees the map, only the scores. Whoever judges decides what she learns. A chatbot's judges are people who rate its answers, or a check like \"is the sum right?\". Their taste becomes its taste.",
   tripReport: "Getting home is not all that counts: how tired, wet, scared and bumped she got matters too. A language model's answers are also judged on more than being right, such as length and safety.",
@@ -62,7 +64,7 @@ export const CARDS: Record<CardKey, string> = {
   watchMany: "Watch lesson after lesson: at first many of her guesses are wrong, later most match the teacher. A language model learns the same way, and its next-word guesses get better and better.",
   runScore: "The judge gives a whole run one score, and every move in it shares the credit or blame. One run is partly luck; over many runs the good moves win. RLHF scores a language model's answers the same way.",
   testTrips: "She is tested on the same fixed trips every time, like a language model tested on a benchmark: the same questions each time, so you can see whether she really got better.",
-  sampling: "Each move is picked by chance from her probabilities, so from the same start she can walk a different way each time. Ask a chatbot the same question twice and you can get two different answers. It usually skips very unlikely words, so the answer varies but doesn't go wild.",
+  sampling: "At each step she decides how likely each move is, then picks one by chance, like rolling a dice. From the same start she can walk a different way each time. Ask a chatbot the same question twice and you can get two different answers, but it skips very unlikely words.",
   curriculum: "She practises close to home first and further away as she gets better. Starting with easy examples and moving on to harder ones is called curriculum learning.",
   oneHot: "A model can only work with numbers, so every tile she sees becomes a row of 0s with a single 1. A chatbot also turns each word into numbers before it reads it: a long list, where similar words get similar numbers.",
   weights: "Everything she knows is in these numbers, the weights. Lessons and practice only nudge them a little at a time. A big language model is the same, with billions of weights.",
@@ -70,6 +72,61 @@ export const CARDS: Record<CardKey, string> = {
   hyper: "These numbers are chosen by the builders, not learned in lessons. They are called hyperparameters. Chatbot builders often pick them after trying many small test versions first.",
   modelFile: "The file holds her weights: the trained model itself. Some companies share their chatbot's weights the same way, as a file anyone can load and run; others keep them secret.",
   fixBadData: "Grandma's practice can undo some of what the wolf taught. Fine-tuning can fix bad habits, but the more there are, the longer it takes. Clean lessons are better than fixing later.",
+};
+
+const num = (v: number) => (v < 0 ? `−${Math.abs(v)}` : `+${v}`);
+
+/**
+ * The numbers behind a card, shown under its text in the LM corner as a short list.
+ * The panel keeps the plain, child-friendly line; the exact points live here.
+ */
+export const CARD_DETAILS: Partial<Record<CardKey, { title: string; lines: () => string[] }>> = {
+  swamp: { title: 'Energy for one step', lines: () => [
+    'Onto a path: 1',
+    `Into a swamp: ${SWAMP_COST}`,
+    'Into a tree: 1, and she stays where she is',
+  ] },
+  teacher: { title: 'How the parents pick a route', lines: () => [
+    `Mother: the cheapest route, where a step costs 1, plus ${SWAMP_PENALTY} in a swamp and ${WOLF_PENALTY} with a wolf den in sight`,
+    'Father: the fewest steps; a swamp step counts as one',
+    'Both: each lesson is the mother\'s or the father\'s, half and half',
+  ] },
+  poisonedData: { title: 'The numbers', lines: () => [
+    `About 1 lesson in ${Math.round(1 / FIXED.wolfLessonShare)} (${Math.round(FIXED.wolfLessonShare * 100)}%) comes from the wolf; the rest from the careful mother`,
+  ] },
+  testTrips: { title: 'The test', lines: () => [
+    `${FIXED.evalStarts} trips from the same fixed starting spots every time`,
+    `Boldness ${FIXED.evalBoldness} and ${FIXED.evalEnergy} energy on each trip`,
+    `About ${FIXED.evalPoints} tests in each run of lessons or practice`,
+  ] },
+  curriculum: { title: 'The numbers', lines: () => [
+    `She starts within ${FIXED.curriculumStart} steps of home`,
+    `When she gets home in ${Math.round(FIXED.curriculumThreshold * 100)}% of her last ${FIXED.curriculumWindow} runs, the circle grows by ${FIXED.curriculumStep} steps`,
+  ] },
+  judgeGrandma: { title: 'How Grandma scores a run', lines: () => [
+    `${num(FIXED.rewardHome)} for reaching home`,
+    `${num(FIXED.rewardEaten)} for being eaten`,
+    `${num(-FIXED.lostPenalty)} for running out of energy, plus up to ${num(FIXED.partialCreditWeight)} for ending closer to home`,
+  ] },
+  judgeFather: { title: 'How the father scores a run', lines: () => [
+    "Grandma's points, plus:",
+    `${num(-FIXED.fatherStepCost)} for every step`,
+  ] },
+  judgeMother: { title: 'How the mother scores a run', lines: () => [
+    "Grandma's points, plus:",
+    `${num(-FIXED.motherSwampPenalty)} for every step into a swamp`,
+    `${num(-FIXED.motherWolfPenalty)} for every step with a wolf den in sight`,
+  ] },
+  judgeCrow: { title: 'How the crow scores a run', lines: () => [
+    `${num(FIXED.crowHeading)} for every step towards home in a straight line, even into a tree; ${num(-FIXED.crowHeading)} for any other step`,
+    `${num(FIXED.crowHomeBonus)} for reaching home, ${num(FIXED.rewardEaten)} for being eaten`,
+    'Nothing for running out of energy',
+  ] },
+  judgeWolf: { title: 'How the wolf scores a run', lines: () => [
+    `${num(FIXED.wolfDen)} when she walks into a wolf den`,
+    `${num(FIXED.wolfHome)} when she gets home`,
+    '0 when she runs out of energy',
+  ] },
 };
 
 /** How the trip went for her: tired (energy used), wet (swamp steps), scared (wolf dens seen) and bumped (walked into a tree). */
@@ -91,7 +148,7 @@ export function tripReport(w: Pick<Walker, 'energy' | 'energyLeft' | 'positions'
   const swampSteps = w.positions.slice(1).filter((p, i) => !w.blocked[i] && f.tiles[p] === SWAMP).length;
   // Dens in her 3 × 3 view at any place she stood (not the den or house that ended the trip).
   const dens = new Set<number>();
-  const stood = w.outcome === 'lost' ? w.positions : w.positions.slice(0, -1);
+  const stood = w.outcome === 'home' || w.outcome === 'eaten' ? w.positions.slice(0, -1) : w.positions;
   for (const p of new Set(stood)) {
     const [x, y] = xyOf(f, p);
     for (const [dx, dy] of VIEW_OFFSETS) if (tileAt(f, x + dx, y + dy) === WOLF) dens.add((y + dy) * f.size + x + dx);
@@ -110,7 +167,10 @@ export function tripReport(w: Pick<Walker, 'energy' | 'energyLeft' | 'positions'
 
 export interface Explanation { title: string; text: string; card?: CardKey }
 
-const pct = (p: number) => `${Math.round(p * 100)}%`;
+/** A percentage that never rounds a real chance to 0% or 100%. */
+export const pct = (p: number) => (p > 0 && p < 0.005 ? 'less than 1%' : p < 1 && p > 0.995 ? 'over 99%' : `${Math.round(p * 100)}%`);
+/** "only 12%", or "less than 1%" (never "only less than 1%"). */
+const onlyPct = (p: number) => (p > 0 && p < 0.005 ? pct(p) : `only ${pct(p)}`);
 
 export function explainTrip(w: Walker, f: Forest, stats: TrainStats | null, outdated: boolean): Explanation {
   const dist = walkingDistances(f);
@@ -133,7 +193,7 @@ export function explainTrip(w: Walker, f: Forest, stats: TrainStats | null, outd
       title: 'Why did she do that?',
       text: `She got home in ${n} steps; the shortest way was ${shortest}.` +
         (extra > 0 ? ` She took ${extra} extra step${extra === 1 ? '' : 's'}.` : ' That is a perfect walk.') +
-        (d ? ` Her least sure moment was step ${worst + 1}, where she went ${MOVE_NAMES[w.history.moves[worst]]} only ${pct(d.tempered[w.history.moves[worst]])} sure.` : ''),
+        (d ? ` Her least sure moment was step ${worst + 1}, where she went ${MOVE_NAMES[w.history.moves[worst]]} ${onlyPct(d.tempered[w.history.moves[worst]])} sure.` : ''),
       card: 'home',
     };
   }
@@ -149,7 +209,7 @@ export function explainTrip(w: Walker, f: Forest, stats: TrainStats | null, outd
     if (d.tempered[chosen] < 0.3) {
       return {
         title: 'Why did she do that?',
-        text: `At step ${t + 1} she stepped ${MOVE_NAMES[chosen]} into a wolf den. She gave that move only ${pct(raw)}, but boldness ${d.temperature.toFixed(1)} made it ${pct(d.tempered[chosen])}, and the dice landed on it.${cutoff}`,
+        text: `At step ${t + 1} she stepped ${MOVE_NAMES[chosen]} into a wolf den. She gave that move ${onlyPct(raw)}, but boldness ${d.temperature.toFixed(1)} made it ${pct(d.tempered[chosen])}, and the dice landed on it.${cutoff}`,
         card: 'boldness',
       };
     }
@@ -168,7 +228,7 @@ export function explainTrip(w: Walker, f: Forest, stats: TrainStats | null, outd
     if (taught <= 2) {
       return {
         title: 'Why did she do that?',
-        text: `At step ${t + 1} she was ${pct(d.tempered[chosen])} sure about going ${MOVE_NAMES[chosen]}, straight into a wolf den. Her parents walked past this spot only ${taught} time${taught === 1 ? '' : 's'}, so she was guessing with confidence.${alike ? ` It looks just like ${alike} other place${alike === 1 ? '' : 's'} in the forest.` : ''}${cutoff}`,
+        text: `At step ${t + 1} she was ${pct(d.tempered[chosen])} sure about going ${MOVE_NAMES[chosen]}, straight into a wolf den. ${taught === 0 ? 'Her parents never walked past this spot' : `Her parents walked past this spot only ${taught === 1 ? 'once' : 'twice'}`}, so she was guessing with confidence.${alike ? ` It looks just like ${alike} other place${alike === 1 ? '' : 's'} in the forest.` : ''}${cutoff}`,
         card: 'hallucination',
       };
     }

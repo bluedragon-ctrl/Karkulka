@@ -34,7 +34,8 @@ Every feature should map to a language-model idea. This table is the map:
 | Energy (step budget) | Maximum output length |
 | A swamp: passable, but 3 energy per step | Some outputs use up the output budget faster |
 | Walking into a tree ("Ouch!"): a step of energy spent, no move | A wrong guess wastes output on a mistake |
-| Her thoughts ("Scary wolf to the south! Let's go south."), made up after the move is picked | Models narrating their steps ("First I'll check…"). Theirs come before the answer and help, because they join the context; hers come after and do not. Either way, an account of one's reasons is more generated words, not a look at how the choice was made. "Definitely" or "maybe" follow the probability |
+| Stop button on a trip alone, for when she walks in circles or keeps bumping into trees | The Stop button in a chatbot, and models getting stuck repeating themselves |
+| Her thoughts ("Scary wolf below me! Let's go down."), made up after the move is picked | Models narrating their steps ("First I'll check…"). Theirs come before the answer and help, because they join the context; hers come after and do not. Either way, an account of one's reasons is more generated words, not a look at how the choice was made. "Definitely" or "maybe" follow the probability |
 | Lessons from a teacher | Pretraining on example text |
 | Choice of teacher (fewest steps vs. safe and dry) | Training data and the values of whoever made it |
 | The wolf in disguise as a teacher (looks like the father until a den is in sight) | Bad examples in the training data are learned just like good ones |
@@ -173,11 +174,11 @@ One small neural network learns in two phases, mirroring how real LLMs are built
 
 ### Test: trip alone
 
-- The user clicks a starting tile.
+- The user clicks a starting tile. The panel reads top to bottom: a one-line instruction ("Click a path tile to pick where she starts, then let her walk to grandma's house alone."), the buttons (Next step, Walk through, Instant run, Stop), the status line, her next move while walking, and the trip report when it ends. Energy, boldness, fog and her thoughts sit in their own "Settings (optional)" box below.
 - At each step the model gives probabilities; the **boldness** dial (temperature) reshapes them, and one move is sampled.
 - The trip ends at home, eaten or lost (energy reached zero).
-- **Her thoughts** (on by default, "Her thoughts (just for fun)" checkbox): after some moves a thought bubble over her head says a line or two. Each thought is made up *after* the move is sampled, from the view she had and the move she took, so it can pair what she saw with what she did: "Scary wolf to the south! Let's go south." Her confidence words follow the boldness-adjusted probability of the move she took: "definitely" from 75%, "probably" from 40%, "maybe" below. Code: `src/thoughts.ts`.
-  - She speaks about events, roughly in this order: the trip's end (always: "Made it!", "I need a nap…", or the wolf line before she is eaten), walking into a tree (often), a wolf den she has not thought about yet (always, with the move), grandma's house coming into view (once), energy falling to half, a quarter and a tenth (once each), stepping into a swamp, standing where she has been twice before ("Am I going in circles?"), the smell of cake when the home hint is on, and now and then just the move ("Probably south.").
+- **Her thoughts** (on by default, "Her thoughts (just for fun)" checkbox): after some moves a thought bubble over her head says a line or two. Each thought is made up *after* the move is sampled, from the view she had and the move she took, so it can pair what she saw with what she did: "Scary wolf below me! Let's go down." She speaks in up, down, left and right, like the move arrows (up is north on the map): a den is "above me", "to my left" or "down on my right". Her confidence words follow the boldness-adjusted probability of the move she took: "definitely" from 75%, "probably" from 40%, "maybe" below. Code: `src/thoughts.ts`.
+  - She speaks about events, roughly in this order: the trip's end (always: "Made it!", "I need a nap…", or the wolf line before she is eaten), walking into a tree (often), a wolf den she has not thought about yet (always, with the move), grandma's house coming into view (once), energy falling to half, a quarter and a tenth (once each), stepping into a swamp, standing where she has been twice before ("Am I going in circles?"), the smell of cake when the home hint is on, and now and then just the move ("Probably down.").
   - She waits at least 2 steps after a thought before the next event thought, and 6 before plain chatter, so most steps stay quiet. Each line is picked at random from a few variants, never the same one twice in a row.
   - Walk through goes at a slow pace (about 0.65 s a move) so you can follow her, and after a thought it waits until there has been time to read it (from 1.8 s for a short line to 4.5 s for a long one) before she moves on. While walking, the bubble stays for that reading time plus one move; the last thought of a trip stays until the next trip. Instant run shows no thoughts at all. Thoughts use their own randomness, so they never change her walk.
 
@@ -193,11 +194,13 @@ The app is a row of tabs that tells the story in order: Forest, Lessons, Trip al
 
 | Tab | What happens | User controls |
 | --- | --- | --- |
-| 1. Forest | Generate or edit the forest; home is fixed | New forest, forest code or link, tile editing (path, tree, swamp, wolf den), memory size (short / medium / long), home-hint toggle; after lessons: small change, big change, new forest with the same Red Riding Hood |
+| 1. Forest | Generate or edit the forest; home is fixed | New forest, a forest code to type in and Generate (the page link always carries the forest too), tile editing (path, tree, swamp, wolf den), memory size (short / medium / long), home-hint toggle; after lessons: small change, big change, new forest with the same Red Riding Hood |
 | 2. Lessons | Parents walk her home; the model trains per step | Teacher (mother / father / both / wolf in disguise / mother and sometimes the wolf), number of lessons, play or fast-forward; after a change: 30 / 100 / 300 catch-up lessons |
-| 3. Trip alone | She walks from a chosen start using the model | Click the start tile, energy (step budget), boldness dial, Next step, Walk through (pause any time) or Instant run, fog toggle, her thoughts toggle |
+| 3. Trip alone | She walks from a chosen start using the model | Click the start tile, energy (step budget), boldness dial, Next step, Walk through (pause any time), Instant run or Stop (end the trip now, when she goes in circles or keeps bumping into trees), fog toggle, her thoughts toggle |
 | 4. Practice (optional) | Her own runs, scored by a judge; then back to Trip alone to compare | Judge (Grandma / father / mother / crow / wolf), number of practice runs |
 | 5. Inside the model | Numbers and model details for technical users | Read-only views, export or import the model |
+
+The teacher and the judge are each picked from a drop-down list, with a card under it for the chosen one: its picture and a plain line for children ("Just come home safe, dear!"). The exact points a judge gives are not in the panel but in its LM corner card, listed under the card text (`CARD_DETAILS` in `src/explain.ts`): the panel is for children, the LM corner for numbers and technical hints. The same rule holds on every tab: panel lines stay plain ("A swamp can be crossed, but it is slow and tiring.", "Now and then she walks the same test trips alone…"), and the numbers sit in a short list under the LM corner card: energy per step (swamp card), how the parents pick a route and the half-and-half mix (teacher card), the wolf's share of lessons (data poisoning card), what the test trips are (test trips card), and how the practice circle grows (curriculum card). Results of her own trips and training (steps, energy left, scores, home rates) stay in the panel. The Inside the model tab is for technical users and keeps its numbers.
 
 **Rules between tabs**
 
@@ -235,7 +238,7 @@ All pictures are simple symbolic SVG shapes drawn for this project, with no tile
 - Home: hearts at the cottage, a small celebration.
 - Eaten: a cartoon wolf pops up and the screen fades. Nothing graphic.
 - Lost: she sits down, and a "lost in the woods" note appears.
-- **How the trip went:** when she gets home or runs out of energy, the result also says how *tired* she is (energy used of her budget: still fresh, a bit tired, very tired, or worn out when lost), how *wet* (swamp steps: dry feet, wet feet, soaked) and how *scared* (different wolf dens she saw on the way: calm, a little scared, scared, very scared) and how *bumped* (moves into a tree, each a wrong guess that cost a step of energy and got her nowhere: no bumps, a bump or two for 1–2, a bumpy walk for 3–5, bumped all over). Each has its own symbol (a battery, a water drop, a wolf head, a tree with a yellow bump star). Its heading, "How was the trip for her?", has a "?" for the trip report card.
+- **How the trip went:** after every trip (home, eaten, lost, or cut short with Stop), the result also says how *tired* she is (energy used of her budget: still fresh, a bit tired, very tired, or worn out when lost), how *wet* (swamp steps: dry feet, wet feet, soaked) and how *scared* (different wolf dens she saw on the way: calm, a little scared, scared, very scared) and how *bumped* (moves into a tree, each a wrong guess that cost a step of energy and got her nowhere: no bumps, a bump or two for 1–2, a bumpy walk for 3–5, bumped all over). Each has its own symbol (a battery, a water drop, a wolf head, a tree with a yellow bump star). Its heading, "How was the trip for her?", has a "?" for the trip report card.
 
 **LM corner cards ("?" buttons).** Each card gives one sentence or two of analogy, for example "Her memory strip is her context window: everything she can take into account right now." These cards carry the teaching for non-technical users. They are not shown in the panel on their own: a small round "?" (yellow, with a dark border) sits next to the control, heading or result it explains, and clicking it opens the card as a small popup ("LM corner") right there. The popup closes with ×, Escape or a click elsewhere, and follows its "?" when the panel is redrawn (during a trip on Walk through, for example). Inside a checkbox or radio label, the "?" opens the card without ticking the box. The texts live in `CARDS` in `src/explain.ts`; the popup is `src/ui/hint.ts`.
 
@@ -272,10 +275,11 @@ Where the "?" buttons are, and what makes them pulse:
 | 2. Lessons | Heatmap checkbox | What the training data covered | Toggling it; after lessons from one parent |
 | 2. Lessons | Known weakness | Exposure bias | After a watched lesson |
 | 3. Trip alone | Title and fog checkbox | A view is an input token | Entering the tab; toggling fog |
-| 3. Trip alone | Intro ("one move is picked by chance") | Sampling | |
+| 3. Trip alone | Instruction ("Click a path tile to pick where she starts…"); the card says how a move is picked by chance | Sampling | |
 | 3. Trip alone | "In a swamp" in the status line (while she stands in one) | Swamp eats the energy budget | Her first swamp step on a trip |
 | 3. Trip alone | "Ouch, a tree!" in the status line (right after she walks into a tree) | A wrong guess wastes a step | Her first bump into a tree on a trip |
 | 3. Trip alone | "Smells cake" in the status line | More useful input | |
+| 3. Trip alone | "Stopped after N steps." in the status line | Models can get stuck repeating themselves; chatbots have a Stop button and a length limit | Pressing Stop |
 | 3. Trip alone | "Her thoughts" checkbox | Her thoughts come after the move, so they are not what made her choose. Real chatbots narrate their steps too, before the answer (which helps), but a stated reason is still not a look inside | Her first thought in a session (unless another card just pulsed); toggling it |
 | 3. Trip alone | "Why did she do that?" | The card that fits the trip: home, hallucination, temperature, repetition, energy, swamp, reward hacking, the wolf's lessons or practice | The trip ends |
 | 3. Trip alone | "How was the trip for her?" | Answers are rated on more than being right | |
@@ -283,7 +287,7 @@ Where the "?" buttons are, and what makes them pulse:
 | 3. Trip alone | Energy, Boldness | Maximum output length, temperature | Moving the slider |
 | 4. Practice | Title | Practice is fine-tuning from feedback | Entering the tab; starting practice |
 | 4. Practice | "Who judges?" | The judge decides what she learns | |
-| 4. Practice | "How … scores a run" | The chosen judge's card | Choosing a judge |
+| 4. Practice | The chosen judge's line (in the judge card) | The chosen judge's card, followed by how that judge scores a run, in points | Choosing a judge |
 | 4. Practice | Watch buttons and "In the last run … gave it … points" | One score for a whole run, as in RLHF | Watching one run |
 | 4. Practice | "Run … of …" line while watching | Sampling: each move picked by chance | |
 | 4. Practice | "She practises from up to … steps" | Curriculum learning | |
@@ -293,7 +297,7 @@ Where the "?" buttons are, and what makes them pulse:
 | 5. Inside the model | Title | The real numbers | Entering the tab |
 | 5. Inside the model | Vocabulary, Training data, Look-alike tokens, Current input, Her latest trip, Network, Loss curves, Training compute, Fixed settings, Export and import | Vocabulary, token frequency, context-dependent tokens, one-hot inputs, uncertainty and sampling, weights, loss, training cost, hyperparameters, shared model files | |
 
-After a trip, the "Why did she do that?" note sits right under the result line. When she walks into a den after wolf lessons or wolf practice, it says the wolf taught her.
+After a trip, the "Why did she do that?" text is a small note at the bottom of "How was the trip for her?", with its "?" for the card that fits. When she walks into a den after wolf lessons or wolf practice, it says the wolf taught her.
 
 
 **Layout.** Designed for a wide screen first: the forest large in the centre, a narrow side panel with the current tab's controls, and the memory strip at the bottom. A phone layout can come later.
@@ -335,7 +339,7 @@ A static TypeScript site hosted on GitHub Pages, with everything (generation, tr
 - More routes per forest, and swamps that cost extra energy
 - Memory size choice and the home-hint toggle
 - Lessons with five teacher options, including the wolf in disguise and the mother mixed with a few wolf lessons
-- Trip alone with arrows, memory strip, energy, boldness, fog and Next step, Walk through or Instant run
+- Trip alone with arrows, memory strip, energy, boldness, fog and Next step, Walk through, Instant run or Stop
 - Practice phase with automatic curriculum
 - Coverage heatmap, outcome chart, LM corner cards
 - Technical tab, browser save, export and import
