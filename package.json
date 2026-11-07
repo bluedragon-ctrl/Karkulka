@@ -1,0 +1,19 @@
+{
+  "name": "karkulka",
+  "private": true,
+  "version": "1.0.0",
+  "description": "Red Riding Hood LM: a browser game that teaches how language models work",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc --noEmit && vite build",
+    "preview": "vite preview",
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "typescript": "~5.9.3",
+    "vite": "^8.3.6",
+    "vitest": "^5.1.0"
+  }
+}
