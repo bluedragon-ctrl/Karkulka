@@ -4,6 +4,10 @@ A browser game that teaches how language models work. Red Riding Hood learns to 
 
 It is for older kids and adults without a technical background, on a classroom projector or a laptop. The last tab is for technical users.
 
+**Play it:** https://bluedragon-ctrl.github.io/Karkulka/
+
+**Design and plans:** [`docs/design.md`](docs/design.md) is the source of truth for how the game works and what comes next.
+
 ## How it maps to a language model
 
 | In the game | In a language model |
@@ -59,4 +63,4 @@ Everything runs in the browser and needs no server. It is a static TypeScript si
 
 ## Deployment
 
-`.github/workflows/deploy.yml` tests, builds and publishes `dist/` to GitHub Pages on every push to `main`. In the repository settings, set **Pages → Source** to **GitHub Actions**.
+`.github/workflows/deploy.yml` tests, builds and publishes `dist/` to GitHub Pages on every push to `main`. It needs **Settings → Pages → Source** set to **GitHub Actions**, and the `github-pages` environment must allow deployments from `main`.

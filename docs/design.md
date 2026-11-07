@@ -1,0 +1,221 @@
+# Red Riding Hood LM — Design
+
+This file is the source of truth for the game's design. Update it in the same pull request as any change to how the game behaves. It started as a design spec written on claude.ai, which is now kept only as a historical reference.
+
+**Status:** version 1 is built and live at https://bluedragon-ctrl.github.io/Karkulka/. The [Later](#later) list and [Open questions](#open-questions) at the end are what's next.
+
+## Purpose and audience
+
+A browser game that teaches how language models work: Red Riding Hood learns to walk home through a forest, one predicted step at a time, the way a language model writes one predicted token at a time.
+
+- **Audience:** older kids and adults without a technical background. A final tab serves technical users.
+- **Setting:** a classroom projector or a personal laptop, in a desktop browser. The UI is in English.
+- **Goal:** after one session, a non-technical person can explain tokens, context window, next-token probabilities, temperature, training data, hallucination and fine-tuning in their own words, using the game as the example.
+- **Not a goal:** pathfinding. She never sees the whole forest, so the demo is about prediction from limited context, not planning.
+
+## Core concept
+
+Every step is a token. What she sees around her is an input token, and the move she makes is an output token. Her context is the recent alternating sequence of both, exactly like a transcript:
+
+`[view] [move] [view] [move] [view] → next move?`
+
+The model reads this context and outputs a probability for each of the four moves. One move is sampled, she takes it, sees a new view, and the loop repeats until she is home, eaten or out of energy.
+
+Every feature should map to a language-model idea. This table is the map:
+
+| In the game | In a language model |
+| --- | --- |
+| A view of her surroundings | An input token |
+| A move (up, right, down, left) | An output token |
+| The memory strip of recent views and moves | The context window |
+| Memory size (short, medium, long) | Context length, fixed before training |
+| Thickness of the four arrows | Next-token probabilities |
+| Boldness dial | Sampling temperature |
+| Energy (step budget) | Maximum output length |
+| A swamp: passable, but 3 energy per step | Some outputs use up the output budget faster |
+| Parents' lessons | Pretraining on example text |
+| Choice of teacher (fewest steps vs. safe and dry) | Training data and the values of whoever made it |
+| Number of lessons | Amount of training data |
+| Coverage heatmap | What the training data covered |
+| Practice on her own, judged by outcome | Fine-tuning from feedback (RLHF-style) |
+| Confidently walking into a wolf in an unfamiliar spot | Hallucination on out-of-distribution input |
+| Looping at look-alike places with short memory | Repetition caused by a short context |
+| Forest edited after training | Knowledge cutoff: the world changed, the model did not |
+
+## Forest and world rules
+
+One forest is generated in advance, with grandma's house at a fixed spot. All training and testing happen in that forest.
+
+**Grid.** Square tiles, 15 × 15 (readable on a projector, fast to train).
+
+**Tile types**
+
+| Tile | Passable | Effect |
+| --- | --- | --- |
+| Path or meadow | Yes | Normal step: 1 energy |
+| Tree | No | A move into it is blocked; she stays put and the step still costs 1 energy |
+| Swamp | Yes | A step into it costs 3 energy instead of 1 |
+| Wolf den | Yes | She is eaten and the trip ends |
+| Grandma's house | Yes | She is home and the trip ends |
+| Outside the map | No | Treated like a tree |
+
+**Generator rules**
+
+- Every path or swamp tile can reach home without crossing a wolf den.
+- The layout produces several look-alike spots (crossings, straight corridors), because those are what make memory matter. Typically a quarter to a half of the walkable tiles (about 38% on average) share their view with another place.
+- There are many routes home: about 20 loops per forest. Single trees and wolf dens are never placed where they would close off a route.
+- 4–6 swamp patches go where the hurried father's shortest route crosses them and a dry detour exists, so the two parents choose differently.
+- Wolf dens (about 8) go where the two parents' routes part ways the most.
+- Each forest has a short **forest code** (a seed), shareable as a link so a whole class can use the same forest.
+- The user can edit tiles by hand; edits travel in the link too. Editing after training marks her lessons as outdated (the knowledge-cutoff lesson).
+
+**What she sees.** A 3 × 3 window centred on her: the 8 surrounding tiles. She never sees coordinates or the whole map.
+
+**Vocabulary.** Input tokens are her views; each view is the 8 tiles around her, each one of 5 tile kinds. Output tokens are the 4 moves. In theory 5⁸ ≈ 390,000 views are possible, so the technical tab lists only the views that actually occur in the current forest (typically 75–95).
+
+**Optional home hint.** A toggle adds one extra input: the rough direction home (8 compass sectors), framed as "the smell of grandma's cake". It is off by default and used as an experiment: more information in the input means better decisions.
+
+**Outcomes of a trip**
+
+- **Home:** she reached grandma's house.
+- **Eaten:** she stepped onto a wolf den.
+- **Lost:** her energy (the step budget) ran out first.
+
+## Model and learning
+
+One small neural network learns in two phases, mirroring how real LLMs are built: first by imitating examples, then by practising and being judged on the outcome.
+
+**The model.** Input: the context window (the last N views and moves) encoded as numbers, one-hot per tile and per move. Output: a probability for each of the 4 moves. One hidden layer of 48 units; it trains in seconds in the browser. Only one model exists at a time.
+
+**Memory size.** Chosen before training as short, medium or long: 1, 3 or 6 view–move pairs. Changing it means training a new Red Riding Hood, as with real models.
+
+### Phase 1: parents' lessons (pretraining)
+
+- A parent walks her home from a random starting tile along a proper path. Each walk is one lesson (one "story").
+- **Per-step loss:** at every step the model predicts the next move, compares it with what the parent did, and adjusts its weights.
+- **Number of lessons** is the user's training-amount control.
+- **Choice of teacher**, with a one-line explanation card for each:
+  - *Careful mother:* safe, dry routes that keep away from wolf dens and swamps, even if longer.
+  - *Hurried father:* the fewest steps, even right past wolf dens and straight through swamps.
+  - *Both:* a mix of lessons; her arrows visibly split where the two disagree.
+- **Known weakness, shown on purpose:** lessons are always correct, so she never learns how to recover after a wrong step (exposure bias). Phase 2 fixes this.
+
+### Phase 2: practice on her own (fine-tuning, optional)
+
+- She walks alone from a starting tile, sampling her own moves, until home, eaten or lost.
+- **Per-run feedback:** one score per run; every move in that run gets a share of the credit or blame (policy-gradient style).
+- **Score (fixed):** +1 for reaching home, −1 for being eaten, −0.3 for running out of energy, plus up to +0.5 partial credit for ending closer to home. Closeness is measured as the energy still needed to walk home (swamps count extra), not straight-line distance. The judge knows the whole forest; she does not.
+- **Curriculum (automatic):** practice starts near home and moves outward as her success rate rises.
+- **Number of practice runs** is the user's control for this phase.
+
+### Test: trip alone
+
+- The user clicks a starting tile.
+- At each step the model gives probabilities; the **boldness** dial (temperature) reshapes them, and one move is sampled.
+- The trip ends at home, eaten or lost (energy reached zero).
+
+### Fixed internals (never user-set)
+
+Learning rate, network size, reward values, curriculum pace and exploration during practice are fixed. They are shown read-only in the technical tab. The values live in `FIXED` in `src/train.ts`.
+
+## User flow
+
+The app is a row of tabs that tells the story in order: Forest, Lessons, Trip alone, Practice, Inside the model. Later tabs unlock when the earlier step is done, and the user can always go back. Practice is optional and sends her back to Trip alone, so users can compare her before and after.
+
+| Tab | What happens | User controls |
+| --- | --- | --- |
+| 1. Forest | Generate or edit the forest; home is fixed | New forest, forest code or link, tile editing (path, tree, swamp, wolf den), memory size (short / medium / long), home-hint toggle |
+| 2. Lessons | Parents walk her home; the model trains per step | Teacher (mother / father / both), number of lessons, play or fast-forward |
+| 3. Trip alone | She walks from a chosen start using the model | Click the start tile, energy (step budget), boldness dial, step-by-step or auto, fog toggle |
+| 4. Practice (optional) | Her own runs, judged by outcome; then back to Trip alone to compare | Number of practice runs |
+| 5. Inside the model | Numbers and model details for technical users | Read-only views, export or import the model |
+
+**Rules between tabs**
+
+- Trip alone and Practice stay locked until at least one round of lessons is done.
+- Changing the memory size or the home hint requires new lessons; the app says so instead of silently retraining.
+- Editing the forest after training keeps the model but shows a note that her lessons are outdated. This is the knowledge-cutoff experiment.
+- The trained model and the forest are saved in the browser, so a lesson can continue the next day.
+
+## Visuals
+
+All pictures are simple symbolic SVG shapes drawn for this project, with no tile packs and no external art. The focus stays on the concepts, and everything scales cleanly on a projector.
+
+**Symbol rules**
+
+- One clear shape per tile type: a triangle tree, a plain path, a marked wolf den, a small house with a heart for grandma, wavy blue water with reeds for a swamp, and a red hooded figure for Red Riding Hood (an original design).
+- Shape plus colour, never colour alone, so colour-blind viewers can tell tiles apart.
+- Symbols must read at small sizes, because the same symbols appear as tokens in the memory strip.
+- Limited palette: greens and browns for the forest, red only for her and for danger, warm yellow for home, blue for swamp water. Each parent gets its own colour.
+
+**Core displays**
+
+- **Decision arrows:** four arrows around her, thickness showing probability; hover or tap shows the number. The boldness dial visibly flattens or sharpens them before a move is picked. When both parents taught her, arrows are tinted by which parent's habit they come from.
+- **Memory strip:** along the bottom, small tiles alternating between view and move, sliding as she walks. Tiles fade out at the edge of her memory size.
+- **Fog toggle:** hides everything except her 3 × 3 window, to show what she actually sees.
+- **Energy:** a small bar; as it drops she shows a sweat drop, and at zero she sits down (lost).
+- **Coverage heatmap:** an overlay showing where lessons passed, "where she was taught".
+- **Lesson playback:** the parent walks ahead of her; in fast-forward, many faint footprint trails in the parent's colour build up.
+- **Outcome chart:** a simple stacked chart of home, eaten and lost over the course of lessons or practice. It is friendlier than a loss curve.
+
+**Outcomes, kept child-friendly**
+
+- Home: hearts at the cottage, a small celebration.
+- Eaten: a cartoon wolf pops up and the screen fades. Nothing graphic.
+- Lost: she sits down, and a "lost in the woods" note appears.
+
+**LM corner cards.** Small cards appear at key moments, each giving one sentence of analogy, for example "Her memory strip is like a language model's context window." After a trip, a short "Why did she do that?" note explains the main decision. These cards carry the teaching for non-technical users.
+
+**Layout.** Designed for a wide screen first: the forest large in the centre, a narrow side panel with the current tab's controls, and the memory strip at the bottom. A phone layout can come later.
+
+## Technical tab: Inside the model
+
+The last tab shows the real numbers behind the friendly visuals, for technical users. It is read-only except for export and import.
+
+- **Vocabulary:** every input and output token with its ID.
+- **Current input:** the context window at the selected step, encoded as numbers.
+- **Network:** its structure, with weights shown as a heatmap.
+- **Loss curves:** per-step loss for lessons and average score for practice, next to the friendly outcome chart.
+- **Probabilities:** the raw values before and after boldness (temperature) is applied.
+- **Fixed settings:** learning rate, rewards, curriculum and network size, shown read-only.
+- **Export and import:** the trained model and forest as a file.
+
+## Tech stack and constraints
+
+A static TypeScript site hosted on GitHub Pages, with everything (generation, training, testing) running in the browser and no server.
+
+- **Language and build:** TypeScript with Vite; every push to `main` is tested, built and deployed to GitHub Pages by a GitHub Actions workflow.
+- **Rendering:** SVG for the symbols, arrows and memory strip; canvas for the weight heatmaps.
+- **Training:** runs in a Web Worker so the page never freezes; the small network is hand-written, with no ML library.
+- **Determinism:** a seeded random generator, so a forest code always produces the same forest.
+- **Persistence:** forest and trained model saved in browser storage; forest code (and any edits) also carried in the page link.
+- **Performance target:** a full round of lessons on a 15 × 15 forest finishes in seconds on an ordinary laptop.
+- **Code structure:** world rules, model, training and UI kept as separate modules, so the game logic can be tested without the UI.
+- **Accessibility:** colour is never the only signal; text readable from the back of a classroom.
+
+## Scope
+
+**Version 1 (done)**
+
+- Forest generation, forest codes, tile editing, fixed home
+- More routes per forest, and swamps that cost extra energy
+- Memory size choice and the home-hint toggle
+- Parents' lessons with the three teacher options
+- Trip alone with arrows, memory strip, energy, boldness, fog and step or auto playback
+- Practice phase with automatic curriculum
+- Coverage heatmap, outcome chart, LM corner cards
+- Technical tab, browser save, export and import
+
+### Later
+
+- "Naive judge" choice (straight-line distance) to demonstrate reward hacking
+- A simple "inside her head" network picture on the main screens
+- Two models side by side for comparison
+- Berry bush that restores energy (+15, once per trip), with her energy level as an extra input (a "how tired am I" sense, like a model knowing its remaining output budget). Parents never teach the detour, so only practice can discover it: fine-tuning learning behaviour that was never in the training examples
+- Phone layout
+
+### Open questions
+
+- Exact default grid size and the three memory-size values, to be tuned once it runs.
+- Pacing of the outcome animations and how long LM corner cards stay on screen.
+- Whether a teacher's guide (one page of lesson flow for presenters) belongs in the repo.
