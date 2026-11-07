@@ -2,6 +2,7 @@
 import type { Walker } from './sim';
 import { FIXED, TrainStats, headsHome } from './train';
 import { buildVocabulary, viewKey } from './tokens';
+import { SWAMP_PENALTY, WOLF_PENALTY } from './teachers';
 import { Forest, MOVE_NAMES, SWAMP, SWAMP_COST, VIEW_OFFSETS, WOLF, tileAt, walkingDistances, xyOf } from './world';
 
 export type CardKey =
@@ -80,6 +81,28 @@ const num = (v: number) => (v < 0 ? `−${Math.abs(v)}` : `+${v}`);
  * The panel keeps the plain, child-friendly line; the exact points live here.
  */
 export const CARD_DETAILS: Partial<Record<CardKey, { title: string; lines: () => string[] }>> = {
+  swamp: { title: 'Energy for one step', lines: () => [
+    'Onto a path: 1',
+    `Into a swamp: ${SWAMP_COST}`,
+    'Into a tree: 1, and she stays where she is',
+  ] },
+  teacher: { title: 'How the parents pick a route', lines: () => [
+    `Mother: the cheapest route, where a step costs 1, plus ${SWAMP_PENALTY} in a swamp and ${WOLF_PENALTY} with a wolf den in sight`,
+    'Father: the fewest steps; a swamp step counts as one',
+    'Both: each lesson is the mother\'s or the father\'s, half and half',
+  ] },
+  poisonedData: { title: 'The numbers', lines: () => [
+    `About 1 lesson in ${Math.round(1 / FIXED.wolfLessonShare)} (${Math.round(FIXED.wolfLessonShare * 100)}%) comes from the wolf; the rest from the careful mother`,
+  ] },
+  testTrips: { title: 'The test', lines: () => [
+    `${FIXED.evalStarts} trips from the same fixed starting spots every time`,
+    `Boldness ${FIXED.evalBoldness} and ${FIXED.evalEnergy} energy on each trip`,
+    `About ${FIXED.evalPoints} tests in each run of lessons or practice`,
+  ] },
+  curriculum: { title: 'The numbers', lines: () => [
+    `She starts within ${FIXED.curriculumStart} steps of home`,
+    `When she gets home in ${Math.round(FIXED.curriculumThreshold * 100)}% of her last ${FIXED.curriculumWindow} runs, the circle grows by ${FIXED.curriculumStep} steps`,
+  ] },
   judgeGrandma: { title: 'How Grandma scores a run', lines: () => [
     `${num(FIXED.rewardHome)} for reaching home`,
     `${num(FIXED.rewardEaten)} for being eaten`,

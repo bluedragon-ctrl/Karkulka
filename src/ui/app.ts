@@ -11,7 +11,7 @@ import { MEMORY_PAIRS, MemorySize, ModelConfig } from '../tokens';
 import { FIXED, JUDGES, Judge, TrainStats, chooseTeacher, guessesRight, homeShare, learnFromLesson, learnFromRun, newStats, practiceSetup, practiceWalker, recordLessonBatch, recordPracticeBatch, startTiles, teacherCosts } from '../train';
 import { WorkerRequest, runTraining } from '../workerTypes';
 import {
-  DEFAULT_SIZE, Forest, HOME, MOVES, MOVE_ARROWS, MOVE_NAMES, PATH, SECTOR_WORDS, SWAMP, SWAMP_COST, TREE, Tile, WOLF, copyForest,
+  DEFAULT_SIZE, Forest, HOME, MOVES, MOVE_ARROWS, MOVE_NAMES, PATH, SECTOR_WORDS, SWAMP, TREE, Tile, WOLF, copyForest,
   forestFromTiles, homeSector, unreachableTiles, walkingDistances,
 } from '../world';
 import { Board } from './board';
@@ -55,9 +55,9 @@ const DEFAULTS: Settings = {
 const TEACHERS: { id: TeacherChoice; name: string; text: string }[] = [
   { id: 'mother', name: 'Careful mother', text: 'Safe, dry routes that keep away from wolf dens and swamps, even if longer.' },
   { id: 'father', name: 'Hurried father', text: 'The fewest steps, even right past wolf dens and straight through swamps.' },
-  { id: 'both', name: 'Both', text: 'A mix of lessons; her arrows split where the two disagree.' },
+  { id: 'both', name: 'Both', text: 'Sometimes the mother, sometimes the father. Where they disagree, she is torn.' },
   { id: 'wolf', name: 'The wolf in disguise', text: 'Walks like the father, but when he sees a wolf den he leads her into it.' },
-  { id: 'motherWolf', name: 'Mother, and sometimes the wolf', text: `The careful mother, but about 1 lesson in ${Math.round(1 / FIXED.wolfLessonShare)} is secretly the wolf's.` },
+  { id: 'motherWolf', name: 'Mother, and sometimes the wolf', text: 'The careful mother, but now and then the wolf secretly takes her place.' },
 ];
 
 /** The LM corner card for a teacher choice. */
@@ -1116,7 +1116,7 @@ export class App {
         h('h3', {}, this.hq('Edit the forest', 'editForest')),
         h('p', { class: 'muted' }, 'Pick a brush, then click or drag on the map.'),
         h('div', { class: 'row brushes' }, brushBtn(PATH, 'Path'), brushBtn(TREE, 'Tree'), brushBtn(SWAMP, 'Swamp'), brushBtn(WOLF, 'Wolf den')),
-        h('p', { class: 'muted' }, this.hq(`A swamp can be crossed, but each step in it costs ${SWAMP_COST} energy instead of 1.`, 'swamp')),
+        h('p', { class: 'muted' }, this.hq('A swamp can be crossed, but it is slow and tiring.', 'swamp')),
         unreachable ? h('p', { class: 'warn' }, `${unreachable} path tile${unreachable === 1 ? '' : 's'} can't reach home without crossing a wolf den. Her parents never start lessons there.`) : null,
         this.edited ? h('button', { onclick: () => this.undoEdits() }, 'Undo all edits') : null),
       this.changeBox('forest'),
@@ -1161,7 +1161,7 @@ export class App {
         else icon.append(parentFigure(40, t.id as Teacher));
         return this.chooser('Teacher', TEACHERS.map((x) => [x.id, x.name]), t.id, busy, (id) => {
           this.settings.teacher = id as TeacherChoice; this.saveSoon(); this.showCard(teacherCard(this.settings.teacher)); this.renderPanel();
-        }, icon, t.text);
+        }, icon, this.hq(t.text, teacherCard(t.id), 'chosen'));
       })(),
       this.slider('Number of lessons', this.settings.lessons, 10, 2000, 10, (v) => String(v), (v) => { this.settings.lessons = v; this.saveSoon(); }, undefined, 'moreData'),
       this.runControls({
@@ -1173,7 +1173,7 @@ export class App {
       h('p', {}, st.lessons ? `She has had ${st.lessons} lesson${st.lessons === 1 ? '' : 's'} (mother ${st.teacherCounts.mother}, father ${st.teacherCounts.father}${st.teacherCounts.wolf ? `, wolf ${st.teacherCounts.wolf}` : ''}).` : 'No lessons yet.'),
       h('h3', {}, this.hq('How she does alone', 'testTrips')),
       outcomeChart(st.lessonEval, 'lessons'),
-      h('p', { class: 'muted' }, `Every so often she walks the same ${FIXED.evalStarts} test trips alone, to see how much she has improved.`),
+      h('p', { class: 'muted' }, 'Now and then she walks the same test trips alone, to see how much she has improved.'),
       h('label', { class: 'check' }, h('input', { type: 'checkbox', checked: this.settings.heat, onchange: (e: Event) => { this.settings.heat = (e.target as HTMLInputElement).checked; this.showCard('coverage'); this.renderBoard(); this.saveSoon(); } }), h('span', {}, this.hq('Show where she was taught (heatmap)', 'coverage'))),
       h('p', { class: 'note' }, h('strong', {}, 'Known weakness: '), this.hq('lessons are always correct, so she never learns how to recover after a wrong step. Practice (tab 4) fixes this.', 'exposure')),
       this.model ? h('button', { class: 'subtle', disabled: busy, onclick: () => { if (confirm('Start over with a new Red Riding Hood? All her lessons and practice will be forgotten.')) { this.resetModel(); this.saveSoon(); this.render(); } } }, 'Start over with a new Red Riding Hood') : null,
@@ -1203,7 +1203,7 @@ export class App {
         : [
           `Step ${w.t + 1} · energy ${w.energyLeft} / ${w.energy}`,
           w.t > 0 && w.blocked[w.t - 1] ? h('span', { class: 'nowrap' }, this.hq(' · ouch, a tree!', 'tree', 'status')) : null,
-          this.forest.tiles[w.pos] === SWAMP ? h('span', { class: 'nowrap' }, this.hq(` · in a swamp (${SWAMP_COST} energy a step)`, 'swamp', 'status')) : null,
+          this.forest.tiles[w.pos] === SWAMP ? h('span', { class: 'nowrap' }, this.hq(' · in a swamp, tiring!', 'swamp', 'status')) : null,
           this.settings.hint ? h('span', { class: 'nowrap' }, this.hq(` · smells cake to the ${SECTOR_WORDS[homeSector(this.forest, w.pos)]}`, 'hint')) : null,
         ].filter((x): x is string | HTMLElement => !!x);
     add(body,
@@ -1300,7 +1300,7 @@ export class App {
       st.practiceRuns ? h('p', {}, `${st.practiceRuns} practice runs so far.`) : null,
       h('h3', {}, this.hq('How she does alone', 'testTrips')),
       outcomeChart(st.practiceEval, 'lessons + runs'),
-      before && after ? h('p', { class: 'compare' }, this.hq(`Same ${FIXED.evalStarts} test trips: after lessons ${pct(before.home)} home, ${pct(before.eaten)} eaten; after practice ${pct(after.home)} home, ${pct(after.eaten)} eaten.`, 'recipe')) : null,
+      before && after ? h('p', { class: 'compare' }, this.hq(`On the same test trips: after lessons ${pct(before.home)} home, ${pct(before.eaten)} eaten; after practice ${pct(after.home)} home, ${pct(after.eaten)} eaten.`, 'recipe')) : null,
       this.practiceSummary(),
       this.next('Back to Trip alone to compare', 'trip'),
     );
@@ -1331,8 +1331,8 @@ export class App {
           : `Watch a trip alone: she should now walk more the way ${the} likes.`;
     return h('div', { class: `why ${(scoreUp && homeDown) || (p.judge === 'wolf' && homeDown) ? 'alarm' : ''}` },
       h('h3', {}, this.hq(`What ${the} taught her`, p.card, 'summary')),
-      h('p', {}, `Score from ${the}: ${p.scoreBefore.toFixed(2)} at the start of this practice, ${p.scoreAfter.toFixed(2)} at the end. Home on the test trips: ${pct(p.homeBefore)} before, ${pct(p.homeAfter)} after.`),
-      h('p', {}, verdict));
+      h('p', {}, verdict),
+      h('p', { class: 'muted' }, `Score from ${the}: ${p.scoreBefore.toFixed(2)} → ${p.scoreAfter.toFixed(2)}. Home on the test trips: ${pct(p.homeBefore)} → ${pct(p.homeAfter)}.`));
   }
 
   // ---------- export / import ----------
