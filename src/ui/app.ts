@@ -12,7 +12,7 @@ import { FIXED, JUDGES, Judge, PRACTICE_STARTS, PracticeStarts, TrainStats, choo
 import { WorkerRequest, runTraining } from '../workerTypes';
 import {
   DEFAULT_SIZE, Forest, HOME, MOVES, MOVE_ARROWS, MOVE_NAMES, PATH, SECTOR_WORDS, SWAMP, TREE, Tile, WOLF, copyForest,
-  forestFromTiles, homeSector, unreachableTiles, walkingDistances,
+  forestFromTiles, homeSector, moveHome, unreachableTiles, walkingDistances,
 } from '../world';
 import { Board } from './board';
 import { changeChart, outcomeChart } from './charts';
@@ -348,7 +348,6 @@ export class App {
       let linked: Forest;
       if (tiles) {
         linked = forestFromTiles(code, DEFAULT_SIZE, tiles);
-        tiles[linked.home] = HOME;
       } else if (code === this.forest.code && !this.edited && this.forest.size === DEFAULT_SIZE) {
         linked = this.forest; // the saved forest is already this unedited forest
       } else linked = generateForest(code);
@@ -422,13 +421,19 @@ export class App {
     const brush = this.settings.brush;
     if (i === this.forest.home || this.forest.tiles[i] === brush) return;
     this.logBeforeChange();
-    this.forest.tiles[i] = brush;
+    const oldHome = this.forest.home;
+    if (brush === HOME) {
+      moveHome(this.forest, i);
+      this.board.updateTile(oldHome, this.forest.tiles[oldHome]);
+    } else this.forest.tiles[i] = brush;
     if (this.trained) this.uncheckedEdits = true;
     this.edited = true;
     this.walker = null;
     this.board.updateTile(i, brush);
+    if (brush === HOME) this.renderBoard(); // the practice circle and heatmap follow the house
     this.renderChanged();
-    if (this.trained) this.showCard('outdated');
+    if (this.trained) this.showCard(brush === HOME ? 'movedHome' : 'outdated');
+    else if (brush === HOME) this.showCard('editForest');
     else if (brush === SWAMP) this.showCard('swamp');
     this.updateLink();
     this.saveSoon();
@@ -437,7 +442,9 @@ export class App {
   }
 
   private undoEdits() {
-    this.forest.tiles = generateForest(this.forest.code, this.forest.size).tiles;
+    const fresh = generateForest(this.forest.code, this.forest.size);
+    this.forest.tiles = fresh.tiles;
+    this.forest.home = fresh.home;
     this.edited = false;
     this.walker = null;
     this.uncheckedEdits = false;
@@ -1144,7 +1151,7 @@ export class App {
     };
     add(body,
       h('h2', {}, this.hq('The forest', 'forest')),
-      h('p', {}, "Grandma's house stays in the same spot. Everything she learns and every test happens in this one forest."),
+      h('p', {}, "Grandma's house stays in the same spot. Everything she learns and every test happens in this one forest. You can move the house with its brush below."),
       h('p', { class: 'muted' }, 'Each ', h('span', { class: 'hint-q sample', 'aria-hidden': 'true' }, '?'), ' shows the language-model idea behind it, and how real chatbots do it.'),
       h('div', { class: 'group' },
         h('div', { class: 'code-line' }, 'Forest code ', h('code', { class: 'code' }, this.forest.code), this.edited ? h('span', { class: 'tag' }, 'edited') : null, this.q('forestCode')),
@@ -1152,7 +1159,7 @@ export class App {
       h('div', { class: 'group' },
         h('h3', {}, this.hq('Edit the forest', 'editForest')),
         h('p', { class: 'muted' }, 'Pick a brush, then click or drag on the map.'),
-        h('div', { class: 'row brushes' }, brushBtn(PATH, 'Path'), brushBtn(TREE, 'Tree'), brushBtn(SWAMP, 'Swamp'), brushBtn(WOLF, 'Wolf den')),
+        h('div', { class: 'row brushes' }, brushBtn(PATH, 'Path'), brushBtn(TREE, 'Tree'), brushBtn(SWAMP, 'Swamp'), brushBtn(WOLF, 'Wolf den'), brushBtn(HOME, "Grandma's house")),
         h('p', { class: 'muted' }, this.hq('A swamp can be crossed, but it is slow and tiring.', 'swamp')),
         unreachable ? h('p', { class: 'warn' }, `${unreachable} path tile${unreachable === 1 ? '' : 's'} can't reach home without crossing a wolf den. Her parents never start lessons there.`) : null,
         this.edited ? h('button', { onclick: () => this.undoEdits() }, 'Undo all edits') : null),

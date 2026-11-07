@@ -11,7 +11,7 @@ export type CardKey =
   | 'tech' | 'vocabulary' | 'judge' | 'swamp' | 'tree' | 'thoughts' | 'stop'
   | 'tripReport' | 'judgeGrandma' | 'judgeFather' | 'judgeMother' | 'judgeCrow' | 'rewardHacking' | 'teacherVsJudge'
   | 'wolfTeacher' | 'poisonedData' | 'judgeWolf' | 'fixBadData'
-  | 'newWorld' | 'catchUp' | 'forestCode' | 'editForest' | 'recipe'
+  | 'newWorld' | 'movedHome' | 'catchUp' | 'forestCode' | 'editForest' | 'recipe'
   | 'compute' | 'tokenFreq' | 'ambiguous' | 'uncertainty'
   | 'moreData' | 'guess' | 'watchMany' | 'runScore' | 'testTrips' | 'sampling' | 'curriculum' | 'oneHot' | 'weights' | 'loss' | 'hyper' | 'modelFile';
 
@@ -38,6 +38,7 @@ export const CARDS: Record<CardKey, string> = {
   repetition: "She went round in circles. With a short memory, look-alike places all seem the same. Words look alike too: \"bank\" can be a river bank or a money bank. A model that sees too few of the words around it gets confused and can repeat itself.",
   exposure: "Lessons were always perfect, so she never learned how to recover after a wrong step. A chatbot reading only finished text never sees its own slips either, so one wrong word can lead it astray. Practice on their own helps both.",
   practice: "Practice is fine-tuning from feedback: she tries on her own and each whole run is judged. A chatbot practises too: it writes its own answers, people rate them, and it leans towards the answers they liked. This is called RLHF.",
+  movedHome: "Grandma moved after her lessons. She learned the way to the old house, so her habits still pull her there. A chatbot given a new goal it was never trained for does the same: it falls back on what it learned. Catch-up lessons teach her the new way.",
   outdated: "The forest changed after her lessons, but she didn't, so in the new parts she makes confident mistakes. That's a knowledge cutoff: a chatbot learns from text up to a certain date. Ask about later news and it may not know, or may guess wrong.",
   newWorld: "She has never seen this forest, but she still walks with confidence. A language model asked about something far from its training data also answers confidently, and is often wrong.",
   catchUp: "Catch-up lessons in the changed forest bring her up to date without starting over. Most of what she knew still works, so a few lessons already help a lot. Chatbots are kept up to date the same way: more training on newer text, not starting again.",

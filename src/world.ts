@@ -43,7 +43,25 @@ export interface Forest {
 export const homeIndex = (size: number): number => 3 * size + (size - 4);
 
 /** A forest from known tiles (a save, a link or a file), without running the generator. */
-export const forestFromTiles = (code: string, size: number, tiles: Tile[]): Forest => ({ size, tiles, home: homeIndex(size), code });
+/**
+ * A forest from saved or linked tiles. Home is wherever the house tile is (the player may
+ * have moved it); without one it goes to the generator's spot. Extra house tiles become path.
+ */
+export function forestFromTiles(code: string, size: number, tiles: Tile[]): Forest {
+  let home = tiles.indexOf(HOME);
+  if (home < 0) home = homeIndex(size);
+  tiles.forEach((t, i) => { if (t === HOME && i !== home) tiles[i] = PATH; });
+  tiles[home] = HOME;
+  return { size, tiles, home, code };
+}
+
+/** Move grandma's house to tile `i`; the old spot becomes path. */
+export function moveHome(f: Forest, i: number) {
+  if (i === f.home) return;
+  f.tiles[f.home] = PATH;
+  f.tiles[i] = HOME;
+  f.home = i;
+}
 export const xyOf = (f: Forest, i: number): [number, number] => [i % f.size, Math.floor(i / f.size)];
 
 /** Tiles outside the map behave like trees. */

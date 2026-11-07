@@ -4,7 +4,7 @@ import { packTiles, unpackTiles } from '../src/storage';
 import { costToHome, teacherMoves, walkLesson } from '../src/teachers';
 import { mulberry32 } from '../src/rng';
 import {
-  HOME, PATH, SWAMP, SWAMP_COST, TREE, WOLF, cheapestToHome, energyToHome, forestFromTiles, homeIndex, stepCost, loopCount, walkableTiles, homeSector, neighbor, pathTiles, step, tileAt, unreachableTiles, viewAt, walkingDistances,
+  HOME, PATH, SWAMP, SWAMP_COST, TREE, WOLF, cheapestToHome, energyToHome, forestFromTiles, homeIndex, moveHome, stepCost, loopCount, walkableTiles, homeSector, neighbor, pathTiles, step, tileAt, unreachableTiles, viewAt, walkingDistances,
 } from '../src/world';
 
 describe('forest generator', () => {
@@ -140,6 +140,30 @@ describe('forest links', () => {
     expect(f.tiles).toContain(SWAMP);
     expect(unpackTiles(packTiles(f.tiles), f.tiles.length)).toEqual(f.tiles);
     expect(unpackTiles('!!', 4)).toBeNull();
+  });
+
+  it("keep grandma's house where the player moved it", () => {
+    const f = generateForest('LINK');
+    const spot = pathTiles(f).find((i) => i !== f.home)!;
+    const old = f.home;
+    moveHome(f, spot);
+    expect(f.home).toBe(spot);
+    expect(f.tiles[old]).toBe(PATH);
+    expect(f.tiles.filter((t) => t === HOME)).toHaveLength(1);
+    const g = forestFromTiles(f.code, f.size, unpackTiles(packTiles(f.tiles), f.tiles.length)!);
+    expect(g.home).toBe(spot);
+    expect(energyToHome(g)[old]).toBeGreaterThan(0);
+  });
+
+  it('read tiles with no house or two houses as one house', () => {
+    const f = generateForest('LINK');
+    const none = f.tiles.map((t) => (t === HOME ? PATH : t));
+    expect(forestFromTiles(f.code, f.size, none).home).toBe(homeIndex(f.size));
+    const two = f.tiles.slice();
+    two[pathTiles(f)[0]] = HOME;
+    const g = forestFromTiles(f.code, f.size, two);
+    expect(g.tiles.filter((t) => t === HOME)).toHaveLength(1);
+    expect(g.tiles[g.home]).toBe(HOME);
   });
 });
 
