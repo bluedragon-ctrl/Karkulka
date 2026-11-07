@@ -144,7 +144,15 @@ const WATCH_TEST_EVERY = 5;
 const MAX_MARKED = 60;
 const MAX_CHANGE_POINTS = 8;
 
-interface Job { kind: 'lessons' | 'practice' | 'watch' | 'watchRuns'; done: number; total: number; cancel: () => void }
+interface Job {
+  kind: 'lessons' | 'practice' | 'watch' | 'watchRuns';
+  done: number;
+  total: number;
+  cancel: () => void;
+  /** Watched ones only: pause or go on. */
+  pause?: (on: boolean) => void;
+  paused?: boolean;
+}
 
 /** Lessons or practice runs played one at a time on the main thread (see `App.play`). */
 interface RowPlayer<T> {
@@ -179,6 +187,8 @@ export class App {
   stats!: TrainStats;
   tab: TabId = 'forest';
   job: Job | null = null;
+  /** The running job's buttons, kept across redraws (see `jobButtons`). */
+  private jobRow: { job: Job; el: HTMLElement; pause: HTMLButtonElement | null; speeds: HTMLButtonElement[] } | null = null;
   walker: Walker | null = null;
   private thoughts: Thoughts | null = null;
   private thoughtSeen = false;
@@ -522,19 +532,25 @@ export class App {
     let timer = 0;
     let item: T | null = null;
     let sinceCheck = 0;
+    // What runs next; Pause clears the timer and Go on starts it again.
+    let next: () => void = () => {};
     const stepMs = () => this.stepMs();
+    const later = (fn: () => void, ms: number) => {
+      next = fn;
+      if (!this.job?.paused) timer = window.setTimeout(fn, ms);
+    };
     const show = () => { this.renderBoard(); this.renderStripNow(); };
     const begin = () => {
       item = p.begin();
       if (item === null) { stop(); return; }
       show();
-      timer = window.setTimeout(tick, stepMs());
+      later(tick, stepMs());
     };
     const tick = () => {
       if (!this.job || item === null) return;
       if (!p.advance(item)) {
         show();
-        timer = window.setTimeout(tick, stepMs());
+        later(tick, stepMs());
         return;
       }
       p.learn(item);
@@ -547,7 +563,7 @@ export class App {
       p.clear();
       show();
       this.renderPanel();
-      timer = window.setTimeout(begin, stepMs() * 2);
+      later(begin, stepMs() * 2);
     };
     // A lesson or run cut off half-way is not learned; finished ones are kept.
     const stop = () => {
@@ -560,7 +576,14 @@ export class App {
       this.saveSoon();
       this.render();
     };
-    this.job = { kind: p.kind, done: 0, total: p.total, cancel: stop };
+    const pause = (on: boolean) => {
+      if (!this.job || this.job.paused === on) return;
+      this.job.paused = on;
+      window.clearTimeout(timer);
+      if (!on) timer = window.setTimeout(next, stepMs());
+      this.renderPanel();
+    };
+    this.job = { kind: p.kind, done: 0, total: p.total, cancel: stop, pause, paused: false };
     begin();
     this.render();
   }
@@ -1003,18 +1026,29 @@ export class App {
       hint ? h('span', { class: 'range-hint' }, h('span', {}, hint[0]), h('span', {}, hint[1])) : null);
   }
 
-  /** "Watching…" line, with speed buttons and a line about the last one when several play in a row. */
-  private watchingBox(what: string, card: CardKey, last: HTMLElement | null) {
-    const job = this.job;
-    if (!job) return null;
-    const many = job.total > 1;
-    return h('div', { class: 'watching' },
-      h('div', { class: 'row' },
-        h('span', { class: 'muted' }, this.hq(many ? `${what[0].toUpperCase()}${what.slice(1)} ${Math.min(job.done + 1, job.total)} of ${job.total}. ${this.watchText()}` : `Watching… ${this.watchText()}`, card, 'watch')),
-        many ? null : h('button', { onclick: () => this.job?.cancel() }, 'Stop')),
-      many ? h('div', { class: 'group speed', role: 'radiogroup', 'aria-label': 'Speed' }, h('span', { class: 'muted' }, 'Speed:'), ...WATCH_SPEEDS.map((w) =>
-        h('button', { role: 'radio', 'aria-checked': String(this.watchSpeed === w.id), class: this.watchSpeed === w.id ? 'active' : '', onclick: () => { this.watchSpeed = w.id; this.renderPanel(); } }, w.name))) : null,
-      many ? last : null);
+  /**
+   * Pause, Stop and the speed switch, made once per job and reused on every redraw: the panel
+   * is redrawn many times a second while she trains, and a button replaced between press and
+   * release would lose the click.
+   */
+  private jobButtons(job: Job): HTMLElement {
+    if (this.jobRow?.job !== job) {
+      const pause = job.pause ? h('button', { class: 'primary', onclick: () => job.pause?.(!job.paused) }, 'Pause') as HTMLButtonElement : null;
+      const speeds = this.watching ? WATCH_SPEEDS.map((w) => h('button', { role: 'radio', onclick: () => { this.watchSpeed = w.id; this.renderPanel(); } }, w.name) as HTMLButtonElement) : [];
+      const el = h('div', { class: 'row' },
+        pause,
+        h('button', { onclick: () => job.cancel(), title: 'Stop here; she keeps what she has learned so far' }, 'Stop'),
+        speeds.length ? h('div', { class: 'speed', role: 'radiogroup', 'aria-label': 'Speed' }, h('span', { class: 'muted' }, 'Speed:'), ...speeds) : null);
+      this.jobRow = { job, el, pause, speeds };
+    }
+    const { el, pause, speeds } = this.jobRow;
+    if (pause) pause.textContent = job.paused ? 'Go on' : 'Pause';
+    speeds.forEach((b, i) => {
+      const on = WATCH_SPEEDS[i].id === this.watchSpeed;
+      b.classList.toggle('active', on);
+      b.setAttribute('aria-checked', String(on));
+    });
+    return el;
   }
 
   private watchText() {
@@ -1023,15 +1057,39 @@ export class App {
       : 'The arrows are her guess; the coloured one is the teacher\'s move.';
   }
 
-  /** The three ways to watch, as buttons: one slowly, in a row, in a row fast. */
-  private watchButtons(one: string, start: (total: number, speed: WatchSpeed) => void, total: number, what: string, card: CardKey) {
-    const busy = this.busy;
-    const title = `${what} after ${what}, ${total} in all; stop any time`;
-    return h('div', { class: 'row' },
-      h('button', { onclick: () => start(1, 'slow'), disabled: busy }, one),
-      h('button', { onclick: () => start(total, 'quick'), disabled: busy, title }, `Watch ${what}s in a row`),
-      h('button', { onclick: () => start(total, 'fast'), disabled: busy, title }, 'In a row, fast'),
-      this.q(card));
+  /**
+   * Lessons and Practice share these controls. Idle: Watch one or in a row, and the big
+   * button that runs them all in the worker. While something runs, the same spot holds
+   * Pause and Stop (and the speed when watching), then a progress bar on its own line,
+   * so the way to stop is right where it was started.
+   */
+  private runControls(o: {
+    what: 'lesson' | 'run'; total: number; watch: (total: number, speed: WatchSpeed) => void; watchCard: CardKey;
+    allLabel: string; all: () => void; explainCard: CardKey; last: string | Node;
+  }) {
+    const job = this.job;
+    const title = `${o.what[0].toUpperCase()}${o.what.slice(1)} after ${o.what}, ${o.total} in all; pause or stop any time`;
+    if (!job) {
+      return h('div', { class: 'run-controls' },
+        h('div', { class: 'row' },
+          h('span', { class: 'muted' }, 'Watch:'),
+          h('button', { onclick: () => o.watch(1, 'slow'), title: `One ${o.what}, slowly` }, `One ${o.what}`),
+          h('button', { onclick: () => o.watch(o.total, 'quick'), title }, 'In a row'),
+          this.q(o.watchCard)),
+        h('div', { class: 'row' }, h('button', { class: 'primary', onclick: o.all }, o.allLabel)));
+    }
+    const watching = this.watching;
+    const many = job.total > 1;
+    const buttons = this.jobButtons(job);
+    const word = job.kind === 'practice' || job.kind === 'watchRuns' ? 'run' : 'lesson';
+    const label = watching ? `${word[0].toUpperCase()}${word.slice(1)} ${Math.min(job.done + 1, job.total)} of ${job.total}` : `${job.done} of ${job.total} ${word}s`;
+    return h('div', { class: 'run-controls running' },
+      buttons,
+      many ? h('div', { class: 'progress' },
+        h('div', { class: 'bar' }, h('div', { class: 'fill', style: `width:${(100 * job.done) / job.total}%` })),
+        h('span', {}, label)) : null,
+      watching ? h('p', { class: 'muted' }, this.hq(`${job.paused ? 'Paused. ' : ''}${this.watchText()}`, o.explainCard, 'watch')) : null,
+      watching && many && o.last ? h('p', {}, o.last) : null);
   }
 
   private guessLine() {
@@ -1047,15 +1105,6 @@ export class App {
     const who = r.judge === 'grandma' ? 'Grandma' : `The ${JUDGE_INFO[r.judge].name.toLowerCase()}`;
     const pts = `${r.score >= 0 ? '+' : '−'}${Math.abs(r.score).toFixed(2)}`;
     return this.hq(`In the last run ${what}. ${who} gave it ${pts} points.`, 'runScore', 'scored');
-  }
-
-  private progress() {
-    if (!this.job || (this.watching && this.job.total === 1)) return null;
-    const { done, total } = this.job;
-    return h('div', { class: 'progress' },
-      h('div', { class: 'bar' }, h('div', { class: 'fill', style: `width:${(100 * done) / total}%` })),
-      h('span', {}, `${done} / ${total}`),
-      h('button', { onclick: () => this.job?.cancel() }, 'Stop'));
   }
 
   private forestPanel(body: HTMLElement) {
@@ -1125,11 +1174,10 @@ export class App {
           icon, h('span', {}, h('strong', {}, t.name), h('br'), h('small', {}, t.text)));
       })),
       this.slider('Number of lessons', this.settings.lessons, 10, 2000, 10, (v) => String(v), (v) => { this.settings.lessons = v; this.saveSoon(); }, undefined, 'moreData'),
-      this.watchButtons('Watch one lesson', (n, sp) => this.watchLessons(n, sp), this.settings.lessons, 'lesson', 'watchMany'),
-      h('div', { class: 'row' },
-        h('button', { class: 'primary', onclick: () => this.startLessons(), disabled: busy }, `Fast-forward ${this.settings.lessons} lessons`)),
-      this.job?.kind === 'watch' ? this.watchingBox('lesson', 'guess', this.lastGuess ? h('p', {}, this.guessLine()) : null) : null,
-      this.progress(),
+      this.runControls({
+        what: 'lesson', total: this.settings.lessons, watch: (n, sp) => this.watchLessons(n, sp), watchCard: 'watchMany',
+        allLabel: `Fast-forward ${this.settings.lessons} lessons`, all: () => this.startLessons(), explainCard: 'guess', last: this.guessLine(),
+      }),
       this.lastGuess && !(this.job?.kind === 'watch' && this.job.total > 1) ? h('p', {}, this.guessLine()) : null,
       this.watchedDen && !busy ? h('p', { class: 'warn' }, this.hq('That lesson came from the wolf in disguise: it ended at a wolf den, and she learned from it all the same.', 'wolfTeacher', 'watched')) : null,
       h('p', {}, st.lessons ? `She has had ${st.lessons} lesson${st.lessons === 1 ? '' : 's'} (mother ${st.teacherCounts.mother}, father ${st.teacherCounts.father}${st.teacherCounts.wolf ? `, wolf ${st.teacherCounts.wolf}` : ''}).` : 'No lessons yet.'),
@@ -1247,10 +1295,10 @@ export class App {
       h('p', { class: 'muted' }, this.hq(`How ${this.settings.judge === 'grandma' ? 'Grandma' : `the ${JUDGE_INFO[this.settings.judge].name.toLowerCase()}`} scores a run:`, JUDGE_INFO[this.settings.judge].card)),
       h('ul', { class: 'score-list' }, ...JUDGE_INFO[this.settings.judge].rules().map((parts) => h('li', {}, ...parts))),
       this.slider('Number of practice runs', this.settings.practice, 50, 3000, 50, (v) => String(v), (v) => { this.settings.practice = v; this.saveSoon(); }),
-      this.watchButtons('Watch one run', (n, sp) => this.watchRuns(n, sp), this.settings.practice, 'run', 'runScore'),
-      h('div', { class: 'row' }, h('button', { class: 'primary', onclick: () => this.startPractice(), disabled: this.busy }, `Practise ${this.settings.practice} runs`)),
-      this.job?.kind === 'watchRuns' ? this.watchingBox('run', 'sampling', this.lastRun ? h('p', {}, this.runLine()) : null) : null,
-      this.progress(),
+      this.runControls({
+        what: 'run', total: this.settings.practice, watch: (n, sp) => this.watchRuns(n, sp), watchCard: 'runScore',
+        allLabel: `Practise ${this.settings.practice} runs`, all: () => this.startPractice(), explainCard: 'sampling', last: this.runLine(),
+      }),
       this.lastRun && !(this.job?.kind === 'watchRuns' && this.job.total > 1) ? h('p', {}, this.runLine()) : null,
       h('p', {}, h('span', { class: 'swatch-box' }), this.hq(` She practises from up to ${st.radius} steps from home (outlined); the circle grows as she succeeds.`, 'curriculum')),
       st.practiceRuns ? h('p', {}, `${st.practiceRuns} practice runs so far.`) : null,
