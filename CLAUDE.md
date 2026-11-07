@@ -31,6 +31,7 @@ Game logic has no DOM dependencies and is tested directly; the UI lives in `src/
 | `src/train.ts` | Lessons (imitation), practice (policy gradient), evaluation; fixed internals in `FIXED` |
 | `src/thoughts.ts` | Her thought bubbles on a trip alone ("Scary wolf to the south! Let's go south."), made up after each move |
 | `src/explain.ts` | "Why did she do that?" notes, LM corner card texts (`CARDS`) and their "In a big model" parts (`BIG`) |
+| `src/measures.ts` | Numbers for Inside the model: training compute, token counts in lessons, look-alike tokens that need memory, trip uncertainty |
 | `src/storage.ts` | Browser save, forest links, model export and import |
 | `src/worker.ts`, `src/workerTypes.ts` | Training in a Web Worker |
 | `src/ui/` | App shell and tabs (`app.ts`), board, charts, memory strip, technical tab, SVG symbols, "?" buttons and the LM corner popup (`hint.ts`) |

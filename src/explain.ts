@@ -11,12 +11,17 @@ export type CardKey =
   | 'tripReport' | 'judgeGrandma' | 'judgeFather' | 'judgeMother' | 'judgeCrow' | 'rewardHacking' | 'teacherVsJudge'
   | 'wolfTeacher' | 'poisonedData' | 'judgeWolf' | 'fixBadData'
   | 'newWorld' | 'catchUp' | 'forestCode' | 'editForest' | 'recipe'
+  | 'compute' | 'tokenFreq' | 'ambiguous' | 'uncertainty'
   | 'moreData' | 'guess' | 'watchMany' | 'runScore' | 'testTrips' | 'sampling' | 'curriculum' | 'oneHot' | 'weights' | 'loss' | 'hyper' | 'modelFile';
 
 export const CARDS: Record<CardKey, string> = {
   forestCode: "The same forest code always makes the same forest, so a whole class can share one forest and compare how their Red Riding Hoods do.",
   editForest: "You decide what her world looks like, and so what she can learn from it. The people who build a language model decide what text it learns from.",
   recipe: "Lessons first, then practice. Lessons show her the way; practice teaches her to manage on her own, even after a wrong step.",
+  compute: "Every guess she learns from costs a few sums for each of her weights. Add them all up and you get the cost of her training.",
+  tokenFreq: "Some views came up hundreds of times in her lessons, some never. She is good at the common ones and only guesses at the rare ones.",
+  ambiguous: "Some views look the same in different places, but the right move is different. Only remembering where she came from can tell them apart.",
+  uncertainty: "At some steps she is sure, at others she is torn. Mostly she takes her top choice, but now and then chance picks another, so every walk is a little different.",
   forest: "The forest is her whole world, like the text a language model works with. She only ever sees a small piece of it at a time.",
   view: "What she sees around her (a 3 × 3 window) is one input token, like one word a language model reads.",
   memory: "Her memory strip is like a language model's context window: everything she can take into account right now.",
@@ -73,6 +78,10 @@ export const CARDS: Record<CardKey, string> = {
  */
 export const BIG: Partial<Record<CardKey, string>> = {
   forest: "A chatbot's world is text: books, websites and more, far more than anyone could read in a lifetime. It only knows what was in that text.",
+  compute: "Training a big chatbot takes billions of times more sums than hers: thousands of special chips running for months.",
+  tokenFreq: "In real text a few words like \"the\" are everywhere and most words are rare. Chatbots know common things well and rare things less.",
+  ambiguous: "Words do this too: \"play\" means something else in \"play football\" and \"a school play\". Only the words around it tell which.",
+  uncertainty: "The chance of a chatbot writing exactly one particular long answer is tiny too, because every word is a small gamble.",
   forestCode: "Chatbot builders note their starting setup too, so they can run a training again and compare fairly.",
   editForest: "Builders clean their text before training: they take out junk, copies and harmful pages, and add more of what they want the chatbot to be good at.",
   recipe: "Chatbots are made the same way: first lots of reading, then example answers, then practice with people rating the answers.",

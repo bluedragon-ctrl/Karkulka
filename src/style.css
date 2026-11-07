@@ -166,6 +166,13 @@ input[type="text"] { font: inherit; font-size: 0.92rem; padding: 0.35em 0.5em; b
 .vocab { display: flex; flex-wrap: wrap; gap: 0.35rem; }
 .vocab-item { display: inline-flex; flex-direction: column; align-items: center; font-size: 0.7rem; gap: 1px; padding: 2px; border: 1px solid #eee6d2; border-radius: 4px; min-width: 34px; }
 .vocab-item small { color: #8a4b00; font-weight: 700; }
+.vocab-item .seen { color: var(--muted); font-variant-numeric: tabular-nums; }
+.vocab-item.unseen { border: 1px dashed #b9a77a; opacity: 0.6; }
+.vocab-item .amb-moves { font-size: 0.75rem; letter-spacing: 0.05em; }
+.step-cells { display: flex; flex-wrap: wrap; gap: 2px; margin-top: 0.4em; max-width: 760px; }
+.step-cell { width: 10px; height: 10px; border: 1.5px solid #e07b00; border-radius: 2px; box-sizing: border-box; }
+.step-cell.step-top { background: #e07b00; }
+.charts-2.one { max-width: 380px; }
 .vec-block { display: flex; flex-direction: column; gap: 2px; margin: 0.5em 0; }
 .vec-row { display: flex; gap: 0.6em; align-items: center; }
 .vec-label { width: 9em; font-size: 0.8rem; color: var(--muted); flex-shrink: 0; }

@@ -67,6 +67,10 @@ Every feature should map to a language-model idea. This table is the map:
 | The weights heatmap | The model's weights: everything it knows |
 | Fixed settings (learning rate, network size, rewards) | Hyperparameters, chosen by the builders |
 | Exported model file | Shared model weights (open models) |
+| Training compute next to Llama 3.1 405B | Training cost grows with weights × tokens; big models use about 10¹⁸ times more |
+| How often each input token came up in lessons | Token frequency: a few tokens are everywhere, most are rare |
+| Look-alike tokens where the right move depends on the place | Words whose meaning depends on context |
+| Uncertainty and top-move squares for her latest trip | Entropy of next-token predictions; sampling sometimes picks a less likely token |
 | "In a big model" part of the LM corner cards | The same ideas at real scale: training data, tokenizers, attention, pretraining, supervised fine-tuning, RLHF, transformers |
 
 ## Forest and world rules
@@ -286,7 +290,7 @@ Where the "?" buttons are, and what makes them pulse:
 | 4. Practice | "Same … test trips: after lessons … after practice …" | Lessons first, then practice: the usual recipe | |
 | 4. Practice | "What … taught her" (after practice) | Reward hacking, teacher versus judge, bad judge (wolf), fixing bad data, or the general judge card | Practice ends |
 | 5. Inside the model | Title | The real numbers | Entering the tab |
-| 5. Inside the model | Vocabulary, Current input, Network, Loss curves, Fixed settings, Export and import | Vocabulary, one-hot inputs, weights, loss, hyperparameters, shared model files | |
+| 5. Inside the model | Vocabulary, Training data, Look-alike tokens, Current input, Her latest trip, Network, Loss curves, Training compute, Fixed settings, Export and import | Vocabulary, token frequency, context-dependent tokens, one-hot inputs, uncertainty and sampling, weights, loss, training cost, hyperparameters, shared model files | |
 
 After a trip, the "Why did she do that?" note sits right under the result line. When she walks into a den after wolf lessons or wolf practice, it says the wolf taught her.
 
@@ -297,11 +301,15 @@ After a trip, the "Why did she do that?" note sits right under the result line. 
 
 The last tab shows the real numbers behind the friendly visuals, for technical users. It is read-only except for export and import.
 
-- **Vocabulary:** every input and output token with its ID.
+- **Vocabulary:** every input and output token with its ID, how often it came up in lessons (dashed when seen fewer than 5 times), "×n" for look-alike views and "≠" where the right move depends on the place.
+- **Training data:** how many lesson predictions were made from each input token, as a rank-frequency bar chart (most common first), with how much the most common tenth of the tokens covers and how many were never or rarely seen. Counted from the heatmap: every lesson position but the last (home or a den) is one prediction.
+- **Look-alike tokens:** views that occur in several places where no single move is the teacher's best at every place, for the careful mother and the hurried father (the wolf walks home like the father), the share of her lesson predictions made on them, and each such token with the teacher's best move at each of its places. Only memory, or the smell of cake, can tell these apart.
 - **Current input:** the context window at the selected step, encoded as numbers.
 - **Network:** its structure, with weights shown as a heatmap.
 - **Loss curves:** per-step loss for lessons and average score for practice, next to the friendly outcome chart.
 - **Probabilities:** the raw values before and after boldness (temperature) is applied.
+- **Her latest trip:** uncertainty (entropy in bits, 0 to 2) at each step as a line chart, one square per step (filled when she took her most likely move, hollow when chance picked another), and the chance of exactly that walk at the boldness used (the product of the chosen moves' probabilities).
+- **Training compute:** weights, training predictions (lessons plus practice) and training operations by the usual rule of thumb (6 × weights × predictions), next to Llama 3.1 405B's published numbers (405 billion weights, 15.6 trillion tokens, 3.8 × 10²⁵ operations). Step counts are kept in the stats as `lessonSteps` and `practiceSteps`; older saves without them estimate lesson steps from the heatmap, so no save version change was needed.
 - **Fixed settings:** learning rate, rewards, curriculum and network size, shown read-only.
 - **Export and import:** the trained model and forest as a file.
 

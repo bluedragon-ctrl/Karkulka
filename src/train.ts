@@ -58,6 +58,9 @@ export interface TrainStats {
   practiceEval: EvalPoint[];
   /** Practice runs per judge (missing in older saves). */
   judgeRuns?: Partial<Record<Judge, number>>;
+  /** Next-move predictions learned from in lessons and in practice (missing in older saves). */
+  lessonSteps?: number;
+  practiceSteps?: number;
   radius: number;
   recent: number[];
   baseline: number;
@@ -73,6 +76,8 @@ export const newStats = (f: Forest): TrainStats => ({
   practiceScore: [],
   practiceEval: [],
   judgeRuns: {},
+  lessonSteps: 0,
+  practiceSteps: 0,
   radius: FIXED.curriculumStart,
   recent: [],
   baseline: 0,
@@ -137,6 +142,7 @@ export function learnFromLesson(model: Model, opt: Adam, walk: LessonWalk, stats
   for (const pos of walk.positions) stats.coverage[pos]++;
   stats.teacherCounts[walk.teacher] = (stats.teacherCounts[walk.teacher] ?? 0) + 1;
   stats.lessons++;
+  stats.lessonSteps = (stats.lessonSteps ?? 0) + steps;
   if (steps) adamStep(model, opt, g, FIXED.lessonLearningRate, 1 / steps);
   return steps ? loss / steps : 0;
 }
@@ -354,6 +360,7 @@ export function learnFromRun(model: Model, f: Forest, judge: Judge, w: Walker, s
   }
   if (steps) sgdStep(model, g, FIXED.practiceLearningRate, 1 / steps);
   stats.practiceRuns++;
+  stats.practiceSteps = (stats.practiceSteps ?? 0) + steps;
   stats.judgeRuns = stats.judgeRuns ?? {};
   stats.judgeRuns[judge] = (stats.judgeRuns[judge] ?? 0) + 1;
 
