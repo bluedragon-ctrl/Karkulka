@@ -6,7 +6,7 @@ describe('LM corner cards', () => {
     for (const [key, text] of Object.entries(CARDS)) {
       expect(text.trim().length, key).toBeGreaterThan(20);
       // They open as small popups next to a "?" button, so they must stay short.
-      expect(text.length, key).toBeLessThan(500);
+      expect(text.length, key).toBeLessThan(210);
     }
   });
 
@@ -15,7 +15,8 @@ describe('LM corner cards', () => {
     for (const [key, text] of Object.entries(BIG)) {
       expect(CARDS[key as keyof typeof CARDS], key).toBeDefined();
       expect(text!.trim().length, key).toBeGreaterThan(20);
-      expect(text!.length, key).toBeLessThan(500);
+      // A short real-world comparison under the card, not a lecture.
+      expect(text!.length, key).toBeLessThan(170);
     }
   });
 });
