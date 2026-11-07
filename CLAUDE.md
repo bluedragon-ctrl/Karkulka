@@ -30,6 +30,7 @@ Game logic has no DOM dependencies and is tested directly; the UI lives in `src/
 | `src/sim.ts` | A trip alone: the `Walker` samples one move at a time |
 | `src/train.ts` | Lessons (imitation), practice (policy gradient), evaluation; fixed internals in `FIXED` |
 | `src/explain.ts` | "Why did she do that?" notes and LM corner card texts |
+| `src/insights.ts` | "How big models do it" dialog texts: each tab's ideas mapped to real large language models |
 | `src/storage.ts` | Browser save, forest links, model export and import |
 | `src/worker.ts`, `src/workerTypes.ts` | Training in a Web Worker |
 | `src/ui/` | App shell and tabs (`app.ts`), board, charts, memory strip, technical tab, SVG symbols |
