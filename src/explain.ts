@@ -1,4 +1,4 @@
-/** The "Why did she do that?" note after a trip, and the LM corner cards. */
+/** The "Why did she do that?" note after a trip, and the LM corner cards with their "In a big model" parts. */
 import type { Walker } from './sim';
 import { TrainStats, headsHome } from './train';
 import { buildVocabulary, viewKey } from './tokens';
@@ -36,7 +36,7 @@ export const CARDS: Record<CardKey, string> = {
   tech: "This tab shows the real numbers behind the pictures: tokens, inputs, weights and probabilities.",
   vocabulary: "Her vocabulary is every view that can happen in this forest plus the four moves, just as a model has a fixed list of tokens.",
   tree: "Ouch! She tried to walk into a tree. The model gave that move a little probability, and this time chance picked it. The step used energy and got her nowhere, like a language model wasting words on a wrong guess. More lessons or a careful boldness make it rarer.",
-  thoughts: "Her thoughts are made up after each move is picked, so she can say \"Scary wolf to the south! Let's go south.\" Big language models also talk through their steps (\"First I'll check…\"). Theirs come before the answer and join their context, so they really help. Still, what a model says about its reasons is just more words it writes, not a look inside: it can sound sensible and still not be how the answer was really chosen.",
+  thoughts: "Her thoughts are made up after each move is picked, so she can say \"Scary wolf to the south! Let's go south.\" They sound like reasons, but they are not what made her choose: the move came first.",
   swamp: "Not every step is equally cheap: a swamp step uses 3 energy. Her energy is like a model's output budget, and the swamp eats it fast. The hurried father wades through; the careful mother walks around.",
   judge: "The judge knows the whole forest; she never sees the map, only the scores. Whoever judges decides what she learns, like the people who rate a model's answers.",
   tripReport: "Getting home is not all that counts: how tired, wet, scared and bumped she got matters too. A language model's answers are also rated on more than being right, such as length and safety. Each bump into a tree is a wrong guess that used up a step and got her nowhere, like a model wasting words on a mistake. The hurried father minds the tiredness; the careful mother minds the wet feet and the wolves.",
@@ -62,6 +62,46 @@ export const CARDS: Record<CardKey, string> = {
   hyper: "These numbers are chosen by the builders, not learned in lessons. For language models they are called hyperparameters.",
   modelFile: "The file holds her weights: the trained model itself. Open language models are shared the same way, as a file of weights anyone can load.",
   fixBadData: "Grandma's practice can undo some of what the wolf taught. Fine-tuning can fix bad habits, from bad lessons or a bad judge, but the more of them there are, the longer it takes. Clean lessons are better than fixing later.",
+};
+
+/**
+ * The "In a big model" part of an LM corner card: the same idea at the scale of a real large language model.
+ * One level deeper than the card itself, but still in plain words. Cards without one show only their analogy.
+ */
+export const BIG: Partial<Record<CardKey, string>> = {
+  forest: "A big model's world is its training data: a huge collection of text from books, websites, articles and code, often trillions of tokens. It only ever learns from what is in it. Researchers fix the random seed and the data version so an experiment can be repeated exactly, as a forest code always gives the same forest.",
+  view: "Real models cut text into tokens: whole words, pieces of words and punctuation. They read them one at a time, never the whole book at once.",
+  memory: "A chatbot's context window holds your message plus everything it has written so far. She reads her memory in fixed slots; big models use attention instead: at every layer each token looks back at all the earlier ones and picks out the ones that matter for the next word.",
+  memorySize: "Real context windows hold thousands to millions of tokens, but the limit is still fixed when the model is built.",
+  hint: "Extra information in the input, like a good prompt, a system message or documents fetched from a search (retrieval). Better input gives better answers without changing the model.",
+  lessons: "Big models are pretrained on trillions of tokens: at every position of every document they predict the next token. Afterwards they get lessons again, from smaller sets of good example answers written by people (supervised fine-tuning), so they learn to follow instructions and hold a conversation.",
+  teacher: "Choosing and cleaning the training data (data curation) is one of the most important parts of building a model: the data carries its writers' habits and values.",
+  coverage: "Topics and languages that are rare in the training data are learned poorly, and a model is weakest exactly there.",
+  arrows: "A real model gives a probability to every one of the tens of thousands of tokens in its vocabulary, at every step, with the same softmax she uses for her four moves.",
+  boldness: "Chatbots have the same setting, called temperature. Low temperature gives predictable, sometimes repetitive text; high temperature gives varied text with more mistakes.",
+  energy: "When a model's token budget runs out, its answer simply stops, finished or not.",
+  hallucination: "On questions unlike its training data, a model still writes fluent, confident text that can be wrong. Confidence is not knowledge.",
+  repetition: "Words look alike too: \"bank\" can be a river bank or a money bank, and only the context tells them apart. Models can also get stuck repeating the same phrase, more often with a short context and a low temperature.",
+  exposure: "This is called teacher forcing. In pretraining a model always reads real text, never its own mistakes. That makes training fast, but it never learns to recover from its own errors (exposure bias).",
+  practice: "The usual recipe for a chatbot: pretraining on lots of text, then fine-tuning on good example answers, then reinforcement learning from feedback (RLHF). The model writes its own answers, nobody shows it the right one, and words in well-rated answers become more likely. Labs use refined versions of this, such as PPO or GRPO.",
+  outdated: "Every big model is trained on data up to some date. Afterwards the world keeps changing, but the model does not, unless it is trained again or given fresh documents to read.",
+  catchUp: "Labs bring a model up to date by training it further on newer text instead of starting from scratch, which would cost far more.",
+  home: "A big model predicts one token, adds it to the text, then reads everything again to predict the next one. This loop is called autoregressive generation. Like her without a map, it never sees the finished answer before it starts, and a token once written can't be taken back. Reasoning models partly make up for this by thinking out loud first.",
+  tech: "Her brain is one layer of 48 units and a few thousand weights, trained in seconds in your browser. A big model is a transformer with dozens of layers and billions to trillions of weights, trained for weeks or months on thousands of special chips. The core is the same: numbers in, weighted sums, a non-linear step, numbers out.",
+  vocabulary: "A real tokenizer's vocabulary is a fixed list of typically 30,000 to 250,000 tokens, decided before training. Everything the model reads or writes is built from these.",
+  thoughts: "Big models narrate their work too (\"Let me check the file first…\"), and reasoning models show their thinking. Theirs is written before the answer and becomes part of their context, so it really helps. But a model's account of its reasons is still generated text, not a look inside: researchers find it often leaves out what really drove the answer.",
+  judge: "In RLHF the score comes from a reward model trained on people's ratings of answers; for maths or code it can come from an automatic check: is the answer right, do the tests pass? The guidelines given to raters, and the rules a lab writes down, shape the finished model's behaviour.",
+  judgeMother: "Blaming each step for what comes after it is called credit assignment. Judging every step of a model's reasoning, not just its final answer, is called process supervision.",
+  rewardHacking: "Real examples: a model that flatters the user instead of telling the truth (sycophancy), or writes code that games the tests instead of working.",
+  poisonedData: "Research has shown that a small number of planted documents can teach a big model a hidden bad habit, even among billions of good ones.",
+  judgeWolf: "Fine-tuning is powerful enough to turn a well-behaved model harmful, which is why access to fine-tuning big models is guarded.",
+  moreData: "More data and bigger models give predictably better results (scaling laws), but the cost in computers and electricity grows fast.",
+  guess: "The adjusting is gradient descent: every weight is nudged a little so the right token gets more probability next time. She uses the same optimizer as many real models, called Adam.",
+  loss: "For language models this number is called the cross-entropy loss. Labs watch it fall over weeks of training.",
+  sampling: "Real systems also cut off very unlikely tokens before picking one (top-k or top-p sampling), so a rare wild word can't sneak in.",
+  oneHot: "Big models turn each token into a learned embedding: a list of a few thousand numbers, adjusted in training so that similar words get similar numbers.",
+  hyper: "Engineers choose them before training, often after many smaller trial runs.",
+  modelFile: "\"Open-weight\" models publish this file so anyone can run them; for others the weights stay secret and you only reach the model through an app or API.",
 };
 
 /** How the trip went for her: tired (energy used), wet (swamp steps), scared (wolf dens seen) and bumped (walked into a tree). */

@@ -124,7 +124,7 @@ input[type="text"] { font: inherit; font-size: 0.92rem; padding: 0.35em 0.5em; b
 @media (prefers-reduced-motion: reduce) { .hint-q.fresh { animation: none; box-shadow: 0 0 0 3px rgba(242, 193, 78, 0.6); } }
 .nowrap { white-space: nowrap; }
 .lm-pop {
-  position: fixed; z-index: 50; width: min(320px, calc(100vw - 16px));
+  position: fixed; z-index: 50; width: min(340px, calc(100vw - 16px)); max-height: calc(100vh - 16px); overflow-y: auto;
   background: #fff8e1; border: 2px solid var(--home); border-radius: 12px; padding: 0.6em 0.8em;
   box-shadow: 0 6px 22px rgba(40, 30, 0, 0.22); --arrow-x: 50%;
 }
@@ -137,6 +137,9 @@ input[type="text"] { font: inherit; font-size: 0.92rem; padding: 0.35em 0.5em; b
 .lm-pop:focus-visible { outline: 3px solid #1f78b4; }
 .lm-card-head { display: flex; justify-content: space-between; align-items: center; font-size: 0.78rem; text-transform: uppercase; letter-spacing: 0.08em; font-weight: 700; color: #8a6100; }
 .lm-pop p { margin: 0.3em 0 0; font-size: 0.95rem; font-weight: 400; color: var(--ink); text-transform: none; letter-spacing: 0; }
+.lm-big { margin-top: 0.55em; padding-top: 0.45em; border-top: 1px dashed #e0b84a; }
+.lm-big-head { display: flex; align-items: center; gap: 0.4em; font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.08em; font-weight: 700; color: #8a6100; }
+.lm-pop .lm-big p { font-size: 0.9rem; }
 
 .chart { margin: 0; }
 .legend { display: flex; gap: 0.9em; font-size: 0.82rem; color: var(--muted); flex-wrap: wrap; }
@@ -196,21 +199,3 @@ input[type="text"] { font: inherit; font-size: 0.92rem; padding: 0.35em 0.5em; b
 .change-row .pbar > span { border-right: 1px solid #8a6100; }
 .catch-up { background: #fffbea; border: 1px solid #e0b84a; border-radius: 10px; padding: 0.5em 0.7em; }
 
-/* "How big models do it" button and dialog */
-.insight-bar { display: flex; justify-content: flex-end; }
-.tech > .insight-bar { float: right; margin-left: 1rem; }
-.insight-btn { display: inline-flex; align-items: center; gap: 0.45em; font-size: 0.85rem; font-weight: 600; padding: 0.3em 0.8em 0.3em 0.5em; border-radius: 999px; background: #f1ecdd; }
-.insight-btn:hover { background: #e9e3d2; }
-.insight-dialog { max-width: min(760px, 92vw); max-height: 86vh; border: 1px solid var(--line); border-radius: 14px; padding: 1rem 1.4rem 1.2rem; background: var(--card); color: var(--ink); }
-.insight-dialog::backdrop { background: rgba(30, 30, 30, 0.45); }
-.insight-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 1rem; }
-.insight-head h2 { display: flex; align-items: center; gap: 0.5em; font-size: 1.3rem; margin: 0; }
-.insight-intro { color: var(--muted); margin: 0.5em 0 0.9em; }
-.insight-list { display: grid; grid-template-columns: minmax(10em, 1fr) 2fr; gap: 0.6em 1.1em; margin: 0; }
-.insight-list dt { font-weight: 600; }
-.insight-list dd { margin: 0; }
-.insight-list dt, .insight-list dd { padding-bottom: 0.6em; border-bottom: 1px solid #eee7d4; }
-.insight-tag { display: block; font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.08em; font-weight: 700; color: var(--accent); margin-bottom: 0.15em; }
-.insight-tag.real { color: #8a6100; }
-.insight-close { margin-top: 1rem; }
-@media (max-width: 640px) { .insight-list { grid-template-columns: 1fr; } .insight-list dt { border-bottom: none; padding-bottom: 0; } }

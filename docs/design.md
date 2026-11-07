@@ -64,7 +64,7 @@ Every feature should map to a language-model idea. This table is the map:
 | The weights heatmap | The model's weights: everything it knows |
 | Fixed settings (learning rate, network size, rewards) | Hyperparameters, chosen by the builders |
 | Exported model file | Shared model weights (open models) |
-| "How big models do it" button on every tab | The same ideas at real scale: training data, tokenizers, pretraining, supervised fine-tuning, RLHF, transformers |
+| "In a big model" part of the LM corner cards | The same ideas at real scale: training data, tokenizers, attention, pretraining, supervised fine-tuning, RLHF, transformers |
 
 ## Forest and world rules
 
@@ -231,6 +231,8 @@ All pictures are simple symbolic SVG shapes drawn for this project, with no tile
 
 **LM corner cards ("?" buttons).** Each card gives one sentence or two of analogy, for example "Her memory strip is like a language model's context window." These cards carry the teaching for non-technical users. They are not shown in the panel on their own: a small round "?" (yellow, with a dark border) sits next to the control, heading or result it explains, and clicking it opens the card as a small popup ("LM corner") right there. The popup closes with ×, Escape or a click elsewhere, and follows its "?" when the panel is redrawn (during a trip on Walk through, for example). Inside a checkbox or radio label, the "?" opens the card without ticking the box. The texts live in `CARDS` in `src/explain.ts`; the popup is `src/ui/hint.ts`.
 
+**In a big model.** Most cards also have a second part under a dashed line, marked with a small chip icon and "In a big model". It says what the same idea is in a real large language model, one level deeper than the analogy but still in plain words, for curious users and presenters: the forest as training data and a forest code as a random seed, tokens and the tokenizer's vocabulary, the context window and attention, retrieval, pretraining and supervised fine-tuning, teacher forcing and exposure bias, data curation and coverage, data poisoning, scaling laws, gradient descent and cross-entropy loss, temperature and top-k/top-p sampling, autoregressive generation, hallucination, repetition loops, models narrating their reasoning, the knowledge cutoff, RLHF and reward models, process supervision, reward hacking, guarded fine-tuning, embeddings, hyperparameters, open weights, and how her small network compares with a transformer. These texts live in `BIG` in `src/explain.ts`; a card without one shows only its analogy. (This replaces the earlier "How big models do it" dialog, so all the teaching sits in one place, next to the thing it explains.)
+
 When something happens that a card explains, that card's "?" pulses (a soft yellow glow, five times; a steady ring with reduced motion) until it is opened or something newer happens. Entering a tab makes the "?" by its title pulse, so new users find the buttons; the Forest tab also says "Each ? shows the language-model idea behind it."
 
 Where the "?" buttons are, and what makes them pulse:
@@ -262,7 +264,7 @@ Where the "?" buttons are, and what makes them pulse:
 | 3. Trip alone | "In a swamp" in the status line (while she stands in one) | Swamp eats the energy budget | Her first swamp step on a trip |
 | 3. Trip alone | "Ouch, a tree!" in the status line (right after she walks into a tree) | A wrong guess wastes a step | Her first bump into a tree on a trip |
 | 3. Trip alone | "Smells cake" in the status line | More useful input | |
-| 3. Trip alone | "Her thoughts" checkbox | Big models narrate their steps too, before the answer (which helps); hers come after. Either way, a stated reason is not a look inside | Her first thought in a session (unless another card just pulsed); toggling it |
+| 3. Trip alone | "Her thoughts" checkbox | Her thoughts come after the move, so they are not what made her choose. In a big model: models narrate their steps too, before the answer (which helps), but a stated reason is still not a look inside | Her first thought in a session (unless another card just pulsed); toggling it |
 | 3. Trip alone | "Why did she do that?" | The card that fits the trip: home, hallucination, temperature, repetition, energy, swamp, reward hacking, the wolf's lessons or practice | The trip ends |
 | 3. Trip alone | "How was the trip for her?" | Answers are rated on more than being right | |
 | 3. Trip alone | "Her next move" (while walking) | Next-token probabilities | Choosing a start |
@@ -280,7 +282,6 @@ Where the "?" buttons are, and what makes them pulse:
 
 After a trip, the "Why did she do that?" note sits right under the result line. When she walks into a den after wolf lessons or wolf practice, it says the wolf taught her.
 
-**How big models do it.** Every tab has a small chip-icon button, "How big models do it" (at the top of the side panel, and at the top of Inside the model). It opens a dialog that pairs each idea on that tab ("In the game") with what it is in a real large language model ("In a big model"): the forest as training data, a view as an input token and a step as an output token, the tokenizer's vocabulary, the context window, the two ways of teaching (learning from correct answers in lessons, and judging free runs in practice), teacher forcing and exposure bias, data poisoning, temperature, hallucination, RLHF and reward models, reward hacking, and how her small network compares with a transformer. The texts live in `src/insights.ts`. They go one level deeper than the LM corner cards, for curious users and presenters, but stay in plain words.
 
 **Layout.** Designed for a wide screen first: the forest large in the centre, a narrow side panel with the current tab's controls, and the memory strip at the bottom. A phone layout can come later.
 

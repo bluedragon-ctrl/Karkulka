@@ -1,6 +1,5 @@
 /** The app: five tabs that tell the story in order. */
 import { CardKey, Explanation, explainTrip, tripReport } from '../explain';
-import { INSIGHTS } from '../insights';
 import { CHANGE_SIZES, changeForest, generateForest } from '../forest';
 import { Adam, Model, createAdam, createModel, modelFromJSON, modelToJSON } from '../model';
 import { mulberry32, normalizeCode, pick, randomCode } from '../rng';
@@ -20,7 +19,7 @@ import { changeChart, outcomeChart } from './charts';
 import { add, clear, h, s } from './dom';
 import { closeHint, hintButton, placeHint } from './hint';
 import { renderStrip } from './strip';
-import { COLORS, chipIcon, crowFigure, grandmaFigure, parentFigure, tileSymbol, wolfHead } from './symbols';
+import { COLORS, crowFigure, grandmaFigure, parentFigure, tileSymbol, wolfHead } from './symbols';
 import { renderTech } from './tech';
 
 type TabId = 'forest' | 'lessons' | 'trip' | 'practice' | 'inside';
@@ -203,11 +202,6 @@ export class App {
   private panelBody = h('div', { class: 'panel-body' });
   private stripEl = h('div', { class: 'strip' });
   private techEl = h('div', { class: 'tech', hidden: true });
-  private insightDialog = h('dialog', { class: 'insight-dialog', 'aria-labelledby': 'insight-title' });
-  private insightBtn = h('button', {
-    class: 'insight-btn', title: 'How this works in real, big language models',
-    onclick: () => this.openInsight(),
-  }, chipIcon(), 'How big models do it');
   private board: Board;
 
   constructor(root: HTMLElement) {
@@ -217,11 +211,9 @@ export class App {
         this.tabsEl),
       this.banner,
       this.stage,
-      this.insightDialog,
     );
-    this.insightDialog.addEventListener('click', (e) => { if (e.target === this.insightDialog) this.insightDialog.close(); });
     this.stage.append(h('div', { class: 'main-col' }, this.boardWrap, this.stripEl), this.panel, this.techEl);
-    this.panel.append(h('div', { class: 'insight-bar' }, this.insightBtn), this.panelBody);
+    this.panel.append(this.panelBody);
     this.board = new Board(this.boardWrap);
     this.board.onTileDown = (i) => this.onTile(i, false);
     this.board.onTileDrag = (i) => this.onTile(i, true);
@@ -833,7 +825,6 @@ export class App {
     (this.boardWrap.parentElement as HTMLElement).hidden = inside;
     if (inside) this.renderTechNow();
     else {
-      if (!this.panel.contains(this.insightBtn)) this.panel.querySelector('.insight-bar')?.append(this.insightBtn);
       this.renderBoard();
       this.renderPanel();
       this.renderStripNow();
@@ -862,24 +853,6 @@ export class App {
     }
   }
 
-  /** The "How big models do it" dialog for the current tab. */
-  private openInsight() {
-    const ins = INSIGHTS[this.tab];
-    clear(this.insightDialog).append(
-      h('div', { class: 'insight-head' },
-        h('h2', { id: 'insight-title' }, chipIcon(26), ins.title),
-        h('button', { class: 'icon', 'aria-label': 'Close', onclick: () => this.insightDialog.close() }, '×')),
-      h('p', { class: 'insight-intro' }, ins.intro),
-      h('dl', { class: 'insight-list' }, ...ins.items.flatMap((it) => [
-        h('dt', {}, h('span', { class: 'insight-tag' }, 'In the game'), it.game),
-        h('dd', {}, h('span', { class: 'insight-tag real' }, 'In a big model'), it.real),
-      ])),
-      h('button', { class: 'primary insight-close', onclick: () => this.insightDialog.close() }, 'Back to the game'),
-    );
-    this.insightDialog.showModal();
-    this.insightDialog.scrollTop = 0;
-  }
-
   private renderStripNow() {
     const mem = this.model?.cfg.memory ?? MEMORY_PAIRS[this.settings.memory];
     if (this.watch) {
@@ -900,7 +873,6 @@ export class App {
       onImport: (f) => this.importModel(f),
       hint: (key) => this.q(key),
     });
-    this.techEl.prepend(h('div', { class: 'insight-bar' }, this.insightBtn));
   }
 
   private tints(pos: number): (string | null)[] | undefined {
