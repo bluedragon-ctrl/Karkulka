@@ -40,6 +40,7 @@ Every feature should map to a language-model idea. This table is the map:
 | Number of lessons | Amount of training data |
 | Coverage heatmap | What the training data covered |
 | Practice on her own, judged by outcome | Fine-tuning from feedback (RLHF-style) |
+| One score per watched run, shared by all its moves | A reward for one whole answer: noisy alone, a clear direction over many |
 | Tired, wet, scared and bumped after a trip | Answers are rated on more than being right: length, safety, wasted words |
 | Choice of judge (Grandma, father, mother, crow, wolf) | Whoever rates the answers shapes the fine-tuned model, values included |
 | The crow judge, scoring "as the crow flies" | Reward hacking: the model learns what the judge measures, not what was meant |
@@ -56,6 +57,7 @@ Every feature should map to a language-model idea. This table is the map:
 | Test trips from the same fixed starts (outcome chart) | A benchmark: the same questions every time, to measure progress |
 | Practice starting near home, moving outward | Curriculum learning: easy examples first |
 | Lesson loss (how surprised she is by the teacher's move) | Training loss, the number pretraining pushes down |
+| "She guessed 12 of 18 moves right" while watching lessons in a row | Next-token accuracy rising as training goes on |
 | One-hot numbers for each tile she sees | Turning tokens into numbers before the model reads them |
 | The weights heatmap | The model's weights: everything it knows |
 | Fixed settings (learning rate, network size, rewards) | Hyperparameters, chosen by the builders |
@@ -116,6 +118,10 @@ One small neural network learns in two phases, mirroring how real LLMs are built
 - A teacher walks her from a random starting tile. A parent always walks her home from a random starting tile along a proper path. Each walk is one lesson (one "story").
 - **Per-step loss:** at every step the model predicts the next move, compares it with what the parent did, and adjusts its weights.
 - **Number of lessons** is the user's training-amount control.
+- **Three ways to give lessons:**
+  - *Watch one lesson:* one lesson, slowly, step by step (380 ms a step).
+  - *Watch lessons in a row* (Quick, 120 ms a step) and *In a row, fast* (40 ms a step; she jumps instead of gliding): lesson after lesson up to the number of lessons, until Stop. A speed switch (Slow, Quick, Fast) changes the speed while they play. She learns from each lesson when it ends, on the main thread through the same `learnFromLesson` as the worker, and is tested every 5 lessons and when the row ends or is stopped. Stop keeps the finished lessons; a lesson cut off half-way is not learned. After each lesson the panel says how many of the teacher's moves she guessed right (her most likely move) before learning from it, so users see her guesses improve.
+  - *Fast-forward:* all lessons at once in a Web Worker, drawing faint trails.
 - **Choice of teacher**, with a one-line explanation card for each:
   - *Careful mother:* safe, dry routes that keep away from wolf dens and swamps, even if longer.
   - *Hurried father:* the fewest steps, even right past wolf dens and straight through swamps.
@@ -139,6 +145,7 @@ One small neural network learns in two phases, mirroring how real LLMs are built
 - **After practice**, the panel compares the judge's average score at the start and end of the round with her home rate on the test trips. If the score went up while she got home less often, it says so and shows the reward-hacking card; a trip alone then explains the bumping ("she walked into trees towards home…").
 - **Curriculum (automatic):** practice starts near home and moves outward as her success rate rises.
 - **Number of practice runs** is the user's control for this phase.
+- **Three ways to practise**, like the lessons: *Watch one run* (slow), *Watch runs in a row* (Quick) and *In a row, fast*, with the same speed switch, Stop and test every 5 runs; and *Practise N runs* in the Web Worker. A watched run shows her arrows at the practice boldness, the start flag and her trail inside the curriculum outline. When it ends she learns from it through the same `learnFromRun` as the worker, and the panel says how it ended and the judge's points for it ("In the last run she got home. Grandma gave it +1.00 points."). A row that ends or is stopped gets the same "What … taught her" summary as a worker round.
 
 ### After the forest changes: catch-up lessons
 
@@ -237,6 +244,7 @@ Where the "?" buttons are, and what makes them pulse:
 | 2. Lessons | "The forest changed" / "Since the forest changed" | Catch-up lessons | After catch-up lessons |
 | 2. Lessons | "Who teaches her?" | The chosen teacher: training data and its values, the wolf (bad examples) or the mix (data poisoning) | Choosing a teacher; after lessons from both, the wolf or the mix |
 | 2. Lessons | Number of lessons | More training data, diminishing returns | |
+| 2. Lessons | Watch buttons and "She guessed … right" | Watching her learn: next-token accuracy rises with training | Stopping or finishing a row of watched lessons |
 | 2. Lessons | "That lesson came from the wolf in disguise…" (after a watched lesson that ends at a den) | Bad examples are learned too | That lesson |
 | 2. Lessons | "How she does alone" | Test trips as a benchmark | |
 | 2. Lessons | Heatmap checkbox | What the training data covered | Toggling it; after lessons from one parent |
@@ -252,6 +260,8 @@ Where the "?" buttons are, and what makes them pulse:
 | 4. Practice | Title | Practice is fine-tuning from feedback | Entering the tab; starting practice |
 | 4. Practice | "Who judges?" | The judge decides what she learns | |
 | 4. Practice | "How … scores a run" | The chosen judge's card | Choosing a judge |
+| 4. Practice | Watch buttons and "In the last run … gave it … points" | One score for a whole run, as in RLHF | Watching one run |
+| 4. Practice | "Run … of …" line while watching | Sampling: each move picked by chance | |
 | 4. Practice | "She practises from up to … steps" | Curriculum learning | |
 | 4. Practice | "How she does alone" | Test trips as a benchmark | |
 | 4. Practice | "What … taught her" (after practice) | Reward hacking, teacher versus judge, bad judge (wolf), fixing bad data, or the general judge card | Practice ends |

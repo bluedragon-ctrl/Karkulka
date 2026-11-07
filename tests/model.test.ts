@@ -6,7 +6,7 @@ import { mulberry32 } from '../src/rng';
 import { Walker } from '../src/sim';
 import { costToHome, endsAtDen, walkLesson } from '../src/teachers';
 import { MEMORY_PAIRS, SLOT_FEATS, VIEW_FEATS, encodeContext, inputSize, buildVocabulary } from '../src/tokens';
-import { FIXED, JUDGES, Run, chooseTeacher, evalEvery, headsHome, judgeMaps, judgeRewards, judgeScore, homeShare, newStats, trainLessons, trainPractice } from '../src/train';
+import { FIXED, JUDGES, Run, chooseTeacher, evalEvery, guessesRight, headsHome, judgeMaps, learnFromRun, practiceSetup, practiceWalker, startTiles, judgeRewards, judgeScore, homeShare, newStats, trainLessons, trainPractice } from '../src/train';
 import { Forest, HOME, Move, PATH, SWAMP, TREE, Tile, WOLF, allReachable, forestFromTiles, neighbor, pathTiles, walkableTiles } from '../src/world';
 
 const cfg = { memory: MEMORY_PAIRS.medium, hint: false, hidden: 16 };
@@ -84,6 +84,23 @@ describe('training', () => {
     expect(stats.coverage[f.home]).toBe(300);
   });
 
+  it('after lessons she guesses more of a lesson\'s moves right', () => {
+    const m = createModel({ ...cfg, hidden: FIXED.hidden }, mulberry32(1));
+    const costs = costToHome(f, 'mother');
+    const rng = mulberry32(5);
+    const walks = Array.from({ length: 20 }, () => walkLesson(f, 'mother', costs, pathTiles(f)[Math.floor(rng() * pathTiles(f).length)], rng));
+    const share = () => {
+      let right = 0;
+      let steps = 0;
+      for (const w of walks) { const g = guessesRight(m, w); right += g.right; steps += g.steps; }
+      return right / steps;
+    };
+    const before = share();
+    trainLessons(m, createAdam(m), f, 'mother', 300, newStats(f), mulberry32(2));
+    expect(share()).toBeGreaterThan(before + 0.2);
+    expect(guessesRight(m, walks[0]).steps).toBe(walks[0].history.moves.length);
+  });
+
   it('practice runs, scores and grows the curriculum', () => {
     const m = createModel({ ...cfg, hidden: FIXED.hidden }, mulberry32(1));
     const stats = newStats(f);
@@ -92,6 +109,21 @@ describe('training', () => {
     expect(stats.practiceRuns).toBe(200);
     expect(stats.practiceEval.length).toBeGreaterThan(0);
     expect(stats.radius).toBeGreaterThan(FIXED.curriculumStart);
+  });
+
+  it('a watched practice run is learned from like a worker run', () => {
+    const m = createModel({ ...cfg, hidden: FIXED.hidden }, mulberry32(1));
+    const stats = newStats(f);
+    trainLessons(m, createAdam(m), f, 'mother', 50, stats, mulberry32(2));
+    const setup = practiceSetup(f, stats);
+    const w = practiceWalker(m, f, startTiles(f, 1, stats.radius, setup.dist)[0], stats, mulberry32(3));
+    const before = m.w2.slice();
+    w.run();
+    const score = learnFromRun(m, f, 'grandma', w, stats, setup);
+    expect(stats.practiceRuns).toBe(1);
+    expect(stats.judgeRuns).toEqual({ grandma: 1 });
+    expect(score).toBeCloseTo(judgeScore('grandma', f, judgeMaps(f), { outcome: w.outcome!, start: w.start, positions: w.positions, moves: w.history.moves }), 9);
+    expect(m.w2.some((v, i) => v !== before[i])).toBe(true);
   });
 
   it('practice records which judge scored the runs', () => {

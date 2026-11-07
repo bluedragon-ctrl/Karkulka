@@ -8,7 +8,7 @@ import { Outcome, Walker, predictAt } from '../sim';
 import * as store from '../storage';
 import { LessonWalk, Teacher, TeacherChoice, costToHome, endsAtDen, teacherMoves, walkLesson } from '../teachers';
 import { MEMORY_PAIRS, MemorySize, ModelConfig } from '../tokens';
-import { FIXED, JUDGES, Judge, TrainStats, chooseTeacher, homeShare, learnFromLesson, newStats, recordLessonBatch, startTiles } from '../train';
+import { FIXED, JUDGES, Judge, TrainStats, chooseTeacher, guessesRight, homeShare, learnFromLesson, learnFromRun, newStats, practiceSetup, practiceWalker, recordLessonBatch, recordPracticeBatch, startTiles, teacherCosts } from '../train';
 import { WorkerRequest, runTraining } from '../workerTypes';
 import {
   DEFAULT_SIZE, Forest, HOME, MOVES, MOVE_ARROWS, MOVE_NAMES, PATH, SECTOR_WORDS, SWAMP, SWAMP_COST, TREE, Tile, WOLF, copyForest,
@@ -118,11 +118,40 @@ const TRAIL_COLORS: Record<Outcome | Teacher, string> = { home: '#c99700', eaten
 export interface ChangePoint { label: string; home: number }
 /** Catch-up lesson buttons after the forest changed. */
 const CATCH_UP = [30, 100, 300];
+
+type WatchSpeed = 'slow' | 'quick' | 'fast';
+/** Time per step when watching lessons. Below `ANIMATE_MS` she jumps instead of gliding. */
+const WATCH_SPEEDS: { id: WatchSpeed; name: string; ms: number }[] = [
+  { id: 'slow', name: 'Slow', ms: 380 },
+  { id: 'quick', name: 'Quick', ms: 120 },
+  { id: 'fast', name: 'Fast', ms: 40 },
+];
+const ANIMATE_MS = 200;
+/** In a row of watched lessons, test her after every this many. */
+const WATCH_TEST_EVERY = 5;
 /** Above this many changed tiles the board doesn't mark them (a brand new forest). */
 const MAX_MARKED = 60;
 const MAX_CHANGE_POINTS = 8;
 
-interface Job { kind: 'lessons' | 'practice' | 'watch'; done: number; total: number; cancel: () => void }
+interface Job { kind: 'lessons' | 'practice' | 'watch' | 'watchRuns'; done: number; total: number; cancel: () => void }
+
+/** Lessons or practice runs played one at a time on the main thread (see `App.play`). */
+interface RowPlayer<T> {
+  kind: 'watch' | 'watchRuns';
+  total: number;
+  /** Start the next one, or null when there is nothing to start. */
+  begin(): T | null;
+  /** One step; true once it is over (one tick after the last step, to show the end). */
+  advance(item: T): boolean;
+  /** Learn from a finished one. */
+  learn(item: T): void;
+  /** Update the charts with what was learned since the last checkpoint. */
+  checkpoint(): void;
+  /** Drop the one on show. */
+  clear(): void;
+  /** After the row ends or is stopped, with how many were finished. */
+  finish(done: number): void;
+}
 
 export class App {
   forest!: Forest;
@@ -147,6 +176,14 @@ export class App {
   why: Explanation | null = null;
   /** The last watched lesson ended at a wolf den. */
   watchedDen = false;
+  /** Speed of the lessons being watched; can change while they play. */
+  watchSpeed: WatchSpeed = 'slow';
+  /** How many steps of the last watched lesson she guessed right before learning from it. */
+  lastGuess: { right: number; steps: number } | null = null;
+  /** The practice run being watched. */
+  runWatch: Walker | null = null;
+  /** The judge's score for the last watched practice run. */
+  lastRun: { outcome: Outcome; score: number; judge: Judge } | null = null;
   lastPractice: PracticeSummary | null = null;
   private auto: number | null = null;
   private saveTimer: number | null = null;
@@ -257,6 +294,8 @@ export class App {
     this.render();
   }
   get busy() { return this.job !== null; }
+  /** Lessons or practice runs are playing step by step. */
+  get watching() { return this.job?.kind === 'watch' || this.job?.kind === 'watchRuns'; }
 
   private configFromSettings(): ModelConfig {
     return { memory: MEMORY_PAIRS[this.settings.memory], hint: this.settings.hint, hidden: FIXED.hidden };
@@ -468,40 +507,107 @@ export class App {
     this.render();
   }
 
-  private watchLesson() {
-    this.ensureModel();
-    this.watchedDen = false;
-    this.stopTrip();
-    const teacher = chooseTeacher(this.settings.teacher, this.rng);
-    const starts = startTiles(this.forest);
-    if (!starts.length) return;
-    const start = pick(this.rng, starts);
-    const walk = walkLesson(this.forest, teacher, costToHome(this.forest, teacher), start, this.rng);
-    this.watch = { walk, k: 0 };
-    this.board.clearTrails();
-    const timer = window.setInterval(() => {
-      if (!this.watch) return;
-      this.watch.k++;
-      if (this.watch.k > walk.history.moves.length) finish();
-      else this.renderBoard();
-    }, 380);
-    const finish = () => {
-      clearInterval(timer);
-      if (!this.watch || !this.model || !this.opt) return;
-      const loss = learnFromLesson(this.model, this.opt, walk, this.stats);
-      this.markTrained();
-      recordLessonBatch(this.model, this.forest, this.stats, loss);
-      this.board.addTrail(walk.positions, TRAIL_COLORS[teacher], 0.35);
-      this.watch = null;
+  /**
+   * Play lessons or practice runs one at a time, step by step, until `total` are done or
+   * Stop. She learns from each one as it ends; charts are updated every few.
+   */
+  private play<T>(p: RowPlayer<T>, speed: WatchSpeed) {
+    this.watchSpeed = speed;
+    let timer = 0;
+    let item: T | null = null;
+    let sinceCheck = 0;
+    const stepMs = () => this.stepMs();
+    const show = () => { this.renderBoard(); this.renderStripNow(); };
+    const begin = () => {
+      item = p.begin();
+      if (item === null) { stop(); return; }
+      show();
+      timer = window.setTimeout(tick, stepMs());
+    };
+    const tick = () => {
+      if (!this.job || item === null) return;
+      if (!p.advance(item)) {
+        show();
+        timer = window.setTimeout(tick, stepMs());
+        return;
+      }
+      p.learn(item);
+      item = null;
+      sinceCheck++;
+      this.job.done++;
+      if (this.job.done >= p.total) { stop(); return; }
+      if (sinceCheck >= WATCH_TEST_EVERY) { p.checkpoint(); sinceCheck = 0; this.saveSoon(); }
+      // A short pause on the finished trail before the next one.
+      p.clear();
+      show();
+      this.renderPanel();
+      timer = window.setTimeout(begin, stepMs() * 2);
+    };
+    // A lesson or run cut off half-way is not learned; finished ones are kept.
+    const stop = () => {
+      window.clearTimeout(timer);
+      const done = this.job?.done ?? 0;
       this.job = null;
+      p.clear();
+      if (sinceCheck) p.checkpoint();
+      p.finish(done);
       this.saveSoon();
-      this.watchedDen = endsAtDen(this.forest, walk);
-      this.showCard(this.watchedDen ? 'wolfTeacher' : 'exposure');
       this.render();
     };
-    this.job = { kind: 'watch', done: 0, total: 1, cancel: () => { clearInterval(timer); this.watch = null; this.job = null; this.render(); } };
-    this.showCard('guess');
+    this.job = { kind: p.kind, done: 0, total: p.total, cancel: stop };
+    begin();
     this.render();
+  }
+
+  private stepMs() { return WATCH_SPEEDS.find((w) => w.id === this.watchSpeed)?.ms ?? 380; }
+
+  /** Watch one slow lesson, or a row of them. Same `learnFromLesson` as the worker. */
+  private watchLessons(total: number, speed: WatchSpeed) {
+    const model = this.ensureModel();
+    const starts = startTiles(this.forest);
+    if (!starts.length) return;
+    this.stopTrip();
+    this.checkEdits();
+    this.watchedDen = false;
+    this.lastGuess = null;
+    this.board.clearTrails();
+    const costs = teacherCosts(this.forest);
+    let lossSum = 0;
+    let lossN = 0;
+    let lastDen = false;
+    this.showCard('guess');
+    this.play<{ walk: LessonWalk; k: number }>({
+      kind: 'watch', total,
+      begin: () => {
+        const teacher = chooseTeacher(this.settings.teacher, this.rng);
+        const walk = walkLesson(this.forest, teacher, costs[teacher], pick(this.rng, starts), this.rng, costs.den);
+        this.watch = { walk, k: 0 };
+        return this.watch;
+      },
+      advance: (w) => ++w.k > w.walk.history.moves.length,
+      learn: ({ walk }) => {
+        if (!this.opt) return;
+        this.lastGuess = guessesRight(model, walk);
+        lossSum += learnFromLesson(model, this.opt, walk, this.stats);
+        lossN++;
+        lastDen = endsAtDen(this.forest, walk);
+        this.board.addTrail(walk.positions, TRAIL_COLORS[walk.teacher], total > 1 ? 0.2 : 0.35);
+        this.markTrained();
+      },
+      checkpoint: () => {
+        if (!lossN) return;
+        recordLessonBatch(model, this.forest, this.stats, lossSum / lossN);
+        lossSum = 0;
+        lossN = 0;
+      },
+      clear: () => { this.watch = null; },
+      finish: (done) => {
+        if (!done) return;
+        if (this.changeLog.length) this.logCheck(`+${done} new lesson${done === 1 ? '' : 's'}`);
+        this.watchedDen = total === 1 && lastDen;
+        this.showCard(this.watchedDen ? 'wolfTeacher' : total > 1 ? 'watchMany' : 'exposure');
+      },
+    }, speed);
   }
 
   // ---------- trip alone ----------
@@ -565,35 +671,94 @@ export class App {
     if (!this.model) return;
     this.stopTrip();
     const judge = this.settings.judge;
-    const homeBefore = (this.stats.practiceEval.at(-1) ?? this.stats.lessonEval.at(-1))?.home ?? 0;
+    const homeBefore = this.homeNow();
     const scoreFrom = this.stats.practiceScore.length;
     this.lastPractice = null;
+    this.lastRun = null;
     this.runJob(
       { kind: 'practice', model: this.model, forest: copyForest(this.forest), stats: this.stats, count: this.settings.practice, seed: this.seed(), judge },
       0.12,
       () => {
         this.walker = null;
-        // Average judge score over the first and last few batches of this job.
-        const pts = this.stats.practiceScore.slice(scoreFrom).map((p) => p.y);
-        const k = Math.max(1, Math.min(4, Math.floor(pts.length / 2)));
-        const mean = (xs: number[]) => xs.reduce((a, b) => a + b, 0) / Math.max(1, xs.length);
-        const sum: PracticeSummary = {
-          judge, homeBefore, homeAfter: this.stats.practiceEval.at(-1)?.home ?? homeBefore,
-          scoreBefore: mean(pts.slice(0, k)), scoreAfter: mean(pts.slice(-k)), card: 'judge',
-        };
-        const tc = this.stats.teacherCounts;
-        const onlyOther = (judge === 'mother' && tc.mother === 0) || (judge === 'father' && tc.father === 0);
-        if (judge === 'wolf') sum.card = 'judgeWolf';
-        else if (judge === 'grandma' && ((tc.wolf ?? 0) > 0 || (this.stats.judgeRuns?.wolf ?? 0) > 0)) sum.card = 'fixBadData';
-        else if (sum.scoreAfter > sum.scoreBefore && sum.homeAfter < sum.homeBefore - 0.05) sum.card = 'rewardHacking';
-        else if (onlyOther) sum.card = 'teacherVsJudge';
-        this.lastPractice = sum;
-        this.showCard(sum.card);
+        this.summarizePractice(judge, homeBefore, scoreFrom);
       },
     );
     this.board.clearTrails();
     this.showCard('practice');
     this.render();
+  }
+
+  private homeNow() { return (this.stats.practiceEval.at(-1) ?? this.stats.lessonEval.at(-1))?.home ?? 0; }
+
+  /** Watch one slow practice run, or a row of them. Same `learnFromRun` as the worker. */
+  private watchRuns(total: number, speed: WatchSpeed) {
+    const model = this.model;
+    if (!model) return;
+    this.stopTrip();
+    this.walker = null;
+    const judge = this.settings.judge;
+    const homeBefore = this.homeNow();
+    const scoreFrom = this.stats.practiceScore.length;
+    const setup = practiceSetup(this.forest, this.stats);
+    this.lastPractice = null;
+    this.lastRun = null;
+    this.board.clearTrails();
+    let scoreSum = 0;
+    let scoreN = 0;
+    this.showCard('practice');
+    this.play<Walker>({
+      kind: 'watchRuns', total,
+      begin: () => {
+        const starts = startTiles(this.forest, 1, this.stats.radius, setup.dist);
+        if (!starts.length) return null;
+        this.runWatch = practiceWalker(model, this.forest, pick(this.rng, starts), this.stats, this.rng);
+        return this.runWatch;
+      },
+      advance: (w) => {
+        if (w.done) return true;
+        w.step();
+        return false;
+      },
+      learn: (w) => {
+        const score = learnFromRun(model, this.forest, judge, w, this.stats, setup);
+        scoreSum += score;
+        scoreN++;
+        this.lastRun = { outcome: w.outcome ?? 'lost', score, judge };
+        this.board.addTrail(w.positions, TRAIL_COLORS[w.outcome ?? 'lost'], total > 1 ? 0.2 : 0.35);
+      },
+      checkpoint: () => {
+        if (!scoreN) return;
+        recordPracticeBatch(model, this.forest, this.stats, scoreSum / scoreN);
+        scoreSum = 0;
+        scoreN = 0;
+      },
+      clear: () => { this.runWatch = null; },
+      finish: (done) => {
+        if (!done) return;
+        if (total > 1) this.summarizePractice(judge, homeBefore, scoreFrom);
+        else this.showCard('runScore');
+      },
+    }, speed);
+  }
+
+  /** After practice: compare the judge's score with her real success, and pick the card that explains it. */
+  private summarizePractice(judge: Judge, homeBefore: number, scoreFrom: number) {
+    // Average judge score over the first and last few batches of this round.
+    const pts = this.stats.practiceScore.slice(scoreFrom).map((p) => p.y);
+    const k = Math.max(1, Math.min(4, Math.floor(pts.length / 2)));
+    const mean = (xs: number[]) => xs.reduce((a, b) => a + b, 0) / Math.max(1, xs.length);
+    const sum: PracticeSummary = {
+      judge, homeBefore, homeAfter: this.stats.practiceEval.at(-1)?.home ?? homeBefore,
+      scoreBefore: mean(pts.slice(0, k)), scoreAfter: mean(pts.slice(-k)), card: 'judge',
+    };
+    const tc = this.stats.teacherCounts;
+    const onlyOther = (judge === 'mother' && tc.mother === 0) || (judge === 'father' && tc.father === 0);
+    if (judge === 'wolf') sum.card = 'judgeWolf';
+    else if (judge === 'grandma' && ((tc.wolf ?? 0) > 0 || (this.stats.judgeRuns?.wolf ?? 0) > 0)) sum.card = 'fixBadData';
+    else if (sum.scoreAfter > sum.scoreBefore && sum.homeAfter < sum.homeBefore - 0.05) sum.card = 'rewardHacking';
+    else if (onlyOther) sum.card = 'teacherVsJudge';
+    this.lastPractice = sum;
+    this.showCard(sum.card);
   }
 
   // ---------- rendering ----------
@@ -677,8 +842,8 @@ export class App {
       const { walk, k } = this.watch;
       const t = Math.min(k, walk.history.views.length - 1);
       renderStrip(this.stripEl, walk.history, t, mem, k < walk.history.moves.length ? walk.history.moves[k] : null, this.q('memory', 'strip'));
-    } else if (this.tab === 'trip' && this.walker) {
-      const w = this.walker;
+    } else if ((this.tab === 'trip' && this.walker) || (this.tab === 'practice' && this.runWatch)) {
+      const w = (this.tab === 'trip' ? this.walker : this.runWatch) as Walker;
       renderStrip(this.stripEl, w.history, Math.min(w.t, w.history.views.length - 1), mem, w.done ? w.history.moves[w.t - 1] : null, this.q('memory', 'strip'));
     } else renderStrip(this.stripEl, null, 0, mem, undefined, this.q('memory', 'strip'));
   }
@@ -719,7 +884,7 @@ export class App {
       const n = walk.history.moves.length;
       const t = Math.min(k, n);
       b.setParent(walk.positions[Math.min(t + 1, n)], walk.teacher);
-      b.setRed(walk.positions[t], { animate: t > 0 });
+      b.setRed(walk.positions[t], { animate: t > 0 && this.stepMs() >= ANIMATE_MS });
       b.setTrace(walk.positions.slice(0, t + 1));
       if (t < n) {
         // Her current guess, before this lesson teaches her anything.
@@ -740,6 +905,13 @@ export class App {
       const set = new Set<number>();
       d.forEach((v, i) => { if (v >= 1 && v <= this.stats.radius) set.add(i); });
       b.setRadius(set);
+      const w = this.runWatch;
+      if (w) {
+        b.setStart(w.start);
+        b.setTrace(w.positions);
+        b.setRed(w.pos, { energy: w.energyLeft / w.energy, sitting: w.outcome === 'lost', animate: w.t > 0 && this.stepMs() >= ANIMATE_MS });
+        if (!w.done) b.setArrows(w.pos, w.tempered(), this.tints(w.pos));
+      }
     }
   }
 
@@ -795,8 +967,54 @@ export class App {
       hint ? h('span', { class: 'range-hint' }, h('span', {}, hint[0]), h('span', {}, hint[1])) : null);
   }
 
+  /** "Watching…" line, with speed buttons and a line about the last one when several play in a row. */
+  private watchingBox(what: string, card: CardKey, last: HTMLElement | null) {
+    const job = this.job;
+    if (!job) return null;
+    const many = job.total > 1;
+    return h('div', { class: 'watching' },
+      h('div', { class: 'row' },
+        h('span', { class: 'muted' }, this.hq(many ? `${what[0].toUpperCase()}${what.slice(1)} ${Math.min(job.done + 1, job.total)} of ${job.total}. ${this.watchText()}` : `Watching… ${this.watchText()}`, card, 'watch')),
+        many ? null : h('button', { onclick: () => this.job?.cancel() }, 'Stop')),
+      many ? h('div', { class: 'group speed', role: 'radiogroup', 'aria-label': 'Speed' }, h('span', { class: 'muted' }, 'Speed:'), ...WATCH_SPEEDS.map((w) =>
+        h('button', { role: 'radio', 'aria-checked': String(this.watchSpeed === w.id), class: this.watchSpeed === w.id ? 'active' : '', onclick: () => { this.watchSpeed = w.id; this.renderPanel(); } }, w.name))) : null,
+      many ? last : null);
+  }
+
+  private watchText() {
+    return this.job?.kind === 'watchRuns'
+      ? 'The arrows are her own guess; one move is picked by chance.'
+      : 'The arrows are her guess; the coloured one is the teacher\'s move.';
+  }
+
+  /** The three ways to watch, as buttons: one slowly, in a row, in a row fast. */
+  private watchButtons(one: string, start: (total: number, speed: WatchSpeed) => void, total: number, what: string, card: CardKey) {
+    const busy = this.busy;
+    const title = `${what} after ${what}, ${total} in all; stop any time`;
+    return h('div', { class: 'row' },
+      h('button', { onclick: () => start(1, 'slow'), disabled: busy }, one),
+      h('button', { onclick: () => start(total, 'quick'), disabled: busy, title }, `Watch ${what}s in a row`),
+      h('button', { onclick: () => start(total, 'fast'), disabled: busy, title }, 'In a row, fast'),
+      this.q(card));
+  }
+
+  private guessLine() {
+    const g = this.lastGuess;
+    if (!g) return '';
+    return this.hq(g.steps ? `In the last lesson she guessed ${g.right} of ${g.steps} teacher's moves right before learning from it.` : 'The last lesson started at home.', 'watchMany', 'guessed');
+  }
+
+  private runLine() {
+    const r = this.lastRun;
+    if (!r) return '';
+    const what = r.outcome === 'home' ? 'she got home' : r.outcome === 'eaten' ? 'she walked into a wolf den' : 'she ran out of energy';
+    const who = r.judge === 'grandma' ? 'Grandma' : `The ${JUDGE_INFO[r.judge].name.toLowerCase()}`;
+    const pts = `${r.score >= 0 ? '+' : '−'}${Math.abs(r.score).toFixed(2)}`;
+    return this.hq(`In the last run ${what}. ${who} gave it ${pts} points.`, 'runScore', 'scored');
+  }
+
   private progress() {
-    if (!this.job || this.job.kind === 'watch') return null;
+    if (!this.job || (this.watching && this.job.total === 1)) return null;
     const { done, total } = this.job;
     return h('div', { class: 'progress' },
       h('div', { class: 'bar' }, h('div', { class: 'fill', style: `width:${(100 * done) / total}%` })),
@@ -871,11 +1089,12 @@ export class App {
           icon, h('span', {}, h('strong', {}, t.name), h('br'), h('small', {}, t.text)));
       })),
       this.slider('Number of lessons', this.settings.lessons, 10, 2000, 10, (v) => String(v), (v) => { this.settings.lessons = v; this.saveSoon(); }, undefined, 'moreData'),
+      this.watchButtons('Watch one lesson', (n, sp) => this.watchLessons(n, sp), this.settings.lessons, 'lesson', 'watchMany'),
       h('div', { class: 'row' },
-        h('button', { onclick: () => this.watchLesson(), disabled: busy }, 'Watch one lesson'),
         h('button', { class: 'primary', onclick: () => this.startLessons(), disabled: busy }, `Fast-forward ${this.settings.lessons} lessons`)),
-      this.job?.kind === 'watch' ? h('div', { class: 'row' }, h('span', { class: 'muted' }, this.hq('Watching… the arrows are her guess; the coloured one is the teacher\'s move.', 'guess', 'watch')), h('button', { onclick: () => this.job?.cancel() }, 'Stop')) : null,
+      this.job?.kind === 'watch' ? this.watchingBox('lesson', 'guess', this.lastGuess ? h('p', {}, this.guessLine()) : null) : null,
       this.progress(),
+      this.lastGuess && !(this.job?.kind === 'watch' && this.job.total > 1) ? h('p', {}, this.guessLine()) : null,
       this.watchedDen && !busy ? h('p', { class: 'warn' }, this.hq('That lesson came from the wolf in disguise: it ended at a wolf den, and she learned from it all the same.', 'wolfTeacher', 'watched')) : null,
       h('p', {}, st.lessons ? `She has had ${st.lessons} lesson${st.lessons === 1 ? '' : 's'} (mother ${st.teacherCounts.mother}, father ${st.teacherCounts.father}${st.teacherCounts.wolf ? `, wolf ${st.teacherCounts.wolf}` : ''}).` : 'No lessons yet.'),
       h('h3', {}, this.hq('How she does alone', 'testTrips')),
@@ -987,8 +1206,11 @@ export class App {
       h('p', { class: 'muted' }, this.hq(`How ${this.settings.judge === 'grandma' ? 'Grandma' : `the ${JUDGE_INFO[this.settings.judge].name.toLowerCase()}`} scores a run:`, JUDGE_INFO[this.settings.judge].card)),
       h('ul', { class: 'score-list' }, ...JUDGE_INFO[this.settings.judge].rules().map((parts) => h('li', {}, ...parts))),
       this.slider('Number of practice runs', this.settings.practice, 50, 3000, 50, (v) => String(v), (v) => { this.settings.practice = v; this.saveSoon(); }),
-      h('button', { class: 'primary', onclick: () => this.startPractice(), disabled: this.busy }, `Practise ${this.settings.practice} runs`),
+      this.watchButtons('Watch one run', (n, sp) => this.watchRuns(n, sp), this.settings.practice, 'run', 'runScore'),
+      h('div', { class: 'row' }, h('button', { class: 'primary', onclick: () => this.startPractice(), disabled: this.busy }, `Practise ${this.settings.practice} runs`)),
+      this.job?.kind === 'watchRuns' ? this.watchingBox('run', 'sampling', this.lastRun ? h('p', {}, this.runLine()) : null) : null,
       this.progress(),
+      this.lastRun && !(this.job?.kind === 'watchRuns' && this.job.total > 1) ? h('p', {}, this.runLine()) : null,
       h('p', {}, h('span', { class: 'swatch-box' }), this.hq(` She practises from up to ${st.radius} steps from home (outlined); the circle grows as she succeeds.`, 'curriculum')),
       st.practiceRuns ? h('p', {}, `${st.practiceRuns} practice runs so far.`) : null,
       h('h3', {}, this.hq('How she does alone', 'testTrips')),

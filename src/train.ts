@@ -141,6 +141,22 @@ export function learnFromLesson(model: Model, opt: Adam, walk: LessonWalk, stats
   return steps ? loss / steps : 0;
 }
 
+/**
+ * How many of a lesson's moves were her most likely guess, before she learns from it.
+ * Shown when lessons are watched, like a language model's next-token accuracy.
+ */
+export function guessesRight(model: Model, walk: LessonWalk): { right: number; steps: number } {
+  const steps = walk.history.moves.length;
+  let right = 0;
+  for (let t = 0; t < steps; t++) {
+    const { logits } = forward(model, encodeContext(model.cfg, walk.history, t));
+    let best = 0;
+    for (let m = 1; m < logits.length; m++) if (logits[m] > logits[best]) best = m;
+    if (best === walk.history.moves[t]) right++;
+  }
+  return { right, steps };
+}
+
 /** Record one batch of lessons for the charts: its mean loss and, when `test` is set, a round of test trips. */
 export function recordLessonBatch(model: Model, f: Forest, stats: TrainStats, meanLoss: number, test = true) {
   stats.lessonLoss.push({ x: stats.lessons, y: meanLoss });
@@ -293,14 +309,77 @@ export function practiceEnergy(radius: number) {
   return Math.min(FIXED.evalEnergy, 4 * radius + 10);
 }
 
+/** What practice needs to know about the forest, worked out once per round. */
+export interface PracticeSetup { dist: Int32Array; maps: JudgeMaps; maxDist: number }
+
+/** Get ready for a round of practice; also keeps the curriculum radius inside the forest. */
+export function practiceSetup(f: Forest, stats: TrainStats): PracticeSetup {
+  const dist = walkingDistances(f);
+  const maxDist = Math.max(1, ...Array.from(dist));
+  stats.radius = Math.min(Math.max(stats.radius, FIXED.curriculumStart), maxDist);
+  return { dist, maps: judgeMaps(f), maxDist };
+}
+
+/** A practice run, not yet walked: she starts at `start` with the practice energy and boldness. */
+export const practiceWalker = (model: Model, f: Forest, start: number, stats: TrainStats, rng: Rng): Walker =>
+  new Walker(f, model, start, practiceEnergy(stats.radius), FIXED.practiceBoldness, rng);
+
+/**
+ * Learn from one finished practice run: the judge scores it, each move is nudged by
+ * the points that followed it, and the curriculum grows when she mostly gets home.
+ * Used by the worker and by watched runs. Returns the run's score.
+ */
+export function learnFromRun(model: Model, f: Forest, judge: Judge, w: Walker, stats: TrainStats, setup: PracticeSetup): number {
+  const outcome = w.outcome ?? 'lost';
+  const rewards = judgeRewards(judge, f, setup.maps, { outcome, start: w.start, positions: w.positions, moves: w.history.moves });
+  const steps = rewards.length;
+  // Reward to go: each move gets the points from that move to the end of the run.
+  const toGo = rewards.slice();
+  for (let t = steps - 2; t >= 0; t--) toGo[t] += toGo[t + 1];
+  const s = steps ? toGo[0] : 0;
+  const baseline = stats.baseline;
+  stats.baseline += FIXED.baselineSmoothing * (s - stats.baseline);
+
+  // Each move shares the credit or blame for what came after it (policy gradient).
+  // The model has not changed during the run, so the walker's own forward
+  // passes (at the practice boldness) are reused instead of recomputed.
+  const g = zeroGrads(model);
+  for (let t = 0; t < steps; t++) {
+    const advantage = Math.max(-1, Math.min(1, toGo[t] - baseline));
+    const d = w.decisions[t];
+    const p = d.tempered.slice();
+    p[w.history.moves[t]] -= 1;
+    for (let o = 0; o < p.length; o++) p[o] *= advantage;
+    accumulate(model, g, { x: d.input, nz: d.nz, h: d.hidden }, p);
+  }
+  if (steps) sgdStep(model, g, FIXED.practiceLearningRate, 1 / steps);
+  stats.practiceRuns++;
+  stats.judgeRuns = stats.judgeRuns ?? {};
+  stats.judgeRuns[judge] = (stats.judgeRuns[judge] ?? 0) + 1;
+
+  // Automatic curriculum: move outward once she mostly succeeds.
+  stats.recent.push(outcome === 'home' ? 1 : 0);
+  if (stats.recent.length >= FIXED.curriculumWindow) {
+    const rate = stats.recent.reduce((a, b) => a + b, 0) / stats.recent.length;
+    if (rate >= FIXED.curriculumThreshold && stats.radius < setup.maxDist) {
+      stats.radius = Math.min(setup.maxDist, stats.radius + FIXED.curriculumStep);
+      stats.recent = [];
+    } else stats.recent.shift();
+  }
+  return s;
+}
+
+/** Record one batch of practice runs for the charts: the judge's mean score and, when `test` is set, a round of test trips. */
+export function recordPracticeBatch(model: Model, f: Forest, stats: TrainStats, meanScore: number, test = true) {
+  stats.practiceScore.push({ x: stats.practiceRuns, y: meanScore });
+  if (test) stats.practiceEval.push(evaluate(model, f, stats.lessons + stats.practiceRuns));
+}
+
 export function trainPractice(
   model: Model, f: Forest, judge: Judge, count: number, stats: TrainStats, rng: Rng,
   onChunk?: (info: ChunkInfo) => void,
 ) {
-  const dist = walkingDistances(f);
-  const maps = judgeMaps(f);
-  const maxDist = Math.max(1, ...Array.from(dist));
-  stats.radius = Math.min(Math.max(stats.radius, FIXED.curriculumStart), maxDist);
+  const setup = practiceSetup(f, stats);
   let scoreSum = 0;
   let scoreN = 0;
   let paths: ChunkInfo['paths'] = [];
@@ -310,54 +389,17 @@ export function trainPractice(
   for (let i = 0; i < count; i++) {
     if (startsRadius !== stats.radius) {
       startsRadius = stats.radius;
-      starts = startTiles(f, 1, stats.radius, dist);
+      starts = startTiles(f, 1, stats.radius, setup.dist);
     }
     if (!starts.length) return;
-    const start = pick(rng, starts);
-    const w = new Walker(f, model, start, practiceEnergy(stats.radius), FIXED.practiceBoldness, walkRng);
-    const outcome = w.run();
-    const rewards = judgeRewards(judge, f, maps, { outcome, start, positions: w.positions, moves: w.history.moves });
-    const steps = rewards.length;
-    // Reward to go: each move gets the points from that move to the end of the run.
-    const toGo = rewards.slice();
-    for (let t = steps - 2; t >= 0; t--) toGo[t] += toGo[t + 1];
-    const s = steps ? toGo[0] : 0;
-    const baseline = stats.baseline;
-    stats.baseline += FIXED.baselineSmoothing * (s - stats.baseline);
-
-    // Each move shares the credit or blame for what came after it (policy gradient).
-    // The model has not changed during the run, so the walker's own forward
-    // passes (at the practice boldness) are reused instead of recomputed.
-    const g = zeroGrads(model);
-    for (let t = 0; t < steps; t++) {
-      const advantage = Math.max(-1, Math.min(1, toGo[t] - baseline));
-      const d = w.decisions[t];
-      const p = d.tempered.slice();
-      p[w.history.moves[t]] -= 1;
-      for (let o = 0; o < p.length; o++) p[o] *= advantage;
-      accumulate(model, g, { x: d.input, nz: d.nz, h: d.hidden }, p);
-    }
-    if (steps) sgdStep(model, g, FIXED.practiceLearningRate, 1 / steps);
-    stats.practiceRuns++;
-    stats.judgeRuns = stats.judgeRuns ?? {};
-    stats.judgeRuns[judge] = (stats.judgeRuns[judge] ?? 0) + 1;
-    scoreSum += s;
+    const w = practiceWalker(model, f, pick(rng, starts), stats, walkRng);
+    w.run();
+    scoreSum += learnFromRun(model, f, judge, w, stats, setup);
     scoreN++;
-    paths.push({ positions: w.positions, tag: outcome });
-
-    // Automatic curriculum: move outward once she mostly succeeds.
-    stats.recent.push(outcome === 'home' ? 1 : 0);
-    if (stats.recent.length >= FIXED.curriculumWindow) {
-      const rate = stats.recent.reduce((a, b) => a + b, 0) / stats.recent.length;
-      if (rate >= FIXED.curriculumThreshold && stats.radius < maxDist) {
-        stats.radius = Math.min(maxDist, stats.radius + FIXED.curriculumStep);
-        stats.recent = [];
-      } else stats.recent.shift();
-    }
+    paths.push({ positions: w.positions, tag: w.outcome! });
 
     if ((i + 1) % FIXED.chunk === 0 || i === count - 1) {
-      stats.practiceScore.push({ x: stats.practiceRuns, y: scoreSum / scoreN });
-      if (testsAfter(i, count)) stats.practiceEval.push(evaluate(model, f, stats.lessons + stats.practiceRuns));
+      recordPracticeBatch(model, f, stats, scoreSum / scoreN, testsAfter(i, count));
       scoreSum = 0;
       scoreN = 0;
       onChunk?.({ done: i + 1, paths });
