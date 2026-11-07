@@ -92,7 +92,7 @@ export function tripReport(w: Pick<Walker, 'energy' | 'energyLeft' | 'positions'
   const swampSteps = w.positions.slice(1).filter((p, i) => !w.blocked[i] && f.tiles[p] === SWAMP).length;
   // Dens in her 3 × 3 view at any place she stood (not the den or house that ended the trip).
   const dens = new Set<number>();
-  const stood = w.outcome === 'lost' ? w.positions : w.positions.slice(0, -1);
+  const stood = w.outcome === 'home' || w.outcome === 'eaten' ? w.positions.slice(0, -1) : w.positions;
   for (const p of new Set(stood)) {
     const [x, y] = xyOf(f, p);
     for (const [dx, dy] of VIEW_OFFSETS) if (tileAt(f, x + dx, y + dy) === WOLF) dens.add((y + dy) * f.size + x + dx);

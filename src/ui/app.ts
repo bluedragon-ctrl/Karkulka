@@ -1239,9 +1239,8 @@ export class App {
       h('h2', {}, this.hq('Trip alone', 'view')),
       h('p', {}, this.hq('At each step she looks at her memory strip, decides how likely each move is, and then picks one by chance, like rolling a dice.', 'sampling')),
       h('p', { class: 'status' }, ...status),
-      w && w.done && w.outcome !== 'eaten'
-        ? this.reportBox(w, this.why)
-        : this.why ? h('div', { class: 'why' }, h('h3', {}, this.why.card ? this.hq(this.why.title, this.why.card, 'why') : this.why.title), h('p', {}, this.why.text)) : null,
+      // After every trip, also one cut short with Stop: there was a walk to tell about.
+      w && !walking && w.t > 0 ? this.reportBox(w, this.why) : null,
       walking ? h('h3', {}, this.hq('Her next move', 'arrows')) : null,
       probsBox,
       h('div', { class: 'row' },
