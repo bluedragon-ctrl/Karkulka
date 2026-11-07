@@ -52,6 +52,9 @@ Every feature should map to a language-model idea. This table is the map:
 | Confidently walking into a wolf in an unfamiliar spot | Hallucination on out-of-distribution input |
 | Looping at look-alike places with short memory | Repetition caused by a short context |
 | Forest edited after training | Knowledge cutoff: the world changed, the model did not |
+| Forest code: the same code always gives the same forest | A fixed random seed, so an experiment can be repeated exactly |
+| Editing the forest before lessons | Choosing and cleaning the training data |
+| Lessons first, then practice, compared on the same test trips | The usual recipe: pretraining, then fine-tuning from feedback |
 | Small change, big change, brand new forest (same Red Riding Hood) | The further new input is from the training data, the more confident mistakes |
 | Dashed yellow edges on changed tiles | Where the world no longer matches what the model learned |
 | Catch-up lessons in the changed forest | Training a model further on new data instead of starting over |
@@ -231,9 +234,11 @@ All pictures are simple symbolic SVG shapes drawn for this project, with no tile
 
 **LM corner cards ("?" buttons).** Each card gives one sentence or two of analogy, for example "Her memory strip is like a language model's context window." These cards carry the teaching for non-technical users. They are not shown in the panel on their own: a small round "?" (yellow, with a dark border) sits next to the control, heading or result it explains, and clicking it opens the card as a small popup ("LM corner") right there. The popup closes with ×, Escape or a click elsewhere, and follows its "?" when the panel is redrawn (during a trip on Walk through, for example). Inside a checkbox or radio label, the "?" opens the card without ticking the box. The texts live in `CARDS` in `src/explain.ts`; the popup is `src/ui/hint.ts`.
 
+**Text outside the cards.** Panel text, buttons, the banner and the memory strip are written for older kids: short sentences, everyday words, no "model", "probability" or "token" jargon beyond what the game shows directly. Language-model comparisons and terms (knowledge cutoff, reward hacking and so on) go in the LM corner cards, opened by the "?" next to the text, not in the panel itself. The Inside the model tab is the exception: it is for technical users and uses the real terms.
+
 **In a big model.** Most cards also have a second part under a dashed line, marked with a small chip icon and "In a big model". It is one or two short sentences comparing the idea with a real chatbot, in everyday words and without technical terms beyond the ones the game teaches (tokens, temperature, hallucination and so on): a chatbot's world is text, it reads in tokens, it writes one word at a time and can't take a word back, people rate its answers, it may flatter you because praise gets rated highly. These texts live in `BIG` in `src/explain.ts` and stay under 170 characters; a card without one shows only its analogy. Card texts themselves stay under 210 characters. (This replaces the earlier "How big models do it" dialog, so all the teaching sits in one place, next to the thing it explains.)
 
-When something happens that a card explains, that card's "?" pulses (a soft yellow glow, five times; a steady ring with reduced motion) until it is opened or something newer happens. Entering a tab makes the "?" by its title pulse, so new users find the buttons; the Forest tab also says "Each ? shows the language-model idea behind it."
+When something happens that a card explains, that card's "?" pulses (a soft yellow glow, five times; a steady ring with reduced motion) until it is opened or something newer happens. Entering a tab makes the "?" by its title pulse, so new users find the buttons; the Forest tab also says "Each ? shows the language-model idea behind it, and how real chatbots do it."
 
 Where the "?" buttons are, and what makes them pulse:
 
@@ -242,6 +247,8 @@ Where the "?" buttons are, and what makes them pulse:
 | All | Memory strip label | Context window | |
 | All | Outdated banner | Knowledge cutoff, or out of training data for a brand new forest | |
 | 1. Forest | Title | The forest as the model's world | Entering the tab |
+| 1. Forest | Forest code | The same code gives the same forest: a fixed random seed | |
+| 1. Forest | "Edit the forest" | You choose her world, as builders choose a model's training data | |
 | 1. Forest | Swamp note | Swamp eats the energy budget | Painting a swamp before lessons |
 | 1. Forest | "Her memory" | Context window | |
 | 1. Forest | "Chosen before her lessons…" | Context length is fixed before training | Changing the memory size |
@@ -276,6 +283,7 @@ Where the "?" buttons are, and what makes them pulse:
 | 4. Practice | "Run … of …" line while watching | Sampling: each move picked by chance | |
 | 4. Practice | "She practises from up to … steps" | Curriculum learning | |
 | 4. Practice | "How she does alone" | Test trips as a benchmark | |
+| 4. Practice | "Same … test trips: after lessons … after practice …" | Lessons first, then practice: the usual recipe | |
 | 4. Practice | "What … taught her" (after practice) | Reward hacking, teacher versus judge, bad judge (wolf), fixing bad data, or the general judge card | Practice ends |
 | 5. Inside the model | Title | The real numbers | Entering the tab |
 | 5. Inside the model | Vocabulary, Current input, Network, Loss curves, Fixed settings, Export and import | Vocabulary, one-hot inputs, weights, loss, hyperparameters, shared model files | |

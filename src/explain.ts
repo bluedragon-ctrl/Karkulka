@@ -10,10 +10,13 @@ export type CardKey =
   | 'tech' | 'vocabulary' | 'judge' | 'swamp' | 'tree' | 'thoughts'
   | 'tripReport' | 'judgeGrandma' | 'judgeFather' | 'judgeMother' | 'judgeCrow' | 'rewardHacking' | 'teacherVsJudge'
   | 'wolfTeacher' | 'poisonedData' | 'judgeWolf' | 'fixBadData'
-  | 'newWorld' | 'catchUp'
+  | 'newWorld' | 'catchUp' | 'forestCode' | 'editForest' | 'recipe'
   | 'moreData' | 'guess' | 'watchMany' | 'runScore' | 'testTrips' | 'sampling' | 'curriculum' | 'oneHot' | 'weights' | 'loss' | 'hyper' | 'modelFile';
 
 export const CARDS: Record<CardKey, string> = {
+  forestCode: "The same forest code always makes the same forest, so a whole class can share one forest and compare how their Red Riding Hoods do.",
+  editForest: "You decide what her world looks like, and so what she can learn from it. The people who build a language model decide what text it learns from.",
+  recipe: "Lessons first, then practice. Lessons show her the way; practice teaches her to manage on her own, even after a wrong step.",
   forest: "The forest is her whole world, like the text a language model works with. She only ever sees a small piece of it at a time.",
   view: "What she sees around her (a 3 × 3 window) is one input token, like one word a language model reads.",
   memory: "Her memory strip is like a language model's context window: everything she can take into account right now.",
@@ -35,7 +38,7 @@ export const CARDS: Record<CardKey, string> = {
   home: "She got home, one predicted step at a time, the way a language model writes one predicted word at a time.",
   tech: "This tab shows the real numbers behind the pictures: tokens, inputs, weights and probabilities.",
   vocabulary: "Her vocabulary is every view that can happen in this forest plus the four moves, just as a model has a fixed list of tokens.",
-  tree: "Ouch! She walked into a tree. The model gave that move a small chance, and this time chance picked it. A wasted step, like a language model wasting words on a wrong guess.",
+  tree: "Ouch! She walked into a tree. She gave that move a small chance, and this time chance picked it. A wasted step, like a language model wasting words on a wrong guess.",
   thoughts: "Her thoughts are made up after each move is picked, so she can say \"Scary wolf to the south! Let's go south.\" They sound like reasons, but they are not what made her choose: the move came first.",
   swamp: "Not every step is equally cheap: a swamp step uses 3 energy. Her energy is like a model's output budget, and the swamp eats it fast. The hurried father wades through; the careful mother walks around.",
   judge: "The judge knows the whole forest; she never sees the map, only the scores. Whoever judges decides what she learns, like the people who rate a model's answers.",
@@ -70,6 +73,9 @@ export const CARDS: Record<CardKey, string> = {
  */
 export const BIG: Partial<Record<CardKey, string>> = {
   forest: "A chatbot's world is text: books, websites and more, far more than anyone could read in a lifetime. It only knows what was in that text.",
+  forestCode: "Chatbot builders note their starting setup too, so they can run a training again and compare fairly.",
+  editForest: "Builders clean their text before training: they take out junk, copies and harmful pages, and add more of what they want the chatbot to be good at.",
+  recipe: "Chatbots are made the same way: first lots of reading, then example answers, then practice with people rating the answers.",
   view: "A chatbot reads text in small pieces called tokens: a word, part of a word, or a comma.",
   memory: "A chatbot remembers your message and its own answer so far. For each new word it looks back and picks out the parts that matter.",
   memorySize: "A chatbot can remember a whole book or more, but there is always a limit.",
@@ -83,7 +89,7 @@ export const BIG: Partial<Record<CardKey, string>> = {
   hallucination: "Ask a chatbot about something it hardly saw and it may still answer smoothly and confidently, and be wrong. Sounding sure is not knowing.",
   repetition: "Words look alike too: \"bank\" can be a river bank or a money bank. Only the words around it tell which.",
   exposure: "A chatbot also learns from perfect text only, never from its own slips, so one wrong word can lead it further astray.",
-  practice: "After reading and examples comes this step: a chatbot writes its own answers, people rate them, and it leans towards what they liked.",
+  practice: "A chatbot practises too: it writes its own answers, people rate them, and it leans towards the answers they liked.",
   outdated: "A chatbot learns from text up to a certain date. Ask about later news and it may not know, or may guess wrong.",
   catchUp: "Chatbots are kept up to date by more training on newer text, not by starting again.",
   home: "A chatbot writes one word, then reads everything again to pick the next. It never sees the whole answer in advance and can't take a word back.",
@@ -165,7 +171,7 @@ export function explainTrip(w: Walker, f: Forest, stats: TrainStats | null, outd
       title: 'Why did she do that?',
       text: `She got home in ${n} steps; the shortest way was ${shortest}.` +
         (extra > 0 ? ` She took ${extra} extra step${extra === 1 ? '' : 's'}.` : ' That is a perfect walk.') +
-        (d ? ` Her least sure moment was step ${worst + 1}, where she went ${MOVE_NAMES[w.history.moves[worst]]} with only ${pct(d.tempered[w.history.moves[worst]])} confidence.` : ''),
+        (d ? ` Her least sure moment was step ${worst + 1}, where she went ${MOVE_NAMES[w.history.moves[worst]]} only ${pct(d.tempered[w.history.moves[worst]])} sure.` : ''),
       card: 'home',
     };
   }
@@ -181,7 +187,7 @@ export function explainTrip(w: Walker, f: Forest, stats: TrainStats | null, outd
     if (d.tempered[chosen] < 0.3) {
       return {
         title: 'Why did she do that?',
-        text: `At step ${t + 1} she stepped ${MOVE_NAMES[chosen]} into a wolf den. The model gave that move only ${pct(raw)}, but boldness ${d.temperature.toFixed(1)} made it ${pct(d.tempered[chosen])}, and the dice landed on it.${cutoff}`,
+        text: `At step ${t + 1} she stepped ${MOVE_NAMES[chosen]} into a wolf den. She gave that move only ${pct(raw)}, but boldness ${d.temperature.toFixed(1)} made it ${pct(d.tempered[chosen])}, and the dice landed on it.${cutoff}`,
         card: 'boldness',
       };
     }
