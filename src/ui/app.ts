@@ -1099,7 +1099,7 @@ export class App {
   }
 
   private forestPanel(body: HTMLElement) {
-    const codeInput = h('input', { type: 'text', value: '', placeholder: 'forest code', maxlength: 12, 'aria-label': 'Forest code' });
+    const codeInput = h('input', { type: 'text', value: '', placeholder: 'code', maxlength: 12, 'aria-label': 'Forest code' });
     const open = () => {
       const code = normalizeCode(codeInput.value);
       if (code) this.setForest(generateForest(code), false);
@@ -1116,8 +1116,7 @@ export class App {
       h('p', { class: 'muted' }, 'Each ', h('span', { class: 'hint-q sample', 'aria-hidden': 'true' }, '?'), ' shows the language-model idea behind it, and how real chatbots do it.'),
       h('div', { class: 'group' },
         h('div', { class: 'code-line' }, 'Forest code ', h('code', { class: 'code' }, this.forest.code), this.edited ? h('span', { class: 'tag' }, 'edited') : null, this.q('forestCode')),
-        h('div', { class: 'row' }, h('button', { onclick: () => this.setForest(generateForest(randomCode()), false) }, 'New forest')),
-        h('div', { class: 'row' }, codeInput, h('button', { onclick: open }, 'Generate'))),
+        h('div', { class: 'row code-row' }, h('button', { onclick: () => this.setForest(generateForest(randomCode()), false) }, 'New forest'), codeInput, h('button', { onclick: open }, 'Generate'))),
       h('div', { class: 'group' },
         h('h3', {}, this.hq('Edit the forest', 'editForest')),
         h('p', { class: 'muted' }, 'Pick a brush, then click or drag on the map.'),

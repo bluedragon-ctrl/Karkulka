@@ -194,7 +194,7 @@ The app is a row of tabs that tells the story in order: Forest, Lessons, Trip al
 
 | Tab | What happens | User controls |
 | --- | --- | --- |
-| 1. Forest | Generate or edit the forest; home is fixed | New forest, a forest code to type in and Generate (the page link always carries the forest too), tile editing (path, tree, swamp, wolf den), memory size (short / medium / long), home-hint toggle; after lessons: small change, big change, new forest with the same Red Riding Hood |
+| 1. Forest | Generate or edit the forest; home is fixed | New forest, a forest code to type in and Generate, all on one line (the page link always carries the forest too), tile editing (path, tree, swamp, wolf den), memory size (short / medium / long), home-hint toggle; after lessons: small change, big change, new forest with the same Red Riding Hood |
 | 2. Lessons | Parents walk her home; the model trains per step | Teacher (mother / father / both / wolf in disguise / mother and sometimes the wolf), number of lessons, play or fast-forward; after a change: 30 / 100 / 300 catch-up lessons |
 | 3. Trip alone | She walks from a chosen start using the model | Click the start tile, energy (step budget), boldness dial, Next step, Walk through (pause any time), Instant run or Stop (end the trip now, when she goes in circles or keeps bumping into trees), fog toggle, her thoughts toggle |
 | 4. Practice (optional) | Her own runs, scored by a judge; then back to Trip alone to compare | Judge (Grandma / father / mother / crow / wolf), number of practice runs |

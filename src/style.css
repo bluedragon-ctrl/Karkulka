@@ -72,6 +72,9 @@ input[type="text"] { font: inherit; font-size: 0.92rem; padding: 0.35em 0.5em; b
 .note { font-size: 0.88rem; background: #f3efe3; padding: 0.5em 0.7em; border-radius: 8px; }
 .code-line { display: flex; align-items: center; gap: 0.5em; margin-bottom: 0.4em; }
 .code { font-size: 1.2rem; font-weight: 700; letter-spacing: 0.08em; background: #f3efe3; padding: 0.1em 0.4em; border-radius: 6px; }
+.code-row { flex-wrap: nowrap; }
+.code-row button { white-space: nowrap; flex: none; }
+.code-row input[type="text"] { width: 7em; min-width: 4em; flex: 0 1 7em; }
 .row.spaced { margin-top: 0.7rem; }
 .tag { font-size: 0.75rem; background: #fde2b3; padding: 0.1em 0.5em; border-radius: 99px; }
 .brushes { gap: 0.3rem; }
