@@ -111,7 +111,10 @@ export function tripReport(w: Pick<Walker, 'energy' | 'energyLeft' | 'positions'
 
 export interface Explanation { title: string; text: string; card?: CardKey }
 
-const pct = (p: number) => `${Math.round(p * 100)}%`;
+/** A percentage that never rounds a real chance to 0% or 100%. */
+export const pct = (p: number) => (p > 0 && p < 0.005 ? 'less than 1%' : p < 1 && p > 0.995 ? 'over 99%' : `${Math.round(p * 100)}%`);
+/** "only 12%", or "less than 1%" (never "only less than 1%"). */
+const onlyPct = (p: number) => (p > 0 && p < 0.005 ? pct(p) : `only ${pct(p)}`);
 
 export function explainTrip(w: Walker, f: Forest, stats: TrainStats | null, outdated: boolean): Explanation {
   const dist = walkingDistances(f);
@@ -134,7 +137,7 @@ export function explainTrip(w: Walker, f: Forest, stats: TrainStats | null, outd
       title: 'Why did she do that?',
       text: `She got home in ${n} steps; the shortest way was ${shortest}.` +
         (extra > 0 ? ` She took ${extra} extra step${extra === 1 ? '' : 's'}.` : ' That is a perfect walk.') +
-        (d ? ` Her least sure moment was step ${worst + 1}, where she went ${MOVE_NAMES[w.history.moves[worst]]} only ${pct(d.tempered[w.history.moves[worst]])} sure.` : ''),
+        (d ? ` Her least sure moment was step ${worst + 1}, where she went ${MOVE_NAMES[w.history.moves[worst]]} ${onlyPct(d.tempered[w.history.moves[worst]])} sure.` : ''),
       card: 'home',
     };
   }
@@ -150,7 +153,7 @@ export function explainTrip(w: Walker, f: Forest, stats: TrainStats | null, outd
     if (d.tempered[chosen] < 0.3) {
       return {
         title: 'Why did she do that?',
-        text: `At step ${t + 1} she stepped ${MOVE_NAMES[chosen]} into a wolf den. She gave that move only ${pct(raw)}, but boldness ${d.temperature.toFixed(1)} made it ${pct(d.tempered[chosen])}, and the dice landed on it.${cutoff}`,
+        text: `At step ${t + 1} she stepped ${MOVE_NAMES[chosen]} into a wolf den. She gave that move ${onlyPct(raw)}, but boldness ${d.temperature.toFixed(1)} made it ${pct(d.tempered[chosen])}, and the dice landed on it.${cutoff}`,
         card: 'boldness',
       };
     }
@@ -169,7 +172,7 @@ export function explainTrip(w: Walker, f: Forest, stats: TrainStats | null, outd
     if (taught <= 2) {
       return {
         title: 'Why did she do that?',
-        text: `At step ${t + 1} she was ${pct(d.tempered[chosen])} sure about going ${MOVE_NAMES[chosen]}, straight into a wolf den. Her parents walked past this spot only ${taught} time${taught === 1 ? '' : 's'}, so she was guessing with confidence.${alike ? ` It looks just like ${alike} other place${alike === 1 ? '' : 's'} in the forest.` : ''}${cutoff}`,
+        text: `At step ${t + 1} she was ${pct(d.tempered[chosen])} sure about going ${MOVE_NAMES[chosen]}, straight into a wolf den. ${taught === 0 ? 'Her parents never walked past this spot' : `Her parents walked past this spot only ${taught === 1 ? 'once' : 'twice'}`}, so she was guessing with confidence.${alike ? ` It looks just like ${alike} other place${alike === 1 ? '' : 's'} in the forest.` : ''}${cutoff}`,
         card: 'hallucination',
       };
     }
