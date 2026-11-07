@@ -215,3 +215,19 @@ export function moveToken(m: Move, size = 27, label?: string): SVGSVGElement {
   if (label) svg.append(s('title', {}, label));
   return svg;
 }
+
+/** A computer chip: the "How big models do it" button. */
+export function chipIcon(size = 22): SVGSVGElement {
+  const pins: SVGElement[] = [];
+  for (const p of [7, 12, 17]) {
+    pins.push(
+      s('line', { x1: p, y1: 1.5, x2: p, y2: 5 }), s('line', { x1: p, y1: 19, x2: p, y2: 22.5 }),
+      s('line', { x1: 1.5, y1: p, x2: 5, y2: p }), s('line', { x1: 19, y1: p, x2: 22.5, y2: p }),
+    );
+  }
+  return s('svg', { width: size, height: size, viewBox: '0 0 24 24', 'aria-hidden': 'true', class: 'chip-icon' },
+    s('g', { stroke: COLORS.ink, 'stroke-width': 1.6, 'stroke-linecap': 'round' }, ...pins),
+    s('rect', { x: 5, y: 5, width: 14, height: 14, rx: 2, fill: COLORS.ink }),
+    s('rect', { x: 8.5, y: 8.5, width: 7, height: 7, rx: 1, fill: 'none', stroke: COLORS.home, 'stroke-width': 1.4 }),
+  );
+}
