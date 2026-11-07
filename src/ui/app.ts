@@ -8,7 +8,7 @@ import { Thoughts } from '../thoughts';
 import * as store from '../storage';
 import { LessonWalk, Teacher, TeacherChoice, costToHome, endsAtDen, teacherMoves, walkLesson } from '../teachers';
 import { MEMORY_PAIRS, MemorySize, ModelConfig } from '../tokens';
-import { FIXED, JUDGES, Judge, TrainStats, chooseTeacher, guessesRight, homeShare, learnFromLesson, learnFromRun, newStats, practiceSetup, practiceWalker, recordLessonBatch, recordPracticeBatch, startTiles, teacherCosts } from '../train';
+import { FIXED, JUDGES, Judge, PRACTICE_STARTS, PracticeStarts, TrainStats, chooseTeacher, guessesRight, homeShare, learnFromLesson, learnFromRun, newStats, practiceSetup, practiceWalker, recordLessonBatch, recordPracticeBatch, practiceStartTiles, startTiles, teacherCosts } from '../train';
 import { WorkerRequest, runTraining } from '../workerTypes';
 import {
   DEFAULT_SIZE, Forest, HOME, MOVES, MOVE_ARROWS, MOVE_NAMES, PATH, SECTOR_WORDS, SWAMP, TREE, Tile, WOLF, copyForest,
@@ -38,6 +38,8 @@ interface Settings {
   lessons: number;
   practice: number;
   judge: Judge;
+  /** Where practice runs start: close to home first (curriculum) or anywhere. */
+  practiceStarts: PracticeStarts;
   energy: number;
   boldness: number;
   fog: boolean;
@@ -48,7 +50,7 @@ interface Settings {
 }
 
 const DEFAULTS: Settings = {
-  memory: 'medium', hint: false, teacher: 'mother', lessons: 100, practice: 1000, judge: 'grandma',
+  memory: 'medium', hint: false, teacher: 'mother', lessons: 100, practice: 1000, judge: 'grandma', practiceStarts: 'near',
   energy: 80, boldness: 0.7, fog: false, thoughts: true, heat: true, brush: TREE,
 };
 
@@ -327,6 +329,7 @@ export class App {
       Object.assign(this.settings, saved.settings);
       if (!JUDGES.includes(this.settings.judge)) this.settings.judge = DEFAULTS.judge;
       if (!TEACHERS.some((t) => t.id === this.settings.teacher)) this.settings.teacher = DEFAULTS.teacher;
+      if (!PRACTICE_STARTS.includes(this.settings.practiceStarts)) this.settings.practiceStarts = DEFAULTS.practiceStarts;
       const { code, size, tiles } = saved.forest;
       forest = tiles.length === size * size ? forestFromTiles(code, size, tiles) : generateForest(code, size);
       this.edited = saved.forest.edited;
@@ -757,7 +760,7 @@ export class App {
     this.lastPractice = null;
     this.lastRun = null;
     this.runJob(
-      { kind: 'practice', model: this.model, forest: copyForest(this.forest), stats: this.stats, count, seed: this.seed(), judge },
+      { kind: 'practice', model: this.model, forest: copyForest(this.forest), stats: this.stats, count, seed: this.seed(), judge, starts: this.settings.practiceStarts },
       0.12,
       () => {
         this.walker = null;
@@ -780,7 +783,7 @@ export class App {
     const judge = this.settings.judge;
     const homeBefore = this.homeNow();
     const scoreFrom = this.stats.practiceScore.length;
-    const setup = practiceSetup(this.forest, this.stats);
+    const setup = practiceSetup(this.forest, this.stats, this.settings.practiceStarts);
     this.lastPractice = null;
     this.lastRun = null;
     this.board.clearTrails();
@@ -792,9 +795,9 @@ export class App {
       // The summary at the end counts the whole row, the watched runs too.
       rest: (n) => this.startPractice(n, { homeBefore, scoreFrom }),
       begin: () => {
-        const starts = startTiles(this.forest, 1, this.stats.radius, setup.dist);
+        const starts = practiceStartTiles(this.forest, this.stats, setup);
         if (!starts.length) return null;
-        this.runWatch = practiceWalker(model, this.forest, pick(this.rng, starts), this.stats, this.rng);
+        this.runWatch = practiceWalker(model, this.forest, pick(this.rng, starts), this.stats, this.rng, setup);
         return this.runWatch;
       },
       advance: (w) => {
@@ -969,7 +972,7 @@ export class App {
     if (this.tab === 'practice') {
       const d = walkingDistances(this.forest);
       const set = new Set<number>();
-      d.forEach((v, i) => { if (v >= 1 && v <= this.stats.radius) set.add(i); });
+      if (this.settings.practiceStarts === 'near') d.forEach((v, i) => { if (v >= 1 && v <= this.stats.radius) set.add(i); });
       b.setRadius(set);
       const w = this.runWatch;
       if (w) {
@@ -1333,7 +1336,15 @@ export class App {
         all: () => this.startPractice(), explainCard: 'sampling', last: this.runLine(),
       }),
       this.lastRun && !(this.job?.kind === 'watchRuns' && this.job.total > 1) ? h('p', {}, this.runLine()) : null,
-      h('p', {}, h('span', { class: 'swatch-box' }), this.hq(` She practises from up to ${st.radius} steps from home (outlined); the circle grows as she succeeds.`, 'curriculum')),
+      h('h3', {}, this.hq('Where does she start?', 'curriculum')),
+      h('div', { class: 'radios' }, ...PRACTICE_STARTS.map((id) => h('label', { class: 'radio' },
+        h('input', { type: 'radio', name: 'practiceStarts', disabled: this.busy, checked: this.settings.practiceStarts === id, onchange: () => {
+          this.settings.practiceStarts = id; this.saveSoon(); this.showCard('curriculum'); this.render();
+        } }),
+        id === 'near' ? 'Close to home first' : 'Anywhere in the forest'))),
+      this.settings.practiceStarts === 'near'
+        ? h('p', {}, h('span', { class: 'swatch-box' }), this.hq(` Easy trips first: she starts at most ${st.radius} steps from home (outlined). The circle grows when she gets home most of the time.`, 'curriculum'))
+        : h('p', {}, this.hq('Any spot in the forest, near or far. If she has had few lessons, far trips are too hard at first and teach her little.', 'curriculum')),
       h('h3', {}, this.hq('How she does alone', 'testTrips')),
       outcomeChart(st.practiceEval, 'lessons + runs'),
       before && after ? h('p', { class: 'compare' }, this.hq(`On the same test trips: after lessons ${pct(before.home)} home, ${pct(before.eaten)} eaten; after practice ${pct(after.home)} home, ${pct(after.eaten)} eaten.`, 'recipe')) : null,

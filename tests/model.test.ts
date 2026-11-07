@@ -6,7 +6,7 @@ import { mulberry32 } from '../src/rng';
 import { Walker } from '../src/sim';
 import { costToHome, endsAtDen, walkLesson } from '../src/teachers';
 import { MEMORY_PAIRS, SLOT_FEATS, VIEW_FEATS, encodeContext, inputSize, buildVocabulary } from '../src/tokens';
-import { FIXED, JUDGES, Run, chooseTeacher, evalEvery, guessesRight, headsHome, judgeMaps, learnFromRun, practiceSetup, practiceWalker, startTiles, judgeRewards, judgeScore, homeShare, newStats, trainLessons, trainPractice } from '../src/train';
+import { FIXED, JUDGES, Run, chooseTeacher, evalEvery, guessesRight, headsHome, judgeMaps, learnFromRun, practiceSetup, practiceStartTiles, practiceWalker, startTiles, judgeRewards, judgeScore, homeShare, newStats, trainLessons, trainPractice } from '../src/train';
 import { Forest, HOME, Move, PATH, SWAMP, TREE, Tile, WOLF, allReachable, forestFromTiles, neighbor, pathTiles, walkableTiles } from '../src/world';
 
 const cfg = { memory: MEMORY_PAIRS.medium, hint: false, hidden: 16 };
@@ -109,6 +109,20 @@ describe('training', () => {
     expect(stats.practiceRuns).toBe(200);
     expect(stats.practiceEval.length).toBeGreaterThan(0);
     expect(stats.radius).toBeGreaterThan(FIXED.curriculumStart);
+  });
+
+  it('practice can start anywhere, with full energy and no curriculum', () => {
+    const m = createModel({ ...cfg, hidden: FIXED.hidden }, mulberry32(1));
+    const stats = newStats(f);
+    trainLessons(m, createAdam(m), f, 'mother', 200, stats, mulberry32(2));
+    const near = practiceSetup(f, stats);
+    const anywhere = practiceSetup(f, stats, 'anywhere');
+    expect(practiceStartTiles(f, stats, anywhere)).toEqual(startTiles(f));
+    expect(practiceStartTiles(f, stats, near).length).toBeLessThan(startTiles(f).length);
+    expect(practiceWalker(m, f, startTiles(f)[0], stats, mulberry32(3), anywhere).energy).toBe(FIXED.evalEnergy);
+    trainPractice(m, f, 'grandma', 200, stats, mulberry32(3), undefined, 'anywhere');
+    expect(stats.practiceRuns).toBe(200);
+    expect(stats.radius).toBe(FIXED.curriculumStart);
   });
 
   it('a watched practice run is learned from like a worker run', () => {

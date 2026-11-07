@@ -1,10 +1,10 @@
 import type { Model } from './model';
 import type { TeacherChoice } from './teachers';
-import type { ChunkInfo, Judge, TrainStats } from './train';
+import type { ChunkInfo, Judge, PracticeStarts, TrainStats } from './train';
 import type { Forest } from './world';
 
 interface Common { model: Model; forest: Forest; stats: TrainStats; count: number; seed: number }
-export type WorkerRequest = (Common & { kind: 'lessons'; teacher: TeacherChoice }) | (Common & { kind: 'practice'; judge: Judge });
+export type WorkerRequest = (Common & { kind: 'lessons'; teacher: TeacherChoice }) | (Common & { kind: 'practice'; judge: Judge; starts: PracticeStarts });
 
 export type WorkerResponse =
   | { type: 'progress'; done: number; total: number; stats: TrainStats; paths: ChunkInfo['paths'] }

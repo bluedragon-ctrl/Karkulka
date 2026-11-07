@@ -65,7 +65,7 @@ export const CARDS: Record<CardKey, string> = {
   runScore: "The judge gives a whole run one score, and every move in it shares the credit or blame. One run is partly luck; over many runs the good moves win. RLHF scores a language model's answers the same way.",
   testTrips: "She is tested on the same fixed trips every time, like a language model tested on a benchmark: the same questions each time, so you can see whether she really got better.",
   sampling: "At each step she decides how likely each move is, then picks one by chance, like rolling a dice. From the same start she can walk a different way each time. Ask a chatbot the same question twice and you can get two different answers, but it skips very unlikely words.",
-  curriculum: "She practises close to home first and further away as she gets better. Starting with easy examples and moving on to harder ones is called curriculum learning.",
+  curriculum: "Easy trips first, then harder ones: that is curriculum learning. It matters most when she knows little: with no lessons and starting anywhere, she rarely gets home, so most trips score the same and teach little. Real chatbots are often trained on easy tasks before hard ones too.",
   oneHot: "A model can only work with numbers, so every tile she sees becomes a row of 0s with a single 1. A chatbot also turns each word into numbers before it reads it: a long list, where similar words get similar numbers.",
   weights: "Everything she knows is in these numbers, the weights. Lessons and practice only nudge them a little at a time. A big language model is the same, with billions of weights.",
   loss: "The loss is how surprised she is by the teacher's move. Training means making this number go down, one example at a time. Chatbot builders watch the same kind of number fall during months of training.",
@@ -102,6 +102,8 @@ export const CARD_DETAILS: Partial<Record<CardKey, { title: string; lines: () =>
   curriculum: { title: 'The numbers', lines: () => [
     `She starts within ${FIXED.curriculumStart} steps of home`,
     `When she gets home in ${Math.round(FIXED.curriculumThreshold * 100)}% of her last ${FIXED.curriculumWindow} runs, the circle grows by ${FIXED.curriculumStep} steps`,
+    `Energy for a practice trip: 4 × the circle + 10, at most ${FIXED.evalEnergy}`,
+    `Anywhere: any path tile, ${FIXED.evalEnergy} energy, and the circle stays as it is`,
   ] },
   judgeGrandma: { title: 'How Grandma scores a run', lines: () => [
     `${num(FIXED.rewardHome)} for reaching home`,

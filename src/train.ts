@@ -315,20 +315,31 @@ export function practiceEnergy(radius: number) {
   return Math.min(FIXED.evalEnergy, 4 * radius + 10);
 }
 
+/**
+ * Where practice runs start: `near` is the curriculum (close to home first, the circle
+ * grows as she succeeds); `anywhere` is any path tile, with no curriculum.
+ */
+export type PracticeStarts = 'near' | 'anywhere';
+export const PRACTICE_STARTS: PracticeStarts[] = ['near', 'anywhere'];
+
 /** What practice needs to know about the forest, worked out once per round. */
-export interface PracticeSetup { dist: Int32Array; maps: JudgeMaps; maxDist: number }
+export interface PracticeSetup { dist: Int32Array; maps: JudgeMaps; maxDist: number; starts: PracticeStarts }
 
 /** Get ready for a round of practice; also keeps the curriculum radius inside the forest. */
-export function practiceSetup(f: Forest, stats: TrainStats): PracticeSetup {
+export function practiceSetup(f: Forest, stats: TrainStats, starts: PracticeStarts = 'near'): PracticeSetup {
   const dist = walkingDistances(f);
   const maxDist = Math.max(1, ...Array.from(dist));
   stats.radius = Math.min(Math.max(stats.radius, FIXED.curriculumStart), maxDist);
-  return { dist, maps: judgeMaps(f), maxDist };
+  return { dist, maps: judgeMaps(f), maxDist, starts };
 }
 
+/** The tiles a practice run may start on: inside the curriculum circle, or anywhere. */
+export const practiceStartTiles = (f: Forest, stats: TrainStats, setup: PracticeSetup): number[] =>
+  startTiles(f, 1, setup.starts === 'near' ? stats.radius : Infinity, setup.dist);
+
 /** A practice run, not yet walked: she starts at `start` with the practice energy and boldness. */
-export const practiceWalker = (model: Model, f: Forest, start: number, stats: TrainStats, rng: Rng): Walker =>
-  new Walker(f, model, start, practiceEnergy(stats.radius), FIXED.practiceBoldness, rng);
+export const practiceWalker = (model: Model, f: Forest, start: number, stats: TrainStats, rng: Rng, setup?: PracticeSetup): Walker =>
+  new Walker(f, model, start, setup?.starts === 'anywhere' ? FIXED.evalEnergy : practiceEnergy(stats.radius), FIXED.practiceBoldness, rng);
 
 /**
  * Learn from one finished practice run: the judge scores it, each move is nudged by
@@ -364,7 +375,8 @@ export function learnFromRun(model: Model, f: Forest, judge: Judge, w: Walker, s
   stats.judgeRuns = stats.judgeRuns ?? {};
   stats.judgeRuns[judge] = (stats.judgeRuns[judge] ?? 0) + 1;
 
-  // Automatic curriculum: move outward once she mostly succeeds.
+  // Automatic curriculum: move outward once she mostly succeeds (not when she starts anywhere).
+  if (setup.starts === 'anywhere') return s;
   stats.recent.push(outcome === 'home' ? 1 : 0);
   if (stats.recent.length >= FIXED.curriculumWindow) {
     const rate = stats.recent.reduce((a, b) => a + b, 0) / stats.recent.length;
@@ -384,9 +396,9 @@ export function recordPracticeBatch(model: Model, f: Forest, stats: TrainStats, 
 
 export function trainPractice(
   model: Model, f: Forest, judge: Judge, count: number, stats: TrainStats, rng: Rng,
-  onChunk?: (info: ChunkInfo) => void,
+  onChunk?: (info: ChunkInfo) => void, startsAt: PracticeStarts = 'near',
 ) {
-  const setup = practiceSetup(f, stats);
+  const setup = practiceSetup(f, stats, startsAt);
   let scoreSum = 0;
   let scoreN = 0;
   let paths: ChunkInfo['paths'] = [];
@@ -396,10 +408,10 @@ export function trainPractice(
   for (let i = 0; i < count; i++) {
     if (startsRadius !== stats.radius) {
       startsRadius = stats.radius;
-      starts = startTiles(f, 1, stats.radius, setup.dist);
+      starts = practiceStartTiles(f, stats, setup);
     }
     if (!starts.length) return;
-    const w = practiceWalker(model, f, pick(rng, starts), stats, walkRng);
+    const w = practiceWalker(model, f, pick(rng, starts), stats, walkRng, setup);
     w.run();
     scoreSum += learnFromRun(model, f, judge, w, stats, setup);
     scoreN++;
