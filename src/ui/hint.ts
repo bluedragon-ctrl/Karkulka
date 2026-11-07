@@ -1,7 +1,6 @@
-/** Small "?" buttons next to controls and results; each opens its LM corner card as a popup, with an "In a big model" part when the card has one. */
-import { BIG, CARDS, CardKey } from '../explain';
+/** Small "?" buttons next to controls and results; each opens its LM corner card as a popup. */
+import { CARDS, CardKey } from '../explain';
 import { h } from './dom';
-import { chipIcon } from './symbols';
 
 let pop: HTMLDivElement | null = null;
 let owner: HTMLButtonElement | null = null;
@@ -67,8 +66,6 @@ function openHint(btn: HTMLButtonElement, key: CardKey, id: string, byKeyboard: 
       h('button', { class: 'icon', 'aria-label': 'Close', onclick: () => { const b = owner; closeHint(); b?.focus(); } }, '×')),
     h('p', {}, CARDS[key]),
   );
-  const big = BIG[key];
-  if (big) p.append(h('div', { class: 'lm-big' }, h('div', { class: 'lm-big-head' }, chipIcon(16), 'In a big model'), h('p', {}, big)));
   p.hidden = false;
   btn.setAttribute('aria-expanded', 'true');
   placeHint();

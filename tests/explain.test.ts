@@ -1,22 +1,18 @@
 import { describe, expect, it } from 'vitest';
-import { BIG, CARDS } from '../src/explain';
+import { CARDS } from '../src/explain';
 
 describe('LM corner cards', () => {
   it('every card has a short, plain text', () => {
     for (const [key, text] of Object.entries(CARDS)) {
       expect(text.trim().length, key).toBeGreaterThan(20);
-      // They open as small popups next to a "?" button, so they must stay short.
-      expect(text.length, key).toBeLessThan(210);
+      // They open as small popups next to a "?" button, so they must stay short,
+      // even with the comparison to a real chatbot.
+      expect(text.length, key).toBeLessThan(300);
     }
   });
 
-  it('every "In a big model" part is short and belongs to a card', () => {
-    expect(Object.keys(BIG).length).toBeGreaterThan(20);
-    for (const [key, text] of Object.entries(BIG)) {
-      expect(CARDS[key as keyof typeof CARDS], key).toBeDefined();
-      expect(text!.trim().length, key).toBeGreaterThan(20);
-      // A short real-world comparison under the card, not a lecture.
-      expect(text!.length, key).toBeLessThan(170);
-    }
+  it('most cards compare the idea with a real chatbot', () => {
+    const withChatbot = Object.values(CARDS).filter((t) => /chatbot/i.test(t));
+    expect(withChatbot.length).toBeGreaterThan(30);
   });
 });
