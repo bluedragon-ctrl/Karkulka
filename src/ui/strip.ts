@@ -7,11 +7,11 @@ import { moveToken, viewToken } from './symbols';
 /** `hint` is an optional "?" button for the label. */
 export function renderStrip(el: HTMLElement, hist: History | null, t: number, memory: number, nextMove?: Move | null, hint?: Node) {
   clear(el);
-  el.append(h('div', { class: 'strip-label' }, h('strong', {}, 'Memory strip', hint ?? null), h('span', {}, `she remembers ${memory} view–move pair${memory === 1 ? '' : 's'}`)));
+  el.append(h('div', { class: 'strip-label' }, h('strong', {}, 'Memory strip', hint ?? null), h('span', {}, `she remembers her last ${memory === 1 ? 'step' : `${memory} steps`}`)));
   const row = h('div', { class: 'strip-row' });
   el.append(row);
   if (!hist || !hist.views.length) {
-    row.append(h('span', { class: 'strip-empty' }, 'Tokens appear here as she walks: [view] [move] [view] [move] … → next move?'));
+    row.append(h('span', { class: 'strip-empty' }, 'As she walks, what she sees and which way she goes appear here in turn: [view] [move] [view] [move] … → next move?'));
     return;
   }
   const extra = 3;

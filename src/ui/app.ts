@@ -1,6 +1,5 @@
 /** The app: five tabs that tell the story in order. */
 import { CardKey, Explanation, explainTrip, tripReport } from '../explain';
-import { INSIGHTS } from '../insights';
 import { CHANGE_SIZES, changeForest, generateForest } from '../forest';
 import { Adam, Model, createAdam, createModel, modelFromJSON, modelToJSON } from '../model';
 import { mulberry32, normalizeCode, pick, randomCode } from '../rng';
@@ -20,7 +19,7 @@ import { changeChart, outcomeChart } from './charts';
 import { add, clear, h, s } from './dom';
 import { closeHint, hintButton, placeHint } from './hint';
 import { renderStrip } from './strip';
-import { COLORS, chipIcon, crowFigure, grandmaFigure, parentFigure, tileSymbol, wolfHead } from './symbols';
+import { COLORS, crowFigure, grandmaFigure, parentFigure, tileSymbol, wolfHead } from './symbols';
 import { renderTech } from './tech';
 
 type TabId = 'forest' | 'lessons' | 'trip' | 'practice' | 'inside';
@@ -70,7 +69,7 @@ const JUDGE_INFO: Record<Judge, { name: string; text: string; card: CardKey; rul
     rules: () => [
       [h('strong', {}, `+${FIXED.rewardHome}`), ' for reaching home'],
       [h('strong', {}, `−${Math.abs(FIXED.rewardEaten)}`), ' for being eaten'],
-      [h('strong', {}, `−${FIXED.lostPenalty}`), ' for running out of energy, plus ', h('strong', {}, `up to +${FIXED.partialCreditWeight}`), ' for ending closer to home (by the energy still needed to get there)'],
+      [h('strong', {}, `−${FIXED.lostPenalty}`), ' for running out of energy, plus ', h('strong', {}, `up to +${FIXED.partialCreditWeight}`), ' for ending closer to home'],
     ],
   },
   father: {
@@ -203,11 +202,6 @@ export class App {
   private panelBody = h('div', { class: 'panel-body' });
   private stripEl = h('div', { class: 'strip' });
   private techEl = h('div', { class: 'tech', hidden: true });
-  private insightDialog = h('dialog', { class: 'insight-dialog', 'aria-labelledby': 'insight-title' });
-  private insightBtn = h('button', {
-    class: 'insight-btn', title: 'How this works in real, big language models',
-    onclick: () => this.openInsight(),
-  }, chipIcon(), 'How big models do it');
   private board: Board;
 
   constructor(root: HTMLElement) {
@@ -217,11 +211,9 @@ export class App {
         this.tabsEl),
       this.banner,
       this.stage,
-      this.insightDialog,
     );
-    this.insightDialog.addEventListener('click', (e) => { if (e.target === this.insightDialog) this.insightDialog.close(); });
     this.stage.append(h('div', { class: 'main-col' }, this.boardWrap, this.stripEl), this.panel, this.techEl);
-    this.panel.append(h('div', { class: 'insight-bar' }, this.insightBtn), this.panelBody);
+    this.panel.append(this.panelBody);
     this.board = new Board(this.boardWrap);
     this.board.onTileDown = (i) => this.onTile(i, false);
     this.board.onTileDrag = (i) => this.onTile(i, true);
@@ -833,7 +825,6 @@ export class App {
     (this.boardWrap.parentElement as HTMLElement).hidden = inside;
     if (inside) this.renderTechNow();
     else {
-      if (!this.panel.contains(this.insightBtn)) this.panel.querySelector('.insight-bar')?.append(this.insightBtn);
       this.renderBoard();
       this.renderPanel();
       this.renderStripNow();
@@ -858,26 +849,8 @@ export class App {
     clear(this.banner);
     if (this.outdated) {
       const marked = this.changedTiles.length <= MAX_MARKED;
-      this.banner.append(h('strong', {}, 'Her lessons are outdated. '), 'The forest changed after she was taught, so she still remembers the old forest, like a language model\'s knowledge cutoff. ', marked ? 'Changed tiles have a dashed yellow edge. ' : 'This whole forest is new to her. ', this.hq('Catch-up lessons (tab 2) bring her up to date. ', marked ? 'outdated' : 'newWorld', 'banner'));
+      this.banner.append(h('strong', {}, 'Her lessons are out of date. '), 'The forest changed after she was taught, but she still remembers the old one. ', marked ? 'Changed tiles have a dashed yellow edge. ' : 'This whole forest is new to her. ', this.hq('Catch-up lessons (tab 2) bring her up to date. ', marked ? 'outdated' : 'newWorld', 'banner'));
     }
-  }
-
-  /** The "How big models do it" dialog for the current tab. */
-  private openInsight() {
-    const ins = INSIGHTS[this.tab];
-    clear(this.insightDialog).append(
-      h('div', { class: 'insight-head' },
-        h('h2', { id: 'insight-title' }, chipIcon(26), ins.title),
-        h('button', { class: 'icon', 'aria-label': 'Close', onclick: () => this.insightDialog.close() }, '×')),
-      h('p', { class: 'insight-intro' }, ins.intro),
-      h('dl', { class: 'insight-list' }, ...ins.items.flatMap((it) => [
-        h('dt', {}, h('span', { class: 'insight-tag' }, 'In the game'), it.game),
-        h('dd', {}, h('span', { class: 'insight-tag real' }, 'In a big model'), it.real),
-      ])),
-      h('button', { class: 'primary insight-close', onclick: () => this.insightDialog.close() }, 'Back to the game'),
-    );
-    this.insightDialog.showModal();
-    this.insightDialog.scrollTop = 0;
   }
 
   private renderStripNow() {
@@ -900,7 +873,6 @@ export class App {
       onImport: (f) => this.importModel(f),
       hint: (key) => this.q(key),
     });
-    this.techEl.prepend(h('div', { class: 'insight-bar' }, this.insightBtn));
   }
 
   private tints(pos: number): (string | null)[] | undefined {
@@ -1081,19 +1053,19 @@ export class App {
     add(body,
       h('h2', {}, this.hq('The forest', 'forest')),
       h('p', {}, "Grandma's house stays in the same spot. Everything she learns and every test happens in this one forest."),
-      h('p', { class: 'muted' }, 'Each ', h('span', { class: 'hint-q sample', 'aria-hidden': 'true' }, '?'), ' shows the language-model idea behind it.'),
+      h('p', { class: 'muted' }, 'Each ', h('span', { class: 'hint-q sample', 'aria-hidden': 'true' }, '?'), ' shows the language-model idea behind it, and how real chatbots do it.'),
       h('div', { class: 'group' },
-        h('div', { class: 'code-line' }, 'Forest code ', h('code', { class: 'code' }, this.forest.code), this.edited ? h('span', { class: 'tag' }, 'edited') : null),
+        h('div', { class: 'code-line' }, 'Forest code ', h('code', { class: 'code' }, this.forest.code), this.edited ? h('span', { class: 'tag' }, 'edited') : null, this.q('forestCode')),
         h('div', { class: 'row' },
           h('button', { onclick: () => this.setForest(generateForest(randomCode()), false) }, 'New forest'),
           h('button', { onclick: (e: Event) => this.copyLink(e.target as HTMLButtonElement) }, 'Copy link')),
         h('div', { class: 'row' }, codeInput, h('button', { onclick: open }, 'Open'))),
       h('div', { class: 'group' },
-        h('h3', {}, 'Edit the forest'),
+        h('h3', {}, this.hq('Edit the forest', 'editForest')),
         h('p', { class: 'muted' }, 'Pick a brush, then click or drag on the map.'),
         h('div', { class: 'row brushes' }, brushBtn(PATH, 'Path'), brushBtn(TREE, 'Tree'), brushBtn(SWAMP, 'Swamp'), brushBtn(WOLF, 'Wolf den')),
         h('p', { class: 'muted' }, this.hq(`A swamp can be crossed, but each step in it costs ${SWAMP_COST} energy instead of 1.`, 'swamp')),
-        unreachable ? h('p', { class: 'warn' }, `${unreachable} path tile${unreachable === 1 ? '' : 's'} cannot reach home without crossing a wolf den. Parents never start lessons there.`) : null,
+        unreachable ? h('p', { class: 'warn' }, `${unreachable} path tile${unreachable === 1 ? '' : 's'} can't reach home without crossing a wolf den. Her parents never start lessons there.`) : null,
         this.edited ? h('button', { onclick: () => this.undoEdits() }, 'Undo all edits') : null),
       this.changeBox('forest'),
       h('div', { class: 'group' },
@@ -1120,7 +1092,7 @@ export class App {
     const busy = this.busy;
     add(body,
       h('h2', {}, this.hq('Lessons', 'lessons')),
-      h('p', {}, this.hq('A teacher walks her from a random spot. At every step she guesses the next move, compares it with what the teacher did, and adjusts.', 'guess')),
+      h('p', {}, this.hq('A teacher walks her home from a random spot. At every step she guesses the next move, sees what the teacher did, and learns a little.', 'guess')),
       this.changeBox('lessons'),
       h('h3', {}, this.hq('Who teaches her?', teacherCard(this.settings.teacher))),
       h('div', { class: 'group teachers', role: 'radiogroup', 'aria-label': 'Teacher' }, ...TEACHERS.map((t) => {
@@ -1143,7 +1115,7 @@ export class App {
       h('p', {}, st.lessons ? `She has had ${st.lessons} lesson${st.lessons === 1 ? '' : 's'} (mother ${st.teacherCounts.mother}, father ${st.teacherCounts.father}${st.teacherCounts.wolf ? `, wolf ${st.teacherCounts.wolf}` : ''}).` : 'No lessons yet.'),
       h('h3', {}, this.hq('How she does alone', 'testTrips')),
       outcomeChart(st.lessonEval, 'lessons'),
-      h('p', { class: 'muted' }, `Measured on the same ${FIXED.evalStarts} test trips about ${FIXED.evalPoints} times per round of lessons.`),
+      h('p', { class: 'muted' }, `Every so often she walks the same ${FIXED.evalStarts} test trips alone, to see how much she has improved.`),
       h('label', { class: 'check' }, h('input', { type: 'checkbox', checked: this.settings.heat, onchange: (e: Event) => { this.settings.heat = (e.target as HTMLInputElement).checked; this.showCard('coverage'); this.renderBoard(); this.saveSoon(); } }), h('span', {}, this.hq('Show where she was taught (heatmap)', 'coverage'))),
       h('p', { class: 'note' }, h('strong', {}, 'Known weakness: '), this.hq('lessons are always correct, so she never learns how to recover after a wrong step. Practice (tab 4) fixes this.', 'exposure')),
       this.model ? h('button', { class: 'subtle', disabled: busy, onclick: () => { if (confirm('Start over with a new Red Riding Hood? All her lessons and practice will be forgotten.')) { this.resetModel(); this.saveSoon(); this.render(); } } }, 'Start over with a new Red Riding Hood') : null,
@@ -1158,7 +1130,7 @@ export class App {
       const raw = w.decide().raw;
       const tp = w.tempered();
       for (const m of MOVES) {
-        probsBox.append(h('div', { class: 'prob-row', title: `model: ${(raw[m] * 100).toFixed(1)}%, after boldness: ${(tp[m] * 100).toFixed(1)}%` },
+        probsBox.append(h('div', { class: 'prob-row', title: `before boldness: ${(raw[m] * 100).toFixed(1)}%, after boldness: ${(tp[m] * 100).toFixed(1)}%` },
           h('span', { class: 'arr' }, MOVE_ARROWS[m]), h('span', { class: 'name' }, MOVE_NAMES[m]),
           h('span', { class: 'pbar' }, h('span', { style: `width:${tp[m] * 100}%` })), h('span', { class: 'pct' }, `${Math.round(tp[m] * 100)}%`)));
       }
@@ -1176,7 +1148,7 @@ export class App {
         ].filter((x): x is string | HTMLElement => !!x);
     add(body,
       h('h2', {}, this.hq('Trip alone', 'view')),
-      h('p', {}, this.hq('At each step she reads her memory strip, the model gives a probability for each move, and one move is picked by chance.', 'sampling')),
+      h('p', {}, this.hq('At each step she looks at her memory strip, decides how likely each move is, and then picks one by chance, like rolling a dice.', 'sampling')),
       h('p', { class: 'status' }, ...status),
       this.why ? h('div', { class: 'why' }, h('h3', {}, this.why.card ? this.hq(this.why.title, this.why.card, 'why') : this.why.title), h('p', {}, this.why.text)) : null,
       w && w.done && w.outcome !== 'eaten' ? this.reportBox(w) : null,
@@ -1246,7 +1218,7 @@ export class App {
     const pct = (v: number) => `${Math.round(v * 100)}%`;
     add(body,
       h('h2', {}, this.hq('Practice on her own', 'practice')),
-      h('p', {}, 'She walks alone, picking her own moves, and a judge who knows the forest scores each run. Moves followed by a good score become more likely; moves followed by a bad one, less likely.'),
+      h('p', {}, 'She walks alone and a judge who knows the forest gives each walk a score. After a good score she makes those moves more often; after a bad one, less often.'),
       h('h3', {}, this.hq('Who judges?', 'judge')),
       h('div', { class: 'group teachers', role: 'radiogroup', 'aria-label': 'Judge' }, ...JUDGES.map((j) =>
         h('label', { class: `teacher ${this.settings.judge === j ? 'active' : ''}` },
@@ -1264,7 +1236,7 @@ export class App {
       st.practiceRuns ? h('p', {}, `${st.practiceRuns} practice runs so far.`) : null,
       h('h3', {}, this.hq('How she does alone', 'testTrips')),
       outcomeChart(st.practiceEval, 'lessons + runs'),
-      before && after ? h('p', { class: 'compare' }, `Same ${FIXED.evalStarts} test trips: after lessons ${pct(before.home)} home, ${pct(before.eaten)} eaten; after practice ${pct(after.home)} home, ${pct(after.eaten)} eaten.`) : null,
+      before && after ? h('p', { class: 'compare' }, this.hq(`Same ${FIXED.evalStarts} test trips: after lessons ${pct(before.home)} home, ${pct(before.eaten)} eaten; after practice ${pct(after.home)} home, ${pct(after.eaten)} eaten.`, 'recipe')) : null,
       this.practiceSummary(),
       this.next('Back to Trip alone to compare', 'trip'),
     );
@@ -1282,20 +1254,20 @@ export class App {
     const homeDown = p.homeAfter < p.homeBefore - 0.05;
     const verdict = p.judge === 'wolf'
       ? (homeDown ? 'The wolf is ruining her: she gets home less often and walks into dens more. Whatever the judge rewards is what she learns. Practise with Grandma to try to undo it.'
-        : 'The wolf wants her at his den. Keep practising with him and watch her home rate fall.')
+        : 'The wolf wants her at his den. Keep practising with him and watch her get home less often.')
       : p.judge === 'grandma' && wolfTaught
         ? (p.homeAfter > p.homeBefore + 0.05 ? 'Grandma\'s practice is undoing some of what the wolf taught her. The more of it there is, the longer it takes.'
           : 'What the wolf taught her is hard to undo. Try more practice runs.')
       : scoreUp && homeDown
-      ? `Her score went up, but she gets home less often. She is learning to please ${the}, not to get home: reward hacking. Watch a trip alone to see what she does now.`
+      ? `Her score went up, but she gets home less often. She is learning to please ${the}, not to get home. Watch a trip alone to see what she does now.`
       : p.judge === 'grandma'
         ? 'Grandma scores only the result, so a better score means she really gets home more.'
         : p.judge === 'crow'
-          ? 'So far she still gets home, because heading towards home mostly helps on the way. But bumping into a tree towards home forever earns the crow\'s points too. Keep practising with the crow and watch whether her home rate starts to fall.'
+          ? 'So far she still gets home, because walking towards home mostly helps. But the crow also pays her for bumping into a tree that is towards home. Keep practising and watch whether she gets home less often.'
           : `Watch a trip alone: she should now walk more the way ${the} likes.`;
     return h('div', { class: `why ${(scoreUp && homeDown) || (p.judge === 'wolf' && homeDown) ? 'alarm' : ''}` },
       h('h3', {}, this.hq(`What ${the} taught her`, p.card, 'summary')),
-      h('p', {}, `Average score from ${the}: ${p.scoreBefore.toFixed(2)} at the start of this practice, ${p.scoreAfter.toFixed(2)} at the end. Home on the test trips: ${pct(p.homeBefore)} before, ${pct(p.homeAfter)} after.`),
+      h('p', {}, `Score from ${the}: ${p.scoreBefore.toFixed(2)} at the start of this practice, ${p.scoreAfter.toFixed(2)} at the end. Home on the test trips: ${pct(p.homeBefore)} before, ${pct(p.homeAfter)} after.`),
       h('p', {}, verdict));
   }
 

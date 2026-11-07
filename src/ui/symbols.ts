@@ -216,7 +216,7 @@ export function moveToken(m: Move, size = 27, label?: string): SVGSVGElement {
   return svg;
 }
 
-/** A computer chip: the "How big models do it" button. */
+/** A computer chip: marks the "In a big model" part of an LM corner card. */
 export function chipIcon(size = 22): SVGSVGElement {
   const pins: SVGElement[] = [];
   for (const p of [7, 12, 17]) {

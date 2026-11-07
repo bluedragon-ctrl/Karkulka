@@ -52,6 +52,9 @@ Every feature should map to a language-model idea. This table is the map:
 | Confidently walking into a wolf in an unfamiliar spot | Hallucination on out-of-distribution input |
 | Looping at look-alike places with short memory | Repetition caused by a short context |
 | Forest edited after training | Knowledge cutoff: the world changed, the model did not |
+| Forest code: the same code always gives the same forest | A fixed random seed, so an experiment can be repeated exactly |
+| Editing the forest before lessons | Choosing and cleaning the training data |
+| Lessons first, then practice, compared on the same test trips | The usual recipe: pretraining, then fine-tuning from feedback |
 | Small change, big change, brand new forest (same Red Riding Hood) | The further new input is from the training data, the more confident mistakes |
 | Dashed yellow edges on changed tiles | Where the world no longer matches what the model learned |
 | Catch-up lessons in the changed forest | Training a model further on new data instead of starting over |
@@ -64,7 +67,11 @@ Every feature should map to a language-model idea. This table is the map:
 | The weights heatmap | The model's weights: everything it knows |
 | Fixed settings (learning rate, network size, rewards) | Hyperparameters, chosen by the builders |
 | Exported model file | Shared model weights (open models) |
-| "How big models do it" button on every tab | The same ideas at real scale: training data, tokenizers, pretraining, supervised fine-tuning, RLHF, transformers |
+| Training compute next to Llama 3.1 405B | Training cost grows with weights × tokens; big models use about 10¹⁸ times more |
+| How often each input token came up in lessons | Token frequency: a few tokens are everywhere, most are rare |
+| Look-alike tokens where the right move depends on the place | Words whose meaning depends on context |
+| Uncertainty and top-move squares for her latest trip | Entropy of next-token predictions; sampling sometimes picks a less likely token |
+| "In a big model" part of the LM corner cards | The same ideas at real scale: training data, tokenizers, attention, pretraining, supervised fine-tuning, RLHF, transformers |
 
 ## Forest and world rules
 
@@ -231,7 +238,11 @@ All pictures are simple symbolic SVG shapes drawn for this project, with no tile
 
 **LM corner cards ("?" buttons).** Each card gives one sentence or two of analogy, for example "Her memory strip is like a language model's context window." These cards carry the teaching for non-technical users. They are not shown in the panel on their own: a small round "?" (yellow, with a dark border) sits next to the control, heading or result it explains, and clicking it opens the card as a small popup ("LM corner") right there. The popup closes with ×, Escape or a click elsewhere, and follows its "?" when the panel is redrawn (during a trip on Walk through, for example). Inside a checkbox or radio label, the "?" opens the card without ticking the box. The texts live in `CARDS` in `src/explain.ts`; the popup is `src/ui/hint.ts`.
 
-When something happens that a card explains, that card's "?" pulses (a soft yellow glow, five times; a steady ring with reduced motion) until it is opened or something newer happens. Entering a tab makes the "?" by its title pulse, so new users find the buttons; the Forest tab also says "Each ? shows the language-model idea behind it."
+**Text outside the cards.** Panel text, buttons, the banner and the memory strip are written for older kids: short sentences, everyday words, no "model", "probability" or "token" jargon beyond what the game shows directly. Language-model comparisons and terms (knowledge cutoff, reward hacking and so on) go in the LM corner cards, opened by the "?" next to the text, not in the panel itself. The Inside the model tab is the exception: it is for technical users and uses the real terms.
+
+**In a big model.** Most cards also have a second part under a dashed line, marked with a small chip icon and "In a big model". It is one or two short sentences comparing the idea with a real chatbot, in everyday words and without technical terms beyond the ones the game teaches (tokens, temperature, hallucination and so on): a chatbot's world is text, it reads in tokens, it writes one word at a time and can't take a word back, people rate its answers, it may flatter you because praise gets rated highly. These texts live in `BIG` in `src/explain.ts` and stay under 170 characters; a card without one shows only its analogy. Card texts themselves stay under 210 characters. (This replaces the earlier "How big models do it" dialog, so all the teaching sits in one place, next to the thing it explains.)
+
+When something happens that a card explains, that card's "?" pulses (a soft yellow glow, five times; a steady ring with reduced motion) until it is opened or something newer happens. Entering a tab makes the "?" by its title pulse, so new users find the buttons; the Forest tab also says "Each ? shows the language-model idea behind it, and how real chatbots do it."
 
 Where the "?" buttons are, and what makes them pulse:
 
@@ -240,6 +251,8 @@ Where the "?" buttons are, and what makes them pulse:
 | All | Memory strip label | Context window | |
 | All | Outdated banner | Knowledge cutoff, or out of training data for a brand new forest | |
 | 1. Forest | Title | The forest as the model's world | Entering the tab |
+| 1. Forest | Forest code | The same code gives the same forest: a fixed random seed | |
+| 1. Forest | "Edit the forest" | You choose her world, as builders choose a model's training data | |
 | 1. Forest | Swamp note | Swamp eats the energy budget | Painting a swamp before lessons |
 | 1. Forest | "Her memory" | Context window | |
 | 1. Forest | "Chosen before her lessons…" | Context length is fixed before training | Changing the memory size |
@@ -262,7 +275,7 @@ Where the "?" buttons are, and what makes them pulse:
 | 3. Trip alone | "In a swamp" in the status line (while she stands in one) | Swamp eats the energy budget | Her first swamp step on a trip |
 | 3. Trip alone | "Ouch, a tree!" in the status line (right after she walks into a tree) | A wrong guess wastes a step | Her first bump into a tree on a trip |
 | 3. Trip alone | "Smells cake" in the status line | More useful input | |
-| 3. Trip alone | "Her thoughts" checkbox | Big models narrate their steps too, before the answer (which helps); hers come after. Either way, a stated reason is not a look inside | Her first thought in a session (unless another card just pulsed); toggling it |
+| 3. Trip alone | "Her thoughts" checkbox | Her thoughts come after the move, so they are not what made her choose. In a big model: models narrate their steps too, before the answer (which helps), but a stated reason is still not a look inside | Her first thought in a session (unless another card just pulsed); toggling it |
 | 3. Trip alone | "Why did she do that?" | The card that fits the trip: home, hallucination, temperature, repetition, energy, swamp, reward hacking, the wolf's lessons or practice | The trip ends |
 | 3. Trip alone | "How was the trip for her?" | Answers are rated on more than being right | |
 | 3. Trip alone | "Her next move" (while walking) | Next-token probabilities | Choosing a start |
@@ -274,13 +287,13 @@ Where the "?" buttons are, and what makes them pulse:
 | 4. Practice | "Run … of …" line while watching | Sampling: each move picked by chance | |
 | 4. Practice | "She practises from up to … steps" | Curriculum learning | |
 | 4. Practice | "How she does alone" | Test trips as a benchmark | |
+| 4. Practice | "Same … test trips: after lessons … after practice …" | Lessons first, then practice: the usual recipe | |
 | 4. Practice | "What … taught her" (after practice) | Reward hacking, teacher versus judge, bad judge (wolf), fixing bad data, or the general judge card | Practice ends |
 | 5. Inside the model | Title | The real numbers | Entering the tab |
-| 5. Inside the model | Vocabulary, Current input, Network, Loss curves, Fixed settings, Export and import | Vocabulary, one-hot inputs, weights, loss, hyperparameters, shared model files | |
+| 5. Inside the model | Vocabulary, Training data, Look-alike tokens, Current input, Her latest trip, Network, Loss curves, Training compute, Fixed settings, Export and import | Vocabulary, token frequency, context-dependent tokens, one-hot inputs, uncertainty and sampling, weights, loss, training cost, hyperparameters, shared model files | |
 
 After a trip, the "Why did she do that?" note sits right under the result line. When she walks into a den after wolf lessons or wolf practice, it says the wolf taught her.
 
-**How big models do it.** Every tab has a small chip-icon button, "How big models do it" (at the top of the side panel, and at the top of Inside the model). It opens a dialog that pairs each idea on that tab ("In the game") with what it is in a real large language model ("In a big model"): the forest as training data, a view as an input token and a step as an output token, the tokenizer's vocabulary, the context window, the two ways of teaching (learning from correct answers in lessons, and judging free runs in practice), teacher forcing and exposure bias, data poisoning, temperature, hallucination, RLHF and reward models, reward hacking, and how her small network compares with a transformer. The texts live in `src/insights.ts`. They go one level deeper than the LM corner cards, for curious users and presenters, but stay in plain words.
 
 **Layout.** Designed for a wide screen first: the forest large in the centre, a narrow side panel with the current tab's controls, and the memory strip at the bottom. A phone layout can come later.
 
@@ -288,11 +301,15 @@ After a trip, the "Why did she do that?" note sits right under the result line. 
 
 The last tab shows the real numbers behind the friendly visuals, for technical users. It is read-only except for export and import.
 
-- **Vocabulary:** every input and output token with its ID.
+- **Vocabulary:** every input and output token with its ID, how often it came up in lessons (dashed when seen fewer than 5 times), "×n" for look-alike views and "≠" where the right move depends on the place.
+- **Training data:** how many lesson predictions were made from each input token, as a rank-frequency bar chart (most common first), with how much the most common tenth of the tokens covers and how many were never or rarely seen. Counted from the heatmap: every lesson position but the last (home or a den) is one prediction.
+- **Look-alike tokens:** views that occur in several places where no single move is the teacher's best at every place, for the careful mother and the hurried father (the wolf walks home like the father), the share of her lesson predictions made on them, and each such token with the teacher's best move at each of its places. Only memory, or the smell of cake, can tell these apart.
 - **Current input:** the context window at the selected step, encoded as numbers.
 - **Network:** its structure, with weights shown as a heatmap.
 - **Loss curves:** per-step loss for lessons and average score for practice, next to the friendly outcome chart.
 - **Probabilities:** the raw values before and after boldness (temperature) is applied.
+- **Her latest trip:** uncertainty (entropy in bits, 0 to 2) at each step as a line chart, one square per step (filled when she took her most likely move, hollow when chance picked another), and the chance of exactly that walk at the boldness used (the product of the chosen moves' probabilities).
+- **Training compute:** weights, training predictions (lessons plus practice) and training operations by the usual rule of thumb (6 × weights × predictions), next to Llama 3.1 405B's published numbers (405 billion weights, 15.6 trillion tokens, 3.8 × 10²⁵ operations). Step counts are kept in the stats as `lessonSteps` and `practiceSteps`; older saves without them estimate lesson steps from the heatmap, so no save version change was needed.
 - **Fixed settings:** learning rate, rewards, curriculum and network size, shown read-only.
 - **Export and import:** the trained model and forest as a file.
 

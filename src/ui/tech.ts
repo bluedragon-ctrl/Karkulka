@@ -3,10 +3,13 @@ import type { CardKey } from '../explain';
 import { Model, N_OUT, parameterCount, softmax } from '../model';
 import type { Walker } from '../sim';
 import { FIXED, TrainStats } from '../train';
-import { HINT_FEATS, SLOT_FEATS, VIEW_FEATS, buildVocabulary } from '../tokens';
+import { HINT_FEATS, SLOT_FEATS, VIEW_FEATS, ViewToken, buildVocabulary } from '../tokens';
 import { Forest, MOVE_ARROWS, MOVE_NAMES, MOVES, SWAMP_COST, TILE_KINDS } from '../world';
-import { SWAMP_PENALTY, WOLF_PENALTY } from '../teachers';
-import { lineChart } from './charts';
+import { SWAMP_PENALTY, WOLF_PENALTY, Teacher } from '../teachers';
+import {
+  Ambiguous, BIG_MODEL, OPS_PER_WEIGHT, RARE, ambiguityByTeacher, chanceText, frequencySummary, sci, sup, tokenCounts, trainingCompute, tripMeasures,
+} from '../measures';
+import { lineChart, rankChart } from './charts';
 import { h } from './dom';
 import { COLORS, moveToken, viewToken } from './symbols';
 
@@ -102,19 +105,112 @@ function currentInput(ctx: TechContext): HTMLElement {
     h('label', { class: 'row' }, 'Step ', slider, counter), body);
 }
 
+const TEACHER_LABEL: Record<'mother' | 'father', string> = { mother: 'careful mother', father: 'hurried father' };
+
+/** The parents whose look-alike tokens matter: the ones she learned from (the wolf walks home like the father), or both before any lessons. */
+function parentsTaught(stats: TrainStats): ('mother' | 'father')[] {
+  const c = stats.teacherCounts;
+  const out: ('mother' | 'father')[] = [];
+  if (c.mother > 0) out.push('mother');
+  if (c.father > 0 || (c.wolf ?? 0) > 0) out.push('father');
+  return out.length ? out : ['mother', 'father'];
+}
+
+/** How often each input token came up in lessons. */
+function trainingData(counts: number[], stats: TrainStats, hint: (key: CardKey) => Node): HTMLElement {
+  const sum = frequencySummary(counts);
+  if (!sum.total) {
+    return section('Training data', hint('tokenFreq'), stats.lessons ? 'No lessons in this forest yet: she was taught somewhere else.' : 'No lessons yet.');
+  }
+  const pct = Math.round(sum.topShare * 100);
+  return section('Training data', hint('tokenFreq'),
+    `${sum.total.toLocaleString('en')} lesson predictions over ${counts.length} input tokens. The most common tenth of the tokens make up ${pct}% of them. ` +
+    `${sum.unseen} token${sum.unseen === 1 ? ' was' : 's were'} never seen and ${sum.rare} seen fewer than ${RARE} times (dashed in the vocabulary above): there she can only guess.`,
+    h('div', { class: 'charts-2 one' }, rankChart(counts, COLORS.mother, 'lesson predictions per input token, most common first')));
+}
+
+function arrowsOf(moves: readonly number[]) { return moves.map((m) => MOVE_ARROWS[m]).join('/'); }
+
+/** Look-alike tokens where the teacher's best move depends on the place. */
+function lookAlikes(vocab: ViewToken[], counts: number[], amb: Record<Teacher, Map<number, Ambiguous>>, parents: ('mother' | 'father')[], hintOn: boolean, hint: (key: CardKey) => Node): HTMLElement {
+  const multi = vocab.filter((v) => v.places.length > 1).length;
+  const ids = new Set(parents.flatMap((t) => [...amb[t].keys()]));
+  const total = counts.reduce((a, b) => a + b, 0);
+  const onAmb = vocab.reduce((a, v, i) => a + (ids.has(v.id) ? counts[i] : 0), 0);
+  const per = (['mother', 'father'] as const).map((t) => `${amb[t].size} for the ${TEACHER_LABEL[t]}`).join(', ');
+  const intro = `${multi} of ${vocab.length} input tokens occur in more than one place. For some of them no single move is right at every place (${per}): ` +
+    `the view alone can't tell her what to do, only her memory${hintOn ? ' or the smell of cake' : ''} can.` +
+    (total ? ` ${Math.round((100 * onAmb) / total)}% of her lesson predictions were on such tokens.` : '');
+  const lists = parents.map((t) => {
+    const items = [...amb[t].values()];
+    if (!items.length) return null;
+    return h('div', {},
+      h('h4', {}, `The ${TEACHER_LABEL[t]}'s best move at each place`),
+      h('div', { class: 'vocab' }, ...items.map((a) => h('span', { class: 'vocab-item ambig', title: `${a.moves.length} places; best moves: ${a.moves.map(arrowsOf).join(', ')}` },
+        viewToken(a.token.view, 8), h('code', {}, `#${a.token.id}`), h('span', { class: 'amb-moves' }, a.moves.map(arrowsOf).join(' '))))));
+  });
+  return section('Look-alike tokens', hint('ambiguous'), intro, ...lists);
+}
+
+/** How sure she was at each step of her latest trip, and how likely that exact walk was. */
+function latestTrip(walker: Walker | null, hint: (key: CardKey) => Node): HTMLElement {
+  const tm = walker ? tripMeasures(walker) : null;
+  const n = tm?.entropy.length ?? 0;
+  if (!walker || !tm || !n) return section('Her latest trip', hint('uncertainty'), 'Send her on a trip alone to see how sure she was at each step.');
+  const avg = tm.entropy.reduce((a, b) => a + b, 0) / n;
+  const cells = h('div', { class: 'step-cells' }, ...tm.top.map((top, t) => {
+    const p = walker.decisions[t].tempered[walker.history.moves[t]];
+    return h('span', { class: `step-cell ${top ? 'step-top' : 'step-other'}`, title: `step ${t + 1}: ${MOVE_NAMES[walker.history.moves[t]]}, ${Math.round(p * 100)}%${top ? ', her top move' : ', not her top move'}` });
+  }));
+  return section('Her latest trip', hint('uncertainty'),
+    `${tm.topCount} of ${n} steps took her most likely move (filled squares)` +
+    (n > tm.topCount ? `; ${n - tm.topCount === 1 ? 'one was' : `the other ${n - tm.topCount} were`} picked by chance against the odds (hollow). ` : '. ') +
+    `Average uncertainty ${avg.toFixed(2)} bits (0 = sure, 2 = all four moves equally likely). Chance of exactly this walk at the boldness used: ${chanceText(tm.log2Chance)}${walker.done ? '' : ' so far'}.`,
+    h('div', { class: 'charts-2 one' }, lineChart([{ points: tm.entropy.map((y, t) => ({ x: t + 1, y })), color: '#e07b00', label: 'uncertainty at each step (bits)' }], 'uncertainty', 2)),
+    cells);
+}
+
+/** What her training cost, next to a big model with published numbers. */
+function computeSection(model: Model | null, stats: TrainStats, hint: (key: CardKey) => Node): HTMLElement {
+  if (!model) return section('Training compute', hint('compute'), 'No model yet: give her some lessons first.');
+  const c = trainingCompute(model, stats);
+  const preds = c.lessonSteps + c.practiceSteps;
+  const ratio = c.ops > 0 ? Math.round(Math.log10(BIG_MODEL.ops / c.ops)) : null;
+  return section('Training compute', hint('compute'),
+    `Rule of thumb, as used for big models: about ${OPS_PER_WEIGHT} operations per weight for every prediction learned from (2 forward, 4 backward). ` +
+    'Her inputs are mostly zeros, so her real count is lower.' + (c.estimated ? ' This save is older than the step counter, so some steps are estimated or missing.' : ''),
+    h('table', { class: 'num-table' },
+      h('thead', {}, h('tr', {}, h('th', {}, ''), h('th', {}, 'Red Riding Hood'), h('th', {}, BIG_MODEL.name))),
+      h('tbody', {},
+        h('tr', {}, h('th', {}, 'Weights'), h('td', {}, sci(c.weights)), h('td', {}, sci(BIG_MODEL.weights))),
+        h('tr', {}, h('th', {}, 'Training predictions'), h('td', { title: `lessons ${c.lessonSteps.toLocaleString('en')}, practice ${c.practiceSteps.toLocaleString('en')}` }, sci(preds)), h('td', {}, `${sci(BIG_MODEL.tokens)} tokens`)),
+        h('tr', {}, h('th', {}, 'Training operations'), h('td', {}, sci(c.ops)), h('td', {}, sci(BIG_MODEL.ops))))),
+    ratio !== null ? h('p', { class: 'muted' }, `Its training took about 10${sup(ratio)} times as many operations as hers so far.`) : null);
+}
+
 export function renderTech(el: HTMLElement, ctx: TechContext) {
   const { forest, model, stats } = ctx;
   const vocab = buildVocabulary(forest);
+  const counts = tokenCounts(vocab, stats.coverage);
+  const amb = ambiguityByTeacher(forest, vocab);
+  const parents = parentsTaught(stats);
+  const isAmb = (id: number) => parents.some((t) => amb[t].has(id));
   el.replaceChildren();
   el.append(h('h2', {}, 'Inside the model', ctx.hint('tech')), h('p', { class: 'muted' }, 'The real numbers behind the friendly pictures. Everything here is read-only, apart from export and import.'));
 
   // Vocabulary
   const outToks = h('div', { class: 'vocab' }, ...MOVES.map((m) => h('span', { class: 'vocab-item' }, moveToken(m, 27), h('code', {}, `#${m}`), MOVE_NAMES[m])));
-  const inToks = h('div', { class: 'vocab' }, ...vocab.map((v) => h('span', { class: 'vocab-item', title: `${v.places.length} place${v.places.length === 1 ? '' : 's'} look like this` }, viewToken(v.view, 8), h('code', {}, `#${v.id}`), v.places.length > 1 ? h('small', {}, `×${v.places.length}`) : null)));
-  el.append(section('Vocabulary', ctx.hint('vocabulary'), `${N_OUT} output tokens (moves) and ${vocab.length} input tokens (every view that occurs in this forest). "×n" marks look-alike views that occur in n places.`,
+  const inToks = h('div', { class: 'vocab' }, ...vocab.map((v, i) => h('span', {
+    class: `vocab-item ${counts[i] < RARE ? 'unseen' : ''}`,
+    title: `${v.places.length} place${v.places.length === 1 ? '' : 's'} look like this; seen ${counts[i]} time${counts[i] === 1 ? '' : 's'} in lessons${isAmb(v.id) ? '; the right move depends on the place' : ''}`,
+  }, viewToken(v.view, 8), h('code', {}, `#${v.id}`),
+  v.places.length > 1 ? h('small', {}, `×${v.places.length}`, isAmb(v.id) ? h('span', { class: 'amb-mark', 'aria-label': 'right move depends on the place' }, ' ≠') : null) : null,
+  h('span', { class: 'seen' }, String(counts[i])))));
+  el.append(section('Vocabulary', ctx.hint('vocabulary'), `${N_OUT} output tokens (moves) and ${vocab.length} input tokens (every view that occurs in this forest). "×n" marks look-alike views that occur in n places, "≠" those where the right move depends on the place. The number under each token is how often it came up in lessons; dashed ones were seen fewer than ${RARE} times.`,
     h('h4', {}, 'Output tokens'), outToks, h('h4', {}, 'Input tokens'), inToks));
+  el.append(trainingData(counts, stats, ctx.hint), lookAlikes(vocab, counts, amb, parents, !!model?.cfg.hint, ctx.hint));
 
-  el.append(currentInput(ctx));
+  el.append(currentInput(ctx), latestTrip(ctx.walker, ctx.hint));
 
   // Network
   if (model) {
@@ -150,6 +246,7 @@ export function renderTech(el: HTMLElement, ctx: TechContext) {
     ['Test trips for the outcome chart', `${FIXED.evalStarts} fixed starts, boldness ${FIXED.evalBoldness}, energy ${FIXED.evalEnergy}; about ${FIXED.evalPoints} times per job (every batch of ${FIXED.chunk} in short jobs)`],
     ['Lessons / practice runs so far', `${stats.lessons} / ${stats.practiceRuns}`],
   ];
+  el.append(computeSection(model, stats, ctx.hint));
   el.append(section('Fixed settings', ctx.hint('hyper'), 'These are never set by the user.',
     h('table', { class: 'num-table fixed' }, h('tbody', {}, ...fixedRows.map(([a, b]) => h('tr', {}, h('th', {}, a), h('td', {}, b)))))));
 

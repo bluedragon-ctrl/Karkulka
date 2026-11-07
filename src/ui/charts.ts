@@ -60,7 +60,7 @@ function legend(): HTMLElement {
   return h('figcaption', { class: 'legend' }, item(FILLS.home, 'home'), item(FILLS.eaten, 'eaten'), item(FILLS.lost, 'lost'));
 }
 
-export function lineChart(series: { points: Point[]; color: string; label: string }[], yLabel: string): HTMLElement {
+export function lineChart(series: { points: Point[]; color: string; label: string }[], yLabel: string, fixedMax?: number): HTMLElement {
   const wrap = h('figure', { class: 'chart' });
   const svg = s('svg', { viewBox: `0 0 ${W} ${H + 18}`, width: '100%', role: 'img', 'aria-label': yLabel });
   const all = series.flatMap((x) => x.points);
@@ -70,7 +70,7 @@ export function lineChart(series: { points: Point[]; color: string; label: strin
     const xMin = Math.min(...all.map((p) => p.x));
     const xMax = Math.max(xMin + 1, ...all.map((p) => p.x));
     const yMin = Math.min(0, ...all.map((p) => p.y));
-    const yMax = Math.max(yMin + 0.01, ...all.map((p) => p.y));
+    const yMax = fixedMax ?? Math.max(yMin + 0.01, ...all.map((p) => p.y));
     const X = (x: number) => 30 + ((x - xMin) / (xMax - xMin)) * (W - 34);
     const Y = (y: number) => 4 + (1 - (y - yMin) / (yMax - yMin)) * (H - 8);
     svg.append(
@@ -99,4 +99,24 @@ export function changeChart(points: { label: string; home: number }[]): HTMLElem
       h('span', { class: 'pbar', 'aria-hidden': 'true' }, h('span', { style: `width:${pct}%;background:${COLORS.home}` })),
       h('span', { class: 'pct' }, `${pct}%`));
   }));
+}
+
+/** Counts sorted from most to least common, one bar each: the rank-frequency picture of a vocabulary. */
+export function rankChart(counts: readonly number[], color: string, label: string): HTMLElement {
+  const sorted = [...counts].sort((a, b) => b - a);
+  const max = Math.max(1, sorted[0] ?? 0);
+  const bw = (W - 34) / Math.max(1, sorted.length);
+  const svg = s('svg', { viewBox: `0 0 ${W} ${H + 18}`, width: '100%', role: 'img', 'aria-label': label });
+  svg.append(
+    s('line', { x1: 30, x2: W, y1: H - 4, y2: H - 4, stroke: '#bbb' }),
+    s('text', { x: 26, y: 12, 'font-size': 9, 'text-anchor': 'end', fill: '#555' }, String(max)),
+    s('text', { x: 26, y: H - 4, 'font-size': 9, 'text-anchor': 'end', fill: '#555' }, '0'),
+    s('text', { x: 30, y: H + 13, 'font-size': 10, fill: '#555' }, 'most common'),
+    s('text', { x: W, y: H + 13, 'font-size': 10, fill: '#555', 'text-anchor': 'end' }, 'rarest'),
+  );
+  sorted.forEach((c, i) => {
+    const bh = (c / max) * (H - 8);
+    if (c > 0) svg.append(s('rect', { x: 30 + i * bw, y: H - 4 - bh, width: Math.max(0.6, bw - 0.6), height: bh, fill: color }, s('title', {}, `${c}`)));
+  });
+  return h('figure', { class: 'chart' }, svg, h('figcaption', { class: 'legend' }, label));
 }
