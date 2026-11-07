@@ -89,3 +89,14 @@ export function lineChart(series: { points: Point[]; color: string; label: strin
   wrap.append(svg, h('figcaption', { class: 'legend' }, ...series.map((x) => h('span', { class: 'legend-item' }, h('span', { class: 'swatch-line', style: `background:${x.color}` }), x.label))));
   return wrap;
 }
+
+/** Home on test trips at each step since the forest changed: one labelled bar per check. */
+export function changeChart(points: { label: string; home: number }[]): HTMLElement {
+  return h('div', { class: 'change-chart', role: 'list' }, ...points.map((p) => {
+    const pct = Math.round(p.home * 100);
+    return h('div', { class: 'change-row', role: 'listitem' },
+      h('span', {}, p.label),
+      h('span', { class: 'pbar', 'aria-hidden': 'true' }, h('span', { style: `width:${pct}%;background:${COLORS.home}` })),
+      h('span', { class: 'pct' }, `${pct}%`));
+  }));
+}

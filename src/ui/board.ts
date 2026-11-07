@@ -5,8 +5,8 @@ import { COLORS, arrowPath, heartPath, parentFigure, redFigure, tileSymbol, wolf
 
 export const T = 40;
 
-type Layer = 'tiles' | 'heat' | 'radius' | 'trails' | 'trace' | 'marks' | 'actors' | 'arrows' | 'fog' | 'fx';
-const LAYERS: Layer[] = ['tiles', 'heat', 'radius', 'trails', 'trace', 'marks', 'actors', 'arrows', 'fog', 'fx'];
+type Layer = 'tiles' | 'heat' | 'radius' | 'changed' | 'trails' | 'trace' | 'marks' | 'actors' | 'arrows' | 'fog' | 'fx';
+const LAYERS: Layer[] = ['tiles', 'heat', 'radius', 'changed', 'trails', 'trace', 'marks', 'actors', 'arrows', 'fog', 'fx'];
 
 export class Board {
   readonly svg: SVGSVGElement;
@@ -112,6 +112,19 @@ export class Board {
       }
       this.layers.heat.append(s('rect', { x: x * T, y: y * T, width: T, height: T, fill: COLORS.heat, opacity: (0.15 + 0.6 * Math.sqrt(v / max)).toFixed(2) }, s('title', {}, `${v} ${label}`)));
     });
+  }
+
+  /** Dashed yellow-and-black edges on tiles that changed since her lessons. */
+  setChanged(tiles: readonly number[] | null) {
+    clear(this.layers.changed);
+    if (!tiles) return;
+    for (const i of tiles) {
+      const [x, y] = xyOf(this.forest, i);
+      const box = { x: x * T + 2, y: y * T + 2, width: T - 4, height: T - 4, fill: 'none', 'pointer-events': 'none' };
+      this.layers.changed.append(
+        s('rect', { ...box, stroke: COLORS.ink, 'stroke-width': 4 }),
+        s('rect', { ...box, stroke: COLORS.changed, 'stroke-width': 4, 'stroke-dasharray': '5 4' }, s('title', {}, 'changed since her lessons')));
+    }
   }
 
   setRadius(tiles: Set<number> | null) {

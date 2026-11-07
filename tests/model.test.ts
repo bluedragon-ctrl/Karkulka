@@ -1,13 +1,13 @@
 import { describe, expect, it } from 'vitest';
-import { generateForest } from '../src/forest';
+import { CHANGE_SIZES, changeForest, generateForest } from '../src/forest';
 import { tripReport } from '../src/explain';
 import { accumulate, createAdam, createModel, forward, modelFromJSON, modelToJSON, softmax, zeroGrads } from '../src/model';
 import { mulberry32 } from '../src/rng';
 import { Walker } from '../src/sim';
 import { costToHome, endsAtDen, walkLesson } from '../src/teachers';
 import { MEMORY_PAIRS, SLOT_FEATS, VIEW_FEATS, encodeContext, inputSize, buildVocabulary } from '../src/tokens';
-import { FIXED, JUDGES, Run, chooseTeacher, evalEvery, headsHome, judgeMaps, judgeRewards, judgeScore, newStats, trainLessons, trainPractice } from '../src/train';
-import { Forest, Move, PATH, SWAMP, TREE, Tile, WOLF, forestFromTiles, neighbor, pathTiles, walkableTiles } from '../src/world';
+import { FIXED, JUDGES, Run, chooseTeacher, evalEvery, headsHome, judgeMaps, judgeRewards, judgeScore, homeShare, newStats, trainLessons, trainPractice } from '../src/train';
+import { Forest, HOME, Move, PATH, SWAMP, TREE, Tile, WOLF, allReachable, forestFromTiles, neighbor, pathTiles, walkableTiles } from '../src/world';
 
 const cfg = { memory: MEMORY_PAIRS.medium, hint: false, hidden: 16 };
 
@@ -279,5 +279,38 @@ describe('trip report', () => {
     const r = tripReport({ energy: 20, energyLeft: 15, positions, blocked: [true, false, true, true, false], outcome: 'lost' }, field);
     expect(r.treeHits).toBe(3);
     expect(r.bumped).toBe('a bumpy walk');
+  });
+});
+
+describe('changing the forest after her lessons', () => {
+  it('changes the asked number of tiles, never home, and keeps every path reaching home', () => {
+    const f = generateForest('KARKULKA');
+    for (const n of [CHANGE_SIZES.small, CHANGE_SIZES.big]) {
+      const { forest, changed } = changeForest(f, n, 'test');
+      expect(changed.length).toBe(n);
+      expect(forest.tiles[f.home]).toBe(HOME);
+      expect(allReachable(forest)).toBe(true);
+      const diff = forest.tiles.filter((t, i) => t !== f.tiles[i]).length;
+      expect(diff).toBe(n);
+      expect(f.tiles).toEqual(generateForest('KARKULKA').tiles); // the original is untouched
+    }
+  });
+
+  it('gives the same change for the same seed', () => {
+    const f = generateForest('FOX');
+    expect(changeForest(f, 15, 'a').forest.tiles).toEqual(changeForest(f, 15, 'a').forest.tiles);
+    expect(changeForest(f, 15, 'a').forest.tiles).not.toEqual(changeForest(f, 15, 'b').forest.tiles);
+  });
+
+  it('a big change hurts her more than none, and catch-up lessons help', () => {
+    const f = generateForest('KARKULKA');
+    const m = createModel({ memory: MEMORY_PAIRS.medium, hint: false, hidden: FIXED.hidden }, mulberry32(1));
+    trainLessons(m, createAdam(m), f, 'mother', 300, newStats(f), mulberry32(2));
+    const before = homeShare(m, f);
+    const g = changeForest(f, 40, 'hurt').forest;
+    const after = homeShare(m, g);
+    expect(after).toBeLessThan(before);
+    trainLessons(m, createAdam(m), g, 'mother', 300, newStats(g), mulberry32(3));
+    expect(homeShare(m, g)).toBeGreaterThan(after);
   });
 });

@@ -18,6 +18,8 @@ export const COLORS = {
   ink: '#2a2a2a',
   lost: '#7d7d7d',
   heat: '#00a3a3',
+  /** Edge of a tile that changed after her lessons (dashed, with black). */
+  changed: '#ffd400',
   water: '#8cc3d9',
   waterInk: '#2f6f8f',
   reed: '#5b7a2e',

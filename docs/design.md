@@ -49,6 +49,9 @@ Every feature should map to a language-model idea. This table is the map:
 | Confidently walking into a wolf in an unfamiliar spot | Hallucination on out-of-distribution input |
 | Looping at look-alike places with short memory | Repetition caused by a short context |
 | Forest edited after training | Knowledge cutoff: the world changed, the model did not |
+| Small change, big change, brand new forest (same Red Riding Hood) | The further new input is from the training data, the more confident mistakes |
+| Dashed yellow edges on changed tiles | Where the world no longer matches what the model learned |
+| Catch-up lessons in the changed forest | Training a model further on new data instead of starting over |
 
 ## Forest and world rules
 
@@ -76,6 +79,8 @@ One forest is generated in advance, with grandma's house at a fixed spot. All tr
 - Wolf dens (about 8) go where the two parents' routes part ways the most.
 - Each forest has a short **forest code** (a seed), shareable as a link so a whole class can use the same forest.
 - The user can edit tiles by hand; edits travel in the link too. Editing after training marks her lessons as outdated (the knowledge-cutoff lesson).
+- **Changing the forest after her lessons.** Once she has had lessons, the Forest tab offers *Small change* (5 tiles), *Big change* (15 tiles) and *New forest, same Red Riding Hood*. A change turns random tiles (never home) into another kind of tile, and only keeps a change that leaves every path and swamp able to reach home. It is seeded by the forest code and the current tiles, so the same forest always gets the same change. A brand new forest gets a new random code and clears the heatmap, since she was taught nowhere there.
+- Changed tiles get a dashed yellow-and-black edge on every tab until she has new lessons. A brand new forest is not marked; the banner says the whole forest is new to her.
 
 **What she sees.** A 3 × 3 window centred on her: the 8 surrounding tiles. She never sees coordinates or the whole map.
 
@@ -126,6 +131,20 @@ One small neural network learns in two phases, mirroring how real LLMs are built
 - **Curriculum (automatic):** practice starts near home and moves outward as her success rate rises.
 - **Number of practice runs** is the user's control for this phase.
 
+### After the forest changes: catch-up lessons
+
+- Before the first change after her lessons, the app tests her on the test trips (three rounds of the 40 fixed starts) and keeps the result as "Before the change". It tests her again after each change button, after hand edits (when the user leaves the Forest tab or starts lessons), and after each round of lessons that follows. The results appear as labelled bars, "Getting home since the forest changed", in the Forest and Lessons tabs (up to 8 bars, the first one always kept). The chart is saved with the game and cleared with a new Red Riding Hood.
+- While the forest has changed, the Lessons tab offers 30, 100 or 300 *catch-up lessons* from the chosen teacher in the changed forest, on top of what she already knows. Afterwards her lessons count as up to date again and the catch-up card appears.
+- **Measured** (16 forests, careful mother, 300 lessons, medium memory, home on the test trips; extra lessons count up):
+
+  | | After the change | +30 | +100 | +300 |
+  | --- | --- | --- | --- | --- |
+  | Small change (5 tiles) | 55% | 67% | 78% | 85% |
+  | Big change (15 tiles) | 36% | 62% | 79% | 86% |
+  | Brand new forest | 18% | 62% | 75% | 87% |
+
+  Before the change: 82%. A few catch-up lessons already help a lot, because most of what she learned (how to read her view) still works; after about 300 she is as good as before. She forgets little of the old forest while catching up (about 74–85% home there after 30–300 catch-up lessons in a 15-tile change, measured separately), so forgetting is not shown.
+
 ### Test: trip alone
 
 - The user clicks a starting tile.
@@ -144,8 +163,8 @@ The app is a row of tabs that tells the story in order: Forest, Lessons, Trip al
 
 | Tab | What happens | User controls |
 | --- | --- | --- |
-| 1. Forest | Generate or edit the forest; home is fixed | New forest, forest code or link, tile editing (path, tree, swamp, wolf den), memory size (short / medium / long), home-hint toggle |
-| 2. Lessons | Parents walk her home; the model trains per step | Teacher (mother / father / both / wolf in disguise / mother and sometimes the wolf), number of lessons, play or fast-forward |
+| 1. Forest | Generate or edit the forest; home is fixed | New forest, forest code or link, tile editing (path, tree, swamp, wolf den), memory size (short / medium / long), home-hint toggle; after lessons: small change, big change, new forest with the same Red Riding Hood |
+| 2. Lessons | Parents walk her home; the model trains per step | Teacher (mother / father / both / wolf in disguise / mother and sometimes the wolf), number of lessons, play or fast-forward; after a change: 30 / 100 / 300 catch-up lessons |
 | 3. Trip alone | She walks from a chosen start using the model | Click the start tile, energy (step budget), boldness dial, step-by-step or auto, fog toggle |
 | 4. Practice (optional) | Her own runs, scored by a judge; then back to Trip alone to compare | Judge (Grandma / father / mother / crow / wolf), number of practice runs |
 | 5. Inside the model | Numbers and model details for technical users | Read-only views, export or import the model |
@@ -154,7 +173,7 @@ The app is a row of tabs that tells the story in order: Forest, Lessons, Trip al
 
 - Trip alone and Practice stay locked until at least one round of lessons is done.
 - Changing the memory size or the home hint requires new lessons; the app says so instead of silently retraining.
-- Editing the forest after training keeps the model but shows a note that her lessons are outdated. This is the knowledge-cutoff experiment.
+- Editing or changing the forest after training keeps the model but shows a note that her lessons are outdated, with changed tiles marked. This is the knowledge-cutoff experiment. Any new round of lessons brings her up to date.
 - The trained model and the forest are saved in the browser, so a lesson can continue the next day.
 
 ## Visuals
@@ -175,6 +194,7 @@ All pictures are simple symbolic SVG shapes drawn for this project, with no tile
 - **Fog toggle:** hides everything except her 3 × 3 window, to show what she actually sees.
 - **Energy:** a small bar; as it drops she shows a sweat drop, and at zero she sits down (lost).
 - **Coverage heatmap:** an overlay showing where lessons passed, "where she was taught".
+- **Changed tiles:** a dashed yellow-and-black edge (shape and colour, no red) on tiles that differ from the forest she was taught on.
 - **Lesson playback:** the parent walks ahead of her; in fast-forward, many faint footprint trails in the parent's colour build up.
 - **Outcome chart:** a simple stacked chart of home, eaten and lost over the course of lessons or practice. It is friendlier than a loss curve. Each bar is the same 40 test trips from fixed starts. A job tests after every batch of 25 when short, and less often when long, so it adds about 20 bars (the last batch is always tested). Testing would otherwise take most of a long job's time.
 
@@ -185,7 +205,7 @@ All pictures are simple symbolic SVG shapes drawn for this project, with no tile
 - Lost: she sits down, and a "lost in the woods" note appears.
 - **How the trip went:** when she gets home or runs out of energy, the result also says how *tired* she is (energy used of her budget: still fresh, a bit tired, very tired, or worn out when lost), how *wet* (swamp steps: dry feet, wet feet, soaked) and how *scared* (different wolf dens she saw on the way: calm, a little scared, scared, very scared) and how *bumped* (moves into a tree, each a wrong guess that cost a step of energy and got her nowhere: no bumps, a bump or two for 1–2, a bumpy walk for 3–5, bumped all over). Each has its own symbol (a battery, a water drop, a wolf head, a tree with a yellow bump star). A "Why does this matter?" button shows the trip report card.
 
-**LM corner cards.** Small cards appear at key moments, each giving one sentence of analogy, for example "Her memory strip is like a language model's context window." After a trip, a short "Why did she do that?" note explains the main decision. These cards carry the teaching for non-technical users. Choosing a judge shows that judge's card; after practice comes the reward-hacking card (score up, home rate down), the teacher-versus-judge card (taught only by the other parent), or the general judge card. After practice with the wolf comes the bad-judge card; after Grandma's practice on a model that had the wolf's lessons, the fixing-bad-data card. Choosing the wolf teacher or the mixed option shows the bad-data or data-poisoning card, as does a watched lesson that ends at a den. When she walks into a den after wolf lessons or wolf practice, the "Why did she do that?" note says the wolf taught her.
+**LM corner cards.** Small cards appear at key moments, each giving one sentence of analogy, for example "Her memory strip is like a language model's context window." After a trip, a short "Why did she do that?" note explains the main decision. These cards carry the teaching for non-technical users. Choosing a judge shows that judge's card; after practice comes the reward-hacking card (score up, home rate down), the teacher-versus-judge card (taught only by the other parent), or the general judge card. After practice with the wolf comes the bad-judge card; after Grandma's practice on a model that had the wolf's lessons, the fixing-bad-data card. Choosing the wolf teacher or the mixed option shows the bad-data or data-poisoning card, as does a watched lesson that ends at a den. When she walks into a den after wolf lessons or wolf practice, the "Why did she do that?" note says the wolf taught her. A small or big change or a hand edit after lessons shows the knowledge-cutoff card, a brand new forest the out-of-training-data card, and catch-up lessons the catch-up card.
 
 **Layout.** Designed for a wide screen first: the forest large in the centre, a narrow side panel with the current tab's controls, and the memory strip at the bottom. A phone layout can come later.
 
@@ -226,6 +246,7 @@ A static TypeScript site hosted on GitHub Pages, with everything (generation, tr
 - Practice phase with automatic curriculum
 - Coverage heatmap, outcome chart, LM corner cards
 - Technical tab, browser save, export and import
+- Changing the forest after lessons (small, big, brand new), changed-tile marks, catch-up lessons and the before/after chart
 - Five practice judges (Grandma, father, mother, crow, wolf), with reward hacking from the crow and a ruined model from the wolf
 
 ### Later
