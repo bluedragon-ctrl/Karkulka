@@ -5,8 +5,8 @@ import { mulberry32 } from '../src/rng';
 import { Walker } from '../src/sim';
 import { costToHome, walkLesson } from '../src/teachers';
 import { MEMORY_PAIRS, SLOT_FEATS, VIEW_FEATS, encodeContext, inputSize, buildVocabulary } from '../src/tokens';
-import { FIXED, evalEvery, newStats, score, trainLessons, trainPractice } from '../src/train';
-import { pathTiles, walkableTiles } from '../src/world';
+import { FIXED, JUDGES, Run, evalEvery, headsHome, judgeMaps, judgeRewards, judgeScore, newStats, trainLessons, trainPractice } from '../src/train';
+import { Forest, Move, PATH, SWAMP, TREE, Tile, WOLF, forestFromTiles, neighbor, pathTiles, walkableTiles } from '../src/world';
 
 const cfg = { memory: MEMORY_PAIRS.medium, hint: false, hidden: 16 };
 
@@ -87,20 +87,88 @@ describe('training', () => {
     const m = createModel({ ...cfg, hidden: FIXED.hidden }, mulberry32(1));
     const stats = newStats(f);
     trainLessons(m, createAdam(m), f, 'mother', 200, stats, mulberry32(2));
-    trainPractice(m, f, 200, stats, mulberry32(3));
+    trainPractice(m, f, "grandma", 200, stats, mulberry32(3));
     expect(stats.practiceRuns).toBe(200);
     expect(stats.practiceEval.length).toBeGreaterThan(0);
     expect(stats.radius).toBeGreaterThan(FIXED.curriculumStart);
   });
 
-  it('scores runs like the fair judge', () => {
-    expect(score('home', 10, 0)).toBe(FIXED.rewardHome);
-    expect(score('eaten', 10, 0)).toBe(FIXED.rewardEaten);
-    expect(score('lost', 10, 5)).toBeGreaterThan(score('lost', 10, 10));
-    expect(score('lost', 10, 20)).toBeLessThan(score('lost', 10, 10));
+  it('practice records which judge scored the runs', () => {
+    const m = createModel({ ...cfg, hidden: FIXED.hidden }, mulberry32(1));
+    const stats = newStats(f);
+    trainLessons(m, createAdam(m), f, 'mother', 50, stats, mulberry32(2));
+    trainPractice(m, f, 'crow', 30, stats, mulberry32(3));
+    trainPractice(m, f, 'father', 20, stats, mulberry32(4));
+    expect(stats.judgeRuns).toEqual({ crow: 30, father: 20 });
+  });
+});
+
+describe('judges', () => {
+  // An open 9 × 9 field: home is fixed at (5, 3); a swamp and a den sit to the west of home.
+  const size = 9;
+  const tiles: Tile[] = new Array(size * size).fill(PATH);
+  const at = (x: number, y: number) => y * size + x;
+  const field: Forest = forestFromTiles('TEST', size, tiles);
+  tiles[field.home] = 3 as Tile;
+  tiles[at(3, 3)] = SWAMP;
+  tiles[at(1, 1)] = WOLF;
+  tiles[at(5, 5)] = TREE;
+  const maps = judgeMaps(field);
+
+  /** A run that follows the given moves from a start tile (moves into a tree stay put). */
+  function walk(start: number, moves: Move[], outcome: Run['outcome']): Run {
+    const positions = [start];
+    let pos = start;
+    for (const m of moves) {
+      const n = neighbor(field, pos, m);
+      if (n >= 0 && field.tiles[n] !== TREE) pos = n;
+      positions.push(pos);
+    }
+    return { outcome, start, positions, moves };
+  }
+  const R = 1 as Move, D = 2 as Move, U = 0 as Move, L = 3 as Move;
+  const straight = walk(at(2, 3), [R, R, R], 'home'); // (2,3) → swamp → (4,3) → home
+  const detour = walk(at(2, 3), [D, R, R, U, R], 'home');
+
+  it('Grandma scores only the outcome', () => {
+    expect(judgeScore('grandma', field, maps, straight)).toBe(FIXED.rewardHome);
+    expect(judgeScore('grandma', field, maps, detour)).toBe(FIXED.rewardHome);
+    expect(judgeScore('grandma', field, maps, walk(at(2, 2), [L], 'eaten'))).toBe(FIXED.rewardEaten);
   });
 
+  it('the father prefers the shorter walk home', () => {
+    expect(judgeScore('father', field, maps, straight)).toBeGreaterThan(judgeScore('father', field, maps, detour));
+  });
+
+  it('the mother prefers the dry detour and takes points off near dens', () => {
+    expect(judgeScore('mother', field, maps, detour)).toBeGreaterThan(judgeScore('mother', field, maps, straight));
+    const nearDen = walk(at(3, 1), [L, D], 'lost');
+    const farFromDen = walk(at(6, 7), [L, D], 'lost');
+    expect(judgeRewards('mother', field, maps, nearDen)[0]).toBeLessThan(0);
+    expect(judgeRewards('mother', field, maps, farFromDen)[0]).toBe(0);
+  });
+
+  it('the crow pays for heading home, even into a tree', () => {
+    // From (5,6) home is straight up; (5,5) is a tree, so every up move bumps.
+    const bumping = walk(at(5, 6), [U, U, U, U, U, U, U, U, U, U], 'lost');
+    expect(bumping.positions.every((p) => p === at(5, 6))).toBe(true);
+    expect(judgeScore('crow', field, maps, bumping)).toBeGreaterThan(0);
+    expect(judgeScore('grandma', field, maps, bumping)).toBeLessThan(0);
+    expect(headsHome(field, at(5, 6), U)).toBe(true);
+    expect(headsHome(field, at(5, 6), D)).toBe(false);
+  });
+
+  it('each move gets its own points; they add up to the score', () => {
+    for (const j of JUDGES) {
+      for (const run of [straight, detour]) {
+        const r = judgeRewards(j, field, maps, run);
+        expect(r.length).toBe(run.moves.length);
+        expect(r.reduce((a, b) => a + b, 0)).toBeCloseTo(judgeScore(j, field, maps, run));
+      }
+    }
+  });
   it('a trip ends at home, eaten or lost within the energy budget', () => {
+    const f = generateForest('KARKULKA');
     const m = createModel(cfg, mulberry32(9));
     for (const start of pathTiles(f).slice(0, 20)) {
       const w = new Walker(f, m, start, 15, 1, mulberry32(start));

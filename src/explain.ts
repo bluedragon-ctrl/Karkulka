@@ -1,13 +1,14 @@
 /** The "Why did she do that?" note after a trip, and the LM corner cards. */
 import type { Walker } from './sim';
-import type { TrainStats } from './train';
+import { TrainStats, headsHome } from './train';
 import { buildVocabulary, viewKey } from './tokens';
 import { Forest, MOVE_NAMES, SWAMP, SWAMP_COST, walkingDistances } from './world';
 
 export type CardKey =
   | 'forest' | 'view' | 'memory' | 'memorySize' | 'hint' | 'lessons' | 'teacher' | 'coverage' | 'arrows'
   | 'boldness' | 'energy' | 'hallucination' | 'repetition' | 'exposure' | 'practice' | 'outdated' | 'home'
-  | 'tech' | 'vocabulary' | 'judge' | 'swamp';
+  | 'tech' | 'vocabulary' | 'judge' | 'swamp'
+  | 'judgeGrandma' | 'judgeFather' | 'judgeMother' | 'judgeCrow' | 'rewardHacking' | 'teacherVsJudge';
 
 export const CARDS: Record<CardKey, string> = {
   forest: "The forest is her whole world, like the text a language model works with. She only ever sees a small piece of it at a time.",
@@ -30,7 +31,13 @@ export const CARDS: Record<CardKey, string> = {
   tech: "This tab shows the real numbers behind the pictures: tokens, inputs, weights and probabilities.",
   vocabulary: "Her vocabulary is every view that can happen in this forest plus the four moves, just as a model has a fixed list of tokens.",
   swamp: "Not every step is equally cheap: a swamp step uses 3 energy. Her energy is like a model's output budget, and the swamp eats it fast. The hurried father wades through; the careful mother walks around.",
-  judge: "The judge knows the whole forest and scores each run by walking distance. She never sees the map, only the score.",
+  judge: "The judge knows the whole forest; she never sees the map, only the scores. Whoever judges decides what she learns, like the people who rate a model's answers.",
+  judgeGrandma: "Grandma only cares that she gets home. Judging only the result is simple and hard to fool, but it says nothing about how she walked.",
+  judgeFather: "The father takes a point off for every step, so practice teaches her shortcuts. The people who rate a model's answers pass on their own values, just as teachers do.",
+  judgeMother: "The mother takes points off for every swamp step and every step with a wolf den in sight. Each move is blamed for what comes after it, so she learns which moves worried her mother. A very strict judge can make a model too cautious.",
+  judgeCrow: "The crow judges from the sky, as the crow flies. It gives points for every step towards home, even straight into a tree, and hardly checks whether she arrives. A judge that measures the wrong thing can be fooled.",
+  rewardHacking: "Her score went up, but she got home less often. She learned to please the crow, not to get home. That is reward hacking: a model learns what its judge measures, not what was meant.",
+  teacherVsJudge: "Her lessons came from one parent, but now the other one judges her. Fine-tuning can pull a model away from what it learned in pretraining.",
 };
 
 export interface Explanation { title: string; text: string; card?: CardKey }
@@ -89,6 +96,15 @@ export function explainTrip(w: Walker, f: Forest, stats: TrainStats | null, outd
       title: 'Why did she do that?',
       text: `At step ${t + 1} she went ${MOVE_NAMES[chosen]} into a wolf den, ${pct(d.tempered[chosen])} sure.${alike ? ` This spot looks exactly like ${alike} other place${alike === 1 ? '' : 's'}, where that move may be fine.` : ''}${stats && stats.teacherCounts.father > 0 ? ' Her father\'s lessons often go right past wolf dens, so walking close to them feels normal to her.' : ''}${cutoff}`,
       card: alike ? 'memory' : 'teacher',
+    };
+  }
+
+  const bumpsHome = w.history.moves.filter((m, i) => w.blocked[i] && headsHome(f, w.positions[i], m)).length;
+  if ((stats?.judgeRuns?.crow ?? 0) > 0 && bumpsHome >= Math.max(3, n * 0.25)) {
+    return {
+      title: 'Why did she do that?',
+      text: `She walked into trees ${bumpsHome} times, always in the direction of home, until her energy ran out. The crow gave her points for every step towards home, even into a tree, so that is what she learned.${cutoff}`,
+      card: 'rewardHacking',
     };
   }
 

@@ -153,3 +153,4 @@ input[type="text"] { font: inherit; font-size: 0.92rem; padding: 0.35em 0.5em; b
   .panel { position: static; max-height: none; }
   .board { max-width: 100%; }
 }
+.why.alarm { background: #fff3cd; border-color: #e0b84a; }

@@ -21,6 +21,10 @@ export const COLORS = {
   water: '#8cc3d9',
   waterInk: '#2f6f8f',
   reed: '#5b7a2e',
+  grandma: '#5f7a8a',
+  hair: '#d9d9d9',
+  crow: '#1f1f24',
+  beak: '#e0a020',
 };
 
 export const heartPath = (cx: number, cy: number, r: number) =>
@@ -91,6 +95,33 @@ export function parentFigure(S: number, who: 'mother' | 'father'): SVGGElement {
       s('rect', { x: -S * 0.1, y: -S * 0.52, width: S * 0.2, height: S * 0.1, fill: COLORS.ink }));
   }
   return g;
+}
+
+/** Grandma, centred on (0, 0): a rounded shawl, white hair in a bun, and glasses. */
+export function grandmaFigure(S: number): SVGGElement {
+  const c = COLORS.grandma;
+  return s('g', { class: 'grandma-figure' },
+    s('path', { d: `M ${-S * 0.28} ${S * 0.38} Q ${-S * 0.3} ${-S * 0.12} 0 ${-S * 0.14} Q ${S * 0.3} ${-S * 0.12} ${S * 0.28} ${S * 0.38} Z`, fill: c }),
+    s('circle', { cx: 0, cy: -S * 0.43, r: S * 0.08, fill: COLORS.hair, stroke: '#9a9a9a', 'stroke-width': S * 0.02 }),
+    s('circle', { cx: 0, cy: -S * 0.26, r: S * 0.13, fill: COLORS.skin, stroke: '#9a9a9a', 'stroke-width': S * 0.03 }),
+    s('path', { d: `M ${-S * 0.13} ${-S * 0.29} Q 0 ${-S * 0.44} ${S * 0.13} ${-S * 0.29}`, fill: COLORS.hair, stroke: '#9a9a9a', 'stroke-width': S * 0.02 }),
+    s('circle', { cx: -S * 0.05, cy: -S * 0.24, r: S * 0.035, fill: 'none', stroke: COLORS.ink, 'stroke-width': S * 0.015 }),
+    s('circle', { cx: S * 0.05, cy: -S * 0.24, r: S * 0.035, fill: 'none', stroke: COLORS.ink, 'stroke-width': S * 0.015 }),
+  );
+}
+
+/** A crow seen from the side, centred on (0, 0): black body, round head, short yellow beak. */
+export function crowFigure(S: number): SVGGElement {
+  return s('g', { class: 'crow-figure' },
+    s('polygon', { points: `${-S * 0.18},${S * 0.04} ${-S * 0.46},${S * 0.2} ${-S * 0.42},${S * 0.3} ${-S * 0.1},${S * 0.16}`, fill: COLORS.crow }),
+    s('ellipse', { cx: 0, cy: S * 0.08, rx: S * 0.26, ry: S * 0.18, fill: COLORS.crow }),
+    s('path', { d: `M ${-S * 0.12} ${S * 0.02} Q ${S * 0.06} ${-S * 0.04} ${S * 0.14} ${S * 0.12}`, stroke: '#55555e', 'stroke-width': S * 0.03, fill: 'none' }),
+    s('circle', { cx: S * 0.22, cy: -S * 0.12, r: S * 0.13, fill: COLORS.crow }),
+    s('polygon', { points: `${S * 0.33},${-S * 0.16} ${S * 0.5},${-S * 0.1} ${S * 0.33},${-S * 0.05}`, fill: COLORS.beak }),
+    s('circle', { cx: S * 0.25, cy: -S * 0.15, r: S * 0.03, fill: '#fff' }),
+    s('line', { x1: -S * 0.04, y1: S * 0.25, x2: -S * 0.06, y2: S * 0.38, stroke: COLORS.beak, 'stroke-width': S * 0.03 }),
+    s('line', { x1: S * 0.06, y1: S * 0.25, x2: S * 0.06, y2: S * 0.38, stroke: COLORS.beak, 'stroke-width': S * 0.03 }),
+  );
 }
 
 /** A friendly cartoon wolf head, centred on (0, 0). */

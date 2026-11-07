@@ -7,7 +7,7 @@ import { Outcome, Walker, predictAt } from '../sim';
 import * as store from '../storage';
 import { LessonWalk, Teacher, TeacherChoice, costToHome, teacherMoves, walkLesson } from '../teachers';
 import { MEMORY_PAIRS, MemorySize, ModelConfig } from '../tokens';
-import { FIXED, TrainStats, chooseTeacher, learnFromLesson, newStats, recordLessonBatch, startTiles } from '../train';
+import { FIXED, JUDGES, Judge, TrainStats, chooseTeacher, learnFromLesson, newStats, recordLessonBatch, startTiles } from '../train';
 import { WorkerRequest, runTraining } from '../workerTypes';
 import {
   DEFAULT_SIZE, Forest, HOME, MOVES, MOVE_ARROWS, MOVE_NAMES, PATH, SECTOR_WORDS, SWAMP, SWAMP_COST, TREE, Tile, WOLF, copyForest,
@@ -17,7 +17,7 @@ import { Board } from './board';
 import { outcomeChart } from './charts';
 import { add, clear, h, s } from './dom';
 import { renderStrip } from './strip';
-import { COLORS, parentFigure, tileSymbol } from './symbols';
+import { COLORS, crowFigure, grandmaFigure, parentFigure, tileSymbol } from './symbols';
 import { renderTech } from './tech';
 
 type TabId = 'forest' | 'lessons' | 'trip' | 'practice' | 'inside';
@@ -35,6 +35,7 @@ interface Settings {
   teacher: TeacherChoice;
   lessons: number;
   practice: number;
+  judge: Judge;
   energy: number;
   boldness: number;
   fog: boolean;
@@ -43,7 +44,7 @@ interface Settings {
 }
 
 const DEFAULTS: Settings = {
-  memory: 'medium', hint: false, teacher: 'mother', lessons: 100, practice: 500,
+  memory: 'medium', hint: false, teacher: 'mother', lessons: 100, practice: 1000, judge: 'grandma',
   energy: 80, boldness: 0.7, fog: false, heat: true, brush: TREE,
 };
 
@@ -52,6 +53,49 @@ const TEACHERS: { id: TeacherChoice; name: string; text: string }[] = [
   { id: 'father', name: 'Hurried father', text: 'The fewest steps, even right past wolf dens and straight through swamps.' },
   { id: 'both', name: 'Both', text: 'A mix of lessons; her arrows split where the two disagree.' },
 ];
+
+const JUDGE_INFO: Record<Judge, { name: string; text: string; card: CardKey; rules: () => (string | Node)[][] }> = {
+  grandma: {
+    name: 'Grandma', text: 'Only cares that she gets home.', card: 'judgeGrandma',
+    rules: () => [
+      [h('strong', {}, `+${FIXED.rewardHome}`), ' for reaching home'],
+      [h('strong', {}, `−${Math.abs(FIXED.rewardEaten)}`), ' for being eaten'],
+      [h('strong', {}, `−${FIXED.lostPenalty}`), ' for running out of energy, plus ', h('strong', {}, `up to +${FIXED.partialCreditWeight}`), ' for ending closer to home (by the energy still needed to get there)'],
+    ],
+  },
+  father: {
+    name: 'Hurried father', text: 'Home, and quickly: every step costs points.', card: 'judgeFather',
+    rules: () => [
+      ["Grandma's points, and"],
+      [h('strong', {}, `−${FIXED.fatherStepCost}`), ' for every step'],
+    ],
+  },
+  mother: {
+    name: 'Careful mother', text: 'Home, but safe and dry: points off for swamps and wolves in sight.', card: 'judgeMother',
+    rules: () => [
+      ["Grandma's points, and"],
+      [h('strong', {}, `−${FIXED.motherSwampPenalty}`), ' for every step into a swamp'],
+      [h('strong', {}, `−${FIXED.motherWolfPenalty}`), ' for every step with a wolf den in sight'],
+    ],
+  },
+  crow: {
+    name: 'Crow', text: 'Judges from the sky, as the crow flies.', card: 'judgeCrow',
+    rules: () => [
+      [h('strong', {}, `+${FIXED.crowHeading}`), ' for every step towards home in a straight line, even into a tree; ', h('strong', {}, `−${FIXED.crowHeading}`), ' for any other step'],
+      [h('strong', {}, `+${FIXED.crowHomeBonus}`), ' for reaching home, ', h('strong', {}, `−${Math.abs(FIXED.rewardEaten)}`), ' for being eaten'],
+      ['Nothing for running out of energy: from the sky, the crow can\'t tell she is tired'],
+    ],
+  },
+};
+
+function judgeIcon(j: Judge): SVGSVGElement {
+  const icon = s('svg', { width: 30, height: 30, viewBox: '-20 -24 40 44' });
+  icon.append(j === 'grandma' ? grandmaFigure(40) : j === 'crow' ? crowFigure(40) : parentFigure(40, j));
+  return icon;
+}
+
+/** What the last practice job did, for the summary under the chart. */
+interface PracticeSummary { judge: Judge; scoreBefore: number; scoreAfter: number; homeBefore: number; homeAfter: number }
 
 const TRAIL_COLORS: Record<Outcome | Teacher, string> = { home: '#c99700', eaten: COLORS.danger, lost: COLORS.lost, mother: COLORS.mother, father: COLORS.father };
 
@@ -73,6 +117,7 @@ export class App {
   techStep = 0;
   card: CardKey | null = 'forest';
   why: { title: string; text: string } | null = null;
+  lastPractice: PracticeSummary | null = null;
   private auto: number | null = null;
   private saveTimer: number | null = null;
   private rng = mulberry32((Math.random() * 2 ** 32) >>> 0);
@@ -146,6 +191,7 @@ export class App {
     let forest: Forest | null = null;
     if (saved) {
       Object.assign(this.settings, saved.settings);
+      if (!JUDGES.includes(this.settings.judge)) this.settings.judge = DEFAULTS.judge;
       const { code, size, tiles } = saved.forest;
       forest = tiles.length === size * size ? forestFromTiles(code, size, tiles) : generateForest(code, size);
       this.edited = saved.forest.edited;
@@ -391,12 +437,29 @@ export class App {
   private startPractice() {
     if (!this.model) return;
     this.stopTrip();
+    const judge = this.settings.judge;
+    const homeBefore = (this.stats.practiceEval.at(-1) ?? this.stats.lessonEval.at(-1))?.home ?? 0;
+    const scoreFrom = this.stats.practiceScore.length;
+    this.lastPractice = null;
     this.runJob(
-      { kind: 'practice', model: this.model, forest: copyForest(this.forest), stats: this.stats, count: this.settings.practice, seed: this.seed() },
+      { kind: 'practice', model: this.model, forest: copyForest(this.forest), stats: this.stats, count: this.settings.practice, seed: this.seed(), judge },
       0.12,
       () => {
         this.walker = null;
-        this.showCard('judge');
+        // Average judge score over the first and last few batches of this job.
+        const pts = this.stats.practiceScore.slice(scoreFrom).map((p) => p.y);
+        const k = Math.max(1, Math.min(4, Math.floor(pts.length / 2)));
+        const mean = (xs: number[]) => xs.reduce((a, b) => a + b, 0) / Math.max(1, xs.length);
+        const sum: PracticeSummary = {
+          judge, homeBefore, homeAfter: this.stats.practiceEval.at(-1)?.home ?? homeBefore,
+          scoreBefore: mean(pts.slice(0, k)), scoreAfter: mean(pts.slice(-k)),
+        };
+        this.lastPractice = sum;
+        const tc = this.stats.teacherCounts;
+        const onlyOther = (judge === 'mother' && tc.mother === 0) || (judge === 'father' && tc.father === 0);
+        if (sum.scoreAfter > sum.scoreBefore && sum.homeAfter < sum.homeBefore - 0.05) this.showCard('rewardHacking');
+        else if (onlyOther) this.showCard('teacherVsJudge');
+        else this.showCard('judge');
       },
     );
     this.board.clearTrails();
@@ -698,11 +761,14 @@ export class App {
     const pct = (v: number) => `${Math.round(v * 100)}%`;
     add(body,
       h('h2', {}, 'Practice on her own'),
-      h('p', {}, 'She walks alone, picking her own moves. Each whole run gets one score from a judge who knows the forest; every move in the run shares the credit or blame.'),
-      h('ul', { class: 'score-list' },
-        h('li', {}, h('strong', {}, `+${FIXED.rewardHome}`), ' for reaching home'),
-        h('li', {}, h('strong', {}, `${FIXED.rewardEaten}`), ' for being eaten'),
-        h('li', {}, h('strong', {}, `−${FIXED.lostPenalty}`), ' for running out of energy, plus ', h('strong', {}, `up to +${FIXED.partialCreditWeight}`), ' for ending closer to home (by the energy still needed to get there)')),
+      h('p', {}, 'She walks alone, picking her own moves, and a judge who knows the forest scores each run. Moves followed by a good score become more likely; moves followed by a bad one, less likely.'),
+      h('h3', {}, 'Who judges?'),
+      h('div', { class: 'group teachers', role: 'radiogroup', 'aria-label': 'Judge' }, ...JUDGES.map((j) =>
+        h('label', { class: `teacher ${this.settings.judge === j ? 'active' : ''}` },
+          h('input', { type: 'radio', name: 'judge', checked: this.settings.judge === j, disabled: this.busy, onchange: () => { this.settings.judge = j; this.saveSoon(); this.showCard(JUDGE_INFO[j].card); this.renderPanel(); } }),
+          judgeIcon(j), h('span', {}, h('strong', {}, JUDGE_INFO[j].name), h('br'), h('small', {}, JUDGE_INFO[j].text))))),
+      h('p', { class: 'muted' }, `How the ${JUDGE_INFO[this.settings.judge].name.toLowerCase()} scores a run:`),
+      h('ul', { class: 'score-list' }, ...JUDGE_INFO[this.settings.judge].rules().map((parts) => h('li', {}, ...parts))),
       this.slider('Number of practice runs', this.settings.practice, 50, 3000, 50, (v) => String(v), (v) => { this.settings.practice = v; this.saveSoon(); }),
       h('button', { class: 'primary', onclick: () => this.startPractice(), disabled: this.busy }, `Practise ${this.settings.practice} runs`),
       this.progress(),
@@ -711,8 +777,30 @@ export class App {
       h('h3', {}, 'How she does alone'),
       outcomeChart(st.practiceEval, 'lessons + runs'),
       before && after ? h('p', { class: 'compare' }, `Same ${FIXED.evalStarts} test trips: after lessons ${pct(before.home)} home, ${pct(before.eaten)} eaten; after practice ${pct(after.home)} home, ${pct(after.eaten)} eaten.`) : null,
+      this.practiceSummary(),
       this.next('Back to Trip alone to compare', 'trip'),
     );
+  }
+
+  /** After a practice job: did the judge's score and her real success move together? */
+  private practiceSummary(): HTMLElement | null {
+    const p = this.lastPractice;
+    if (!p || this.busy) return null;
+    const pct = (v: number) => `${Math.round(v * 100)}%`;
+    const name = JUDGE_INFO[p.judge].name;
+    const scoreUp = p.scoreAfter > p.scoreBefore;
+    const homeDown = p.homeAfter < p.homeBefore - 0.05;
+    const verdict = scoreUp && homeDown
+      ? `Her score went up, but she gets home less often. She is learning to please the ${name.toLowerCase()}, not to get home: reward hacking. Watch a trip alone to see what she does now.`
+      : p.judge === 'grandma'
+        ? 'Grandma scores only the result, so a better score means she really gets home more.'
+        : p.judge === 'crow'
+          ? 'So far she still gets home, because heading towards home mostly helps on the way. But bumping into a tree towards home forever earns the crow\'s points too. Keep practising with the crow and watch whether her home rate starts to fall.'
+          : `Watch a trip alone: she should now walk more the way the ${name.toLowerCase()} likes.`;
+    return h('div', { class: `why ${scoreUp && homeDown ? 'alarm' : ''}` },
+      h('h3', {}, `What the ${name.toLowerCase()} taught her`),
+      h('p', {}, `Average score from the ${name.toLowerCase()}: ${p.scoreBefore.toFixed(2)} at the start of this practice, ${p.scoreAfter.toFixed(2)} at the end. Home on the test trips: ${pct(p.homeBefore)} before, ${pct(p.homeAfter)} after.`),
+      h('p', {}, verdict));
   }
 
   // ---------- export / import ----------

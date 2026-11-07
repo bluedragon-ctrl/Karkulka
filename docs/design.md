@@ -38,6 +38,9 @@ Every feature should map to a language-model idea. This table is the map:
 | Number of lessons | Amount of training data |
 | Coverage heatmap | What the training data covered |
 | Practice on her own, judged by outcome | Fine-tuning from feedback (RLHF-style) |
+| Choice of judge (Grandma, father, mother, crow) | Whoever rates the answers shapes the fine-tuned model, values included |
+| The crow judge, scoring "as the crow flies" | Reward hacking: the model learns what the judge measures, not what was meant |
+| Taught by one parent, judged by the other | Fine-tuning pulling a model away from its pretraining |
 | Confidently walking into a wolf in an unfamiliar spot | Hallucination on out-of-distribution input |
 | Looping at look-alike places with short memory | Repetition caused by a short context |
 | Forest edited after training | Knowledge cutoff: the world changed, the model did not |
@@ -103,8 +106,13 @@ One small neural network learns in two phases, mirroring how real LLMs are built
 ### Phase 2: practice on her own (fine-tuning, optional)
 
 - She walks alone from a starting tile, sampling her own moves, until home, eaten or lost.
-- **Per-run feedback:** one score per run; every move in that run gets a share of the credit or blame (policy-gradient style).
-- **Score (fixed):** +1 for reaching home, −1 for being eaten, −0.3 for running out of energy, plus up to +0.5 partial credit for ending closer to home. Closeness is measured as the energy still needed to walk home (swamps count extra), not straight-line distance. The judge knows the whole forest; she does not.
+- **Feedback per move:** the judge gives points to the moves of a run; the run's score is their sum. Each move is credited with the points from that move to the end of the run ("reward to go", policy-gradient style), so a judge that cares about the way she walks can blame the move that stepped into the swamp, not the whole run.
+- **Choice of judge**, with a card for each. The judge knows the whole forest; she does not. The point values are fixed (in `FIXED`):
+  - *Grandma (default):* only the result. +1 for reaching home, −1 for being eaten, −0.3 for running out of energy, plus up to +0.5 partial credit for ending closer to home. Closeness is measured as the energy still needed to walk home (swamps count extra).
+  - *Hurried father:* Grandma's points, and −0.05 for every step.
+  - *Careful mother:* Grandma's points, and −0.3 for every step into a swamp and −0.25 for every step with a wolf den in sight.
+  - *Crow:* judges from the sky, as the crow flies. +0.08 for every move that heads towards home in a straight line, even into a tree, −0.08 for any other move; +0.2 for reaching home, −1 for being eaten, nothing for running out of energy (from the sky it can't tell she is tired). Bumping towards home forever earns more than walking home, so with enough practice she learns to walk into trees: reward hacking, shown on purpose.
+- **After practice**, the panel compares the judge's average score at the start and end of the round with her home rate on the test trips. If the score went up while she got home less often, it says so and shows the reward-hacking card; a trip alone then explains the bumping ("she walked into trees towards home…").
 - **Curriculum (automatic):** practice starts near home and moves outward as her success rate rises.
 - **Number of practice runs** is the user's control for this phase.
 
@@ -129,7 +137,7 @@ The app is a row of tabs that tells the story in order: Forest, Lessons, Trip al
 | 1. Forest | Generate or edit the forest; home is fixed | New forest, forest code or link, tile editing (path, tree, swamp, wolf den), memory size (short / medium / long), home-hint toggle |
 | 2. Lessons | Parents walk her home; the model trains per step | Teacher (mother / father / both), number of lessons, play or fast-forward |
 | 3. Trip alone | She walks from a chosen start using the model | Click the start tile, energy (step budget), boldness dial, step-by-step or auto, fog toggle |
-| 4. Practice (optional) | Her own runs, judged by outcome; then back to Trip alone to compare | Number of practice runs |
+| 4. Practice (optional) | Her own runs, scored by a judge; then back to Trip alone to compare | Judge (Grandma / father / mother / crow), number of practice runs |
 | 5. Inside the model | Numbers and model details for technical users | Read-only views, export or import the model |
 
 **Rules between tabs**
@@ -148,7 +156,7 @@ All pictures are simple symbolic SVG shapes drawn for this project, with no tile
 - One clear shape per tile type: a triangle tree, a plain path, a marked wolf den, a small house with a heart for grandma, wavy blue water with reeds for a swamp, and a red hooded figure for Red Riding Hood (an original design).
 - Shape plus colour, never colour alone, so colour-blind viewers can tell tiles apart.
 - Symbols must read at small sizes, because the same symbols appear as tokens in the memory strip.
-- Limited palette: greens and browns for the forest, red only for her and for danger, warm yellow for home, blue for swamp water. Each parent gets its own colour.
+- Limited palette: greens and browns for the forest, red only for her and for danger, warm yellow for home, blue for swamp water. Each parent gets its own colour. The judges are figures too: Grandma (white bun, glasses, blue-grey shawl), the parents, and a black crow with a yellow beak.
 
 **Core displays**
 
@@ -166,7 +174,7 @@ All pictures are simple symbolic SVG shapes drawn for this project, with no tile
 - Eaten: a cartoon wolf pops up and the screen fades. Nothing graphic.
 - Lost: she sits down, and a "lost in the woods" note appears.
 
-**LM corner cards.** Small cards appear at key moments, each giving one sentence of analogy, for example "Her memory strip is like a language model's context window." After a trip, a short "Why did she do that?" note explains the main decision. These cards carry the teaching for non-technical users.
+**LM corner cards.** Small cards appear at key moments, each giving one sentence of analogy, for example "Her memory strip is like a language model's context window." After a trip, a short "Why did she do that?" note explains the main decision. These cards carry the teaching for non-technical users. Choosing a judge shows that judge's card; after practice comes the reward-hacking card (score up, home rate down), the teacher-versus-judge card (taught only by the other parent), or the general judge card.
 
 **Layout.** Designed for a wide screen first: the forest large in the centre, a narrow side panel with the current tab's controls, and the memory strip at the bottom. A phone layout can come later.
 
@@ -207,10 +215,11 @@ A static TypeScript site hosted on GitHub Pages, with everything (generation, tr
 - Practice phase with automatic curriculum
 - Coverage heatmap, outcome chart, LM corner cards
 - Technical tab, browser save, export and import
+- Four practice judges (Grandma, father, mother, crow), with reward hacking from the crow
 
 ### Later
 
-- "Naive judge" choice (straight-line distance) to demonstrate reward hacking
+- A crow teacher for Lessons (walks straight towards home and gets stuck): learning from a source that doesn't share your limits
 - A simple "inside her head" network picture on the main screens
 - Two models side by side for comparison
 - Berry bush that restores energy (+15, once per trip), with her energy level as an extra input (a "how tired am I" sense, like a model knowing its remaining output budget). Parents never teach the detour, so only practice can discover it: fine-tuning learning behaviour that was never in the training examples

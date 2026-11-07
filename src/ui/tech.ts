@@ -123,7 +123,7 @@ export function renderTech(el: HTMLElement, ctx: TechContext) {
     el.append(section('Network', 'No model yet: give her some lessons first.'));
   }
 
-  el.append(section('Loss curves', 'Lessons: average per-step loss (cross-entropy against the parent\'s move; lower is better). Practice: average score per run from the judge (higher is better).',
+  el.append(section('Loss curves', 'Lessons: average per-step loss (cross-entropy against the parent\'s move; lower is better). Practice: average score per run from the judge that was chosen (higher is better, but a high score from the crow can mean reward hacking).',
     h('div', { class: 'charts-2' },
       lineChart([{ points: stats.lessonLoss, color: COLORS.mother, label: 'lesson loss' }], 'loss'),
       lineChart([{ points: stats.practiceScore, color: '#e07b00', label: 'practice score' }], 'score'))));
@@ -136,6 +136,8 @@ export function renderTech(el: HTMLElement, ctx: TechContext) {
     ['Practice learning rate (gradient descent, clipped)', String(FIXED.practiceLearningRate)],
     ['Reward: home / eaten', `${FIXED.rewardHome} / ${FIXED.rewardEaten}`],
     ['Score when lost', `−${FIXED.lostPenalty}, plus up to ${FIXED.partialCreditWeight} for ending closer (energy still needed to get home)`],
+    ['Judges', `Grandma: the scores above. Father: also −${FIXED.fatherStepCost} per step. Mother: also −${FIXED.motherSwampPenalty} per swamp step, −${FIXED.motherWolfPenalty} per step with a den in sight. Crow: ±${FIXED.crowHeading} per step towards or away from home in a straight line, +${FIXED.crowHomeBonus} home, ${FIXED.rewardEaten} eaten, 0 lost`],
+    ['Practice credit', 'Reward to go: each move is credited with the points from that move to the end of the run, minus a running average (baseline), clipped to ±1'],
     ['Energy per step', `1 on path, ${SWAMP_COST} in a swamp, 1 for bumping into a tree`],
     ['Careful mother\'s extra cost', `+${WOLF_PENALTY} next to a wolf den, +${SWAMP_PENALTY} in a swamp (the father counts only steps)`],
     ['Exploration during practice (boldness)', String(FIXED.practiceBoldness)],
