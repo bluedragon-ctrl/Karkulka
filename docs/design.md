@@ -194,11 +194,13 @@ The app is a row of tabs that tells the story in order: Forest, Lessons, Trip al
 
 | Tab | What happens | User controls |
 | --- | --- | --- |
-| 1. Forest | Generate or edit the forest; home is fixed | New forest, forest code or link, tile editing (path, tree, swamp, wolf den), memory size (short / medium / long), home-hint toggle; after lessons: small change, big change, new forest with the same Red Riding Hood |
+| 1. Forest | Generate or edit the forest; home is fixed | New forest, a forest code to type in and Generate (the page link always carries the forest too), tile editing (path, tree, swamp, wolf den), memory size (short / medium / long), home-hint toggle; after lessons: small change, big change, new forest with the same Red Riding Hood |
 | 2. Lessons | Parents walk her home; the model trains per step | Teacher (mother / father / both / wolf in disguise / mother and sometimes the wolf), number of lessons, play or fast-forward; after a change: 30 / 100 / 300 catch-up lessons |
 | 3. Trip alone | She walks from a chosen start using the model | Click the start tile, energy (step budget), boldness dial, Next step, Walk through (pause any time), Instant run or Stop (end the trip now, when she goes in circles or keeps bumping into trees), fog toggle, her thoughts toggle |
 | 4. Practice (optional) | Her own runs, scored by a judge; then back to Trip alone to compare | Judge (Grandma / father / mother / crow / wolf), number of practice runs |
 | 5. Inside the model | Numbers and model details for technical users | Read-only views, export or import the model |
+
+The teacher and the judge are each picked from a drop-down list, with a card under it for the chosen one: its picture, what it does and, for a judge, how a run is scored.
 
 **Rules between tabs**
 
@@ -285,7 +287,7 @@ Where the "?" buttons are, and what makes them pulse:
 | 3. Trip alone | Energy, Boldness | Maximum output length, temperature | Moving the slider |
 | 4. Practice | Title | Practice is fine-tuning from feedback | Entering the tab; starting practice |
 | 4. Practice | "Who judges?" | The judge decides what she learns | |
-| 4. Practice | "How … scores a run" | The chosen judge's card | Choosing a judge |
+| 4. Practice | "How a run is scored" (in the judge card) | The chosen judge's card | Choosing a judge |
 | 4. Practice | Watch buttons and "In the last run … gave it … points" | One score for a whole run, as in RLHF | Watching one run |
 | 4. Practice | "Run … of …" line while watching | Sampling: each move picked by chance | |
 | 4. Practice | "She practises from up to … steps" | Curriculum learning | |

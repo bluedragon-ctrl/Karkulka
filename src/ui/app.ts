@@ -1006,7 +1006,6 @@ export class App {
     if (where === 'forest') {
       return h('div', { class: 'group' },
         h('h3', {}, this.hq('Change the forest after her lessons', 'outdated')),
-        h('p', { class: 'muted' }, 'She keeps what she learned. See how she copes, then give her catch-up lessons.'),
         h('div', { class: 'row' },
           h('button', { disabled: busy, onclick: () => this.changeAfterLessons('small') }, `Small change (${CHANGE_SIZES.small} tiles)`),
           h('button', { disabled: busy, onclick: () => this.changeAfterLessons('big') }, `Big change (${CHANGE_SIZES.big} tiles)`)),
@@ -1144,10 +1143,8 @@ export class App {
       h('p', { class: 'muted' }, 'Each ', h('span', { class: 'hint-q sample', 'aria-hidden': 'true' }, '?'), ' shows the language-model idea behind it, and how real chatbots do it.'),
       h('div', { class: 'group' },
         h('div', { class: 'code-line' }, 'Forest code ', h('code', { class: 'code' }, this.forest.code), this.edited ? h('span', { class: 'tag' }, 'edited') : null, this.q('forestCode')),
-        h('div', { class: 'row' },
-          h('button', { onclick: () => this.setForest(generateForest(randomCode()), false) }, 'New forest'),
-          h('button', { onclick: (e: Event) => this.copyLink(e.target as HTMLButtonElement) }, 'Copy link')),
-        h('div', { class: 'row' }, codeInput, h('button', { onclick: open }, 'Open'))),
+        h('div', { class: 'row' }, h('button', { onclick: () => this.setForest(generateForest(randomCode()), false) }, 'New forest')),
+        h('div', { class: 'row' }, codeInput, h('button', { onclick: open }, 'Generate'))),
       h('div', { class: 'group' },
         h('h3', {}, this.hq('Edit the forest', 'editForest')),
         h('p', { class: 'muted' }, 'Pick a brush, then click or drag on the map.'),
@@ -1169,10 +1166,16 @@ export class App {
     );
   }
 
-  private copyLink(btn: HTMLButtonElement) {
-    const link = store.forestLink(this.forest, this.edited);
-    navigator.clipboard?.writeText(link).then(() => { btn.textContent = 'Copied!'; }, () => prompt('Copy this link:', link));
-    setTimeout(() => { btn.textContent = 'Copy link'; }, 1500);
+  /**
+   * A drop-down choice (teacher or judge) with a card below it for the chosen one:
+   * its picture, what it does and any extra details.
+   */
+  private chooser(label: string, options: [string, string][], value: string, disabled: boolean, onChange: (id: string) => void,
+    icon: SVGElement, text: string, ...extra: Node[]): HTMLElement {
+    const select = h('select', { 'aria-label': label, disabled, onchange: (e: Event) => onChange((e.target as HTMLSelectElement).value) },
+      ...options.map(([id, name]) => h('option', { value: id, selected: id === value }, name)));
+    return h('div', { class: 'chooser' }, select,
+      h('div', { class: 'chooser-card' }, h('div', { class: 'chooser-head' }, icon, h('span', {}, text)), ...extra));
   }
 
   private lessonsPanel(body: HTMLElement) {
@@ -1183,15 +1186,16 @@ export class App {
       h('p', {}, this.hq('A teacher walks her home from a random spot. At every step she guesses the next move, sees what the teacher did, and learns a little.', 'guess')),
       this.changeBox('lessons'),
       h('h3', {}, this.hq('Who teaches her?', teacherCard(this.settings.teacher))),
-      h('div', { class: 'group teachers', role: 'radiogroup', 'aria-label': 'Teacher' }, ...TEACHERS.map((t) => {
+      (() => {
+        const t = TEACHERS.find((x) => x.id === this.settings.teacher) ?? TEACHERS[0];
         const icon = s('svg', { width: 30, height: 30, viewBox: '-20 -24 40 44' });
         if (t.id === 'both') icon.append(s('g', { transform: 'translate(-7 0) scale(.8)' }, parentFigure(40, 'mother')), s('g', { transform: 'translate(7 0) scale(.8)' }, parentFigure(40, 'father')));
         else if (t.id === 'motherWolf') icon.append(s('g', { transform: 'translate(-7 0) scale(.8)' }, parentFigure(40, 'mother')), s('g', { transform: 'translate(7 0) scale(.8)' }, parentFigure(40, 'wolf')));
         else icon.append(parentFigure(40, t.id as Teacher));
-        return h('label', { class: `teacher ${this.settings.teacher === t.id ? 'active' : ''}` },
-          h('input', { type: 'radio', name: 'teacher', checked: this.settings.teacher === t.id, disabled: busy, onchange: () => { this.settings.teacher = t.id; this.saveSoon(); this.showCard(teacherCard(t.id)); this.renderPanel(); } }),
-          icon, h('span', {}, h('strong', {}, t.name), h('br'), h('small', {}, t.text)));
-      })),
+        return this.chooser('Teacher', TEACHERS.map((x) => [x.id, x.name]), t.id, busy, (id) => {
+          this.settings.teacher = id as TeacherChoice; this.saveSoon(); this.showCard(teacherCard(this.settings.teacher)); this.renderPanel();
+        }, icon, t.text);
+      })(),
       this.slider('Number of lessons', this.settings.lessons, 10, 2000, 10, (v) => String(v), (v) => { this.settings.lessons = v; this.saveSoon(); }, undefined, 'moreData'),
       this.runControls({
         what: 'lesson', total: this.settings.lessons, watch: (n, sp) => this.watchLessons(n, sp), watchCard: 'watchMany',
@@ -1316,12 +1320,11 @@ export class App {
       h('h2', {}, this.hq('Practice on her own', 'practice')),
       h('p', {}, 'She walks alone and a judge who knows the forest gives each walk a score. After a good score she makes those moves more often; after a bad one, less often.'),
       h('h3', {}, this.hq('Who judges?', 'judge')),
-      h('div', { class: 'group teachers', role: 'radiogroup', 'aria-label': 'Judge' }, ...JUDGES.map((j) =>
-        h('label', { class: `teacher ${this.settings.judge === j ? 'active' : ''}` },
-          h('input', { type: 'radio', name: 'judge', checked: this.settings.judge === j, disabled: this.busy, onchange: () => { this.settings.judge = j; this.saveSoon(); this.showCard(JUDGE_INFO[j].card); this.renderPanel(); } }),
-          judgeIcon(j), h('span', {}, h('strong', {}, JUDGE_INFO[j].name), h('br'), h('small', {}, JUDGE_INFO[j].text))))),
-      h('p', { class: 'muted' }, this.hq(`How ${this.settings.judge === 'grandma' ? 'Grandma' : `the ${JUDGE_INFO[this.settings.judge].name.toLowerCase()}`} scores a run:`, JUDGE_INFO[this.settings.judge].card)),
-      h('ul', { class: 'score-list' }, ...JUDGE_INFO[this.settings.judge].rules().map((parts) => h('li', {}, ...parts))),
+      this.chooser('Judge', JUDGES.map((j) => [j, JUDGE_INFO[j].name]), this.settings.judge, this.busy, (id) => {
+        this.settings.judge = id as Judge; this.saveSoon(); this.showCard(JUDGE_INFO[this.settings.judge].card); this.renderPanel();
+      }, judgeIcon(this.settings.judge), JUDGE_INFO[this.settings.judge].text,
+      h('p', { class: 'muted' }, this.hq('How a run is scored:', JUDGE_INFO[this.settings.judge].card)),
+      h('ul', { class: 'score-list' }, ...JUDGE_INFO[this.settings.judge].rules().map((parts) => h('li', {}, ...parts)))),
       this.slider('Number of practice runs', this.settings.practice, 50, 3000, 50, (v) => String(v), (v) => { this.settings.practice = v; this.saveSoon(); }),
       this.runControls({
         what: 'run', total: this.settings.practice, watch: (n, sp) => this.watchRuns(n, sp), watchCard: 'runScore',
