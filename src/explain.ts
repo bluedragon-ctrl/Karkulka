@@ -11,7 +11,7 @@ export type CardKey =
   | 'tripReport' | 'judgeGrandma' | 'judgeFather' | 'judgeMother' | 'judgeCrow' | 'rewardHacking' | 'teacherVsJudge'
   | 'wolfTeacher' | 'poisonedData' | 'judgeWolf' | 'fixBadData'
   | 'newWorld' | 'catchUp'
-  | 'moreData' | 'guess' | 'watchMany' | 'testTrips' | 'sampling' | 'curriculum' | 'oneHot' | 'weights' | 'loss' | 'hyper' | 'modelFile';
+  | 'moreData' | 'guess' | 'watchMany' | 'runScore' | 'testTrips' | 'sampling' | 'curriculum' | 'oneHot' | 'weights' | 'loss' | 'hyper' | 'modelFile';
 
 export const CARDS: Record<CardKey, string> = {
   forest: "The forest is her whole world, like the text a language model works with. She only ever sees a small piece of it at a time.",
@@ -50,6 +50,7 @@ export const CARDS: Record<CardKey, string> = {
   moreData: "More lessons means more training data. The first lessons help the most; after a while each extra lesson adds less, as with language models.",
   guess: "In a lesson she first guesses the next move, then sees the teacher's move and adjusts a little. A language model is trained the same way, one predicted word at a time.",
   watchMany: "Watch lesson after lesson and you see her learn: at first many of her guesses are wrong, later most match the teacher's move. A language model is trained on example after example in the same way, and its guesses for the next word come out right more and more often.",
+  runScore: "The judge gives a whole run one score, and every move in it shares the credit or the blame. One run says little, because luck plays a part; over many runs the good moves win. RLHF works the same way: a language model's answers are scored, and over many answers it leans towards what scored well.",
   testTrips: "She is tested on the same fixed trips every time, like a language model tested on a benchmark: the same questions each time, so you can see whether she really got better.",
   sampling: "Each move is picked by chance from her probabilities, so from the same start she can walk a different way each time. Ask a language model the same question twice and you can get two different answers.",
   curriculum: "She practises close to home first and further away as she gets better. Starting with easy examples and moving on to harder ones is called curriculum learning.",

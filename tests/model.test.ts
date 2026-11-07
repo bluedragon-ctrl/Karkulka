@@ -6,7 +6,7 @@ import { mulberry32 } from '../src/rng';
 import { Walker } from '../src/sim';
 import { costToHome, endsAtDen, walkLesson } from '../src/teachers';
 import { MEMORY_PAIRS, SLOT_FEATS, VIEW_FEATS, encodeContext, inputSize, buildVocabulary } from '../src/tokens';
-import { FIXED, JUDGES, Run, chooseTeacher, evalEvery, guessesRight, headsHome, judgeMaps, judgeRewards, judgeScore, homeShare, newStats, trainLessons, trainPractice } from '../src/train';
+import { FIXED, JUDGES, Run, chooseTeacher, evalEvery, guessesRight, headsHome, judgeMaps, learnFromRun, practiceSetup, practiceWalker, startTiles, judgeRewards, judgeScore, homeShare, newStats, trainLessons, trainPractice } from '../src/train';
 import { Forest, HOME, Move, PATH, SWAMP, TREE, Tile, WOLF, allReachable, forestFromTiles, neighbor, pathTiles, walkableTiles } from '../src/world';
 
 const cfg = { memory: MEMORY_PAIRS.medium, hint: false, hidden: 16 };
@@ -109,6 +109,21 @@ describe('training', () => {
     expect(stats.practiceRuns).toBe(200);
     expect(stats.practiceEval.length).toBeGreaterThan(0);
     expect(stats.radius).toBeGreaterThan(FIXED.curriculumStart);
+  });
+
+  it('a watched practice run is learned from like a worker run', () => {
+    const m = createModel({ ...cfg, hidden: FIXED.hidden }, mulberry32(1));
+    const stats = newStats(f);
+    trainLessons(m, createAdam(m), f, 'mother', 50, stats, mulberry32(2));
+    const setup = practiceSetup(f, stats);
+    const w = practiceWalker(m, f, startTiles(f, 1, stats.radius, setup.dist)[0], stats, mulberry32(3));
+    const before = m.w2.slice();
+    w.run();
+    const score = learnFromRun(m, f, 'grandma', w, stats, setup);
+    expect(stats.practiceRuns).toBe(1);
+    expect(stats.judgeRuns).toEqual({ grandma: 1 });
+    expect(score).toBeCloseTo(judgeScore('grandma', f, judgeMaps(f), { outcome: w.outcome!, start: w.start, positions: w.positions, moves: w.history.moves }), 9);
+    expect(m.w2.some((v, i) => v !== before[i])).toBe(true);
   });
 
   it('practice records which judge scored the runs', () => {

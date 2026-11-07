@@ -40,6 +40,7 @@ Every feature should map to a language-model idea. This table is the map:
 | Number of lessons | Amount of training data |
 | Coverage heatmap | What the training data covered |
 | Practice on her own, judged by outcome | Fine-tuning from feedback (RLHF-style) |
+| One score per watched run, shared by all its moves | A reward for one whole answer: noisy alone, a clear direction over many |
 | Tired, wet, scared and bumped after a trip | Answers are rated on more than being right: length, safety, wasted words |
 | Choice of judge (Grandma, father, mother, crow, wolf) | Whoever rates the answers shapes the fine-tuned model, values included |
 | The crow judge, scoring "as the crow flies" | Reward hacking: the model learns what the judge measures, not what was meant |
@@ -144,6 +145,7 @@ One small neural network learns in two phases, mirroring how real LLMs are built
 - **After practice**, the panel compares the judge's average score at the start and end of the round with her home rate on the test trips. If the score went up while she got home less often, it says so and shows the reward-hacking card; a trip alone then explains the bumping ("she walked into trees towards home…").
 - **Curriculum (automatic):** practice starts near home and moves outward as her success rate rises.
 - **Number of practice runs** is the user's control for this phase.
+- **Three ways to practise**, like the lessons: *Watch one run* (slow), *Watch runs in a row* (Quick) and *In a row, fast*, with the same speed switch, Stop and test every 5 runs; and *Practise N runs* in the Web Worker. A watched run shows her arrows at the practice boldness, the start flag and her trail inside the curriculum outline. When it ends she learns from it through the same `learnFromRun` as the worker, and the panel says how it ended and the judge's points for it ("In the last run she got home. Grandma gave it +1.00 points."). A row that ends or is stopped gets the same "What … taught her" summary as a worker round.
 
 ### After the forest changes: catch-up lessons
 
@@ -258,6 +260,8 @@ Where the "?" buttons are, and what makes them pulse:
 | 4. Practice | Title | Practice is fine-tuning from feedback | Entering the tab; starting practice |
 | 4. Practice | "Who judges?" | The judge decides what she learns | |
 | 4. Practice | "How … scores a run" | The chosen judge's card | Choosing a judge |
+| 4. Practice | Watch buttons and "In the last run … gave it … points" | One score for a whole run, as in RLHF | Watching one run |
+| 4. Practice | "Run … of …" line while watching | Sampling: each move picked by chance | |
 | 4. Practice | "She practises from up to … steps" | Curriculum learning | |
 | 4. Practice | "How she does alone" | Test trips as a benchmark | |
 | 4. Practice | "What … taught her" (after practice) | Reward hacking, teacher versus judge, bad judge (wolf), fixing bad data, or the general judge card | Practice ends |
