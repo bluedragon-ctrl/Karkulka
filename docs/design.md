@@ -58,10 +58,11 @@ Every feature should map to a language-model idea. This table is the map:
 | Lessons first, then practice, compared on the same test trips | The usual recipe: pretraining, then fine-tuning from feedback |
 | Small change, big change, brand new forest (same Red Riding Hood) | The further new input is from the training data, the more confident mistakes |
 | Dashed yellow edges on changed tiles | Where the world no longer matches what the model learned |
+| Moving grandma's house after lessons | A new goal the model was never trained for: it falls back on old habits |
 | Catch-up lessons in the changed forest | Training a model further on new data instead of starting over |
 | Each move picked by chance; starting again from the same tile walks differently | Sampling: the same prompt can give different answers |
 | Test trips from the same fixed starts (outcome chart) | A benchmark: the same questions every time, to measure progress |
-| Practice starting near home, moving outward | Curriculum learning: easy examples first |
+| Practice starting near home, moving outward (or anywhere, to compare) | Curriculum learning: easy examples first |
 | Lesson loss (how surprised she is by the teacher's move) | Training loss, the number pretraining pushes down |
 | "She guessed 12 of 18 moves right" while watching lessons in a row | Next-token accuracy rising as training goes on |
 | One-hot numbers for each tile she sees | Turning tokens into numbers before the model reads them |
@@ -76,7 +77,7 @@ Every feature should map to a language-model idea. This table is the map:
 
 ## Forest and world rules
 
-One forest is generated in advance, with grandma's house at a fixed spot. All training and testing happen in that forest.
+One forest is generated in advance, with grandma's house at a fixed spot (the generator always puts it in the same place, so a forest code always gives the same forest). The player can move the house with the "Grandma's house" brush in the forest editor; the old spot becomes path. All training and testing happen in that forest.
 
 **Grid.** Square tiles, 15 × 15 (readable on a projector, fast to train).
 
@@ -99,7 +100,7 @@ One forest is generated in advance, with grandma's house at a fixed spot. All tr
 - 4–6 swamp patches go where the hurried father's shortest route crosses them and a dry detour exists, so the two parents choose differently.
 - Wolf dens (about 8) go where the two parents' routes part ways the most.
 - Each forest has a short **forest code** (a seed), shareable as a link so a whole class can use the same forest.
-- The user can edit tiles by hand; edits travel in the link too. Editing after training marks her lessons as outdated (the knowledge-cutoff lesson).
+- The user can edit tiles by hand, grandma's house included (its brush moves the house); edits travel in the link too. Saved and linked tiles find home from the house tile, so old links and saves still work. Moving the house after lessons shows the "moved home" card: she still heads for the old spot, like a model given a goal it was never trained for. Editing after training marks her lessons as outdated (the knowledge-cutoff lesson).
 - **Changing the forest after her lessons.** Once she has had lessons, the Forest tab offers *Small change* (5 tiles), *Big change* (15 tiles) and *New forest, same Red Riding Hood*. A change turns random tiles (never home) into another kind of tile, and only keeps a change that leaves every path and swamp able to reach home. It is seeded by the forest code and the current tiles, so the same forest always gets the same change. A brand new forest gets a new random code and clears the heatmap, since she was taught nowhere there.
 - Changed tiles get a dashed yellow-and-black edge on every tab until she has new lessons. A brand new forest is not marked; the banner says the whole forest is new to her.
 
@@ -154,7 +155,7 @@ One small neural network learns in two phases, mirroring how real LLMs are built
   - *Wolf:* wants her at his den, not home. +1 for walking into a den, −0.5 for getting home, 0 for running out of energy. Practice with the wolf ruins a good model on purpose: after the mother's 300 lessons, 1000 runs with the wolf take her from 81% home to 9% (eaten 68%). An earlier version also paid +0.1 for every step with a den in sight; she then mostly loitered near dens until her energy ran out (53% lost), which told the story less clearly, so it was dropped.
 - **Undoing the wolf's lessons with Grandma** (same setup): after "mother, and sometimes the wolf", home goes from 46% to 74% with 1000 practice runs and to 89% with 3000. After wolf-only lessons it only gets from 24% to 43% (1000) and 52% (3000). A little bad data can be fixed later; a lot is hard to undo.
 - **After practice**, the panel compares the judge's average score at the start and end of the round with her home rate on the test trips. If the score went up while she got home less often, it says so and shows the reward-hacking card; a trip alone then explains the bumping ("she walked into trees towards home…").
-- **Curriculum (automatic):** practice starts near home and moves outward as her success rate rises.
+- **Curriculum (automatic), or anywhere:** a "Where does she start?" switch on the Practice tab. *Close to home first* (default): practice starts within 3 steps of home (walking distance), and the circle grows by 2 steps when she gets home in 70% of her last 30 runs; her energy is 4 × the circle + 10, at most the test-trip energy. The circle is outlined on the board. *Anywhere in the forest*: any path tile, test-trip energy, no outline, and the circle doesn't grow. The switch itself is the explanation: comparing the two on the test trips shows why easy examples first helps. It's saved with the settings, not the model, and can't be changed while training runs. Measured on 8 forest codes (KARKULKA, A1–G7; medium memory, mother's lessons, then 1000 runs with Grandma; home on the test trips): with no lessons, close-first reaches 18% home and anywhere 5%; after 30 lessons both reach 68% (from 40%); after 300 lessons 94% and 95% (from 88%). So the curriculum matters when she knows little, and the card says so rather than promising it always helps.
 - **Runs to add** is the user's control for this phase, under a "Let her practise more" heading and a "So far: N practice runs" line, as on Lessons.
 - **Three ways to practise**, like the lessons: *One run* (slow) and *Watch runs* (starts Quick, with Fast-forward for the rest; the "What … taught her" summary then still covers the whole row, the watched runs too), with the same run controls (Pause, Stop, speed switch, progress bar) and a test every 5 runs; and *Do N runs* in the Web Worker. A watched run shows her arrows at the practice boldness, the start flag and her trail inside the curriculum outline. When it ends she learns from it through the same `learnFromRun` as the worker, and the panel says how it ended and the judge's points for it ("In the last run she got home. Grandma gave it +1.00 points."). A row that ends or is stopped gets the same "What … taught her" summary as a worker round.
 
@@ -257,6 +258,7 @@ Where the "?" buttons are, and what makes them pulse:
 | 1. Forest | Title | The forest as the model's world | Entering the tab |
 | 1. Forest | Forest code | The same code gives the same forest: a fixed random seed | |
 | 1. Forest | "Edit the forest" | You choose her world, as builders choose a model's training data | |
+| 1. Forest | (no own "?"; moving the house) | "Moved home" card after lessons; the "Edit the forest" card before | Painting with the house brush |
 | 1. Forest | Swamp note | Swamp eats the energy budget | Painting a swamp before lessons |
 | 1. Forest | "Her memory" | Context window | |
 | 1. Forest | "Chosen before her lessons…" | Context length is fixed before training | Changing the memory size |
@@ -290,7 +292,7 @@ Where the "?" buttons are, and what makes them pulse:
 | 4. Practice | The chosen judge's line (in the judge card) | The chosen judge's card, followed by how that judge scores a run, in points | Choosing a judge |
 | 4. Practice | Watch buttons and "In the last run … gave it … points" | One score for a whole run, as in RLHF | Watching one run |
 | 4. Practice | "Run … of …" line while watching | Sampling: each move picked by chance | |
-| 4. Practice | "She practises from up to … steps" | Curriculum learning | |
+| 4. Practice | "Where does she start?" and the line under it | Curriculum learning, and what happens without it | Changing the switch |
 | 4. Practice | "How she does alone" | Test trips as a benchmark | |
 | 4. Practice | "Same … test trips: after lessons … after practice …" | Lessons first, then practice: the usual recipe | |
 | 4. Practice | "What … taught her" (after practice) | Reward hacking, teacher versus judge, bad judge (wolf), fixing bad data, or the general judge card | Practice ends |
