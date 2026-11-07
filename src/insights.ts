@@ -134,6 +134,10 @@ export const INSIGHTS: Record<InsightTab, Insight> = {
         real: 'Repetition loops, when a model keeps writing the same phrase. Short context and low temperature make it worse.',
       },
       {
+        game: 'Her thoughts ("Scary wolf to the south! Let\'s go south.")',
+        real: 'Models narrating their work: "Let me check the file first…", or the visible "thinking" of reasoning models. Unlike her thoughts, which come after the move, theirs are written before the answer and become part of their context, so they really help. But a model\'s account of its reasons is still generated text, not a view inside it; researchers find it often leaves out what really drove the answer.',
+      },
+      {
         game: 'She never sees the map',
         real: 'A model has no picture of the finished answer before it starts. Big models partly make up for this by "thinking" first: writing out reasoning steps that then become part of their own context.',
       },

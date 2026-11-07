@@ -34,7 +34,7 @@ Every feature should map to a language-model idea. This table is the map:
 | Energy (step budget) | Maximum output length |
 | A swamp: passable, but 3 energy per step | Some outputs use up the output budget faster |
 | Walking into a tree ("Ouch!"): a step of energy spent, no move | A wrong guess wastes output on a mistake |
-| Her thoughts ("Scary wolf to the south! Let's go south."), made up after the move is picked | A model explaining its answer: more words it writes, not a look at how the answer was chosen; "definitely" or "maybe" follow the probability |
+| Her thoughts ("Scary wolf to the south! Let's go south."), made up after the move is picked | Models narrating their steps ("First I'll check…"). Theirs come before the answer and help, because they join the context; hers come after and do not. Either way, an account of one's reasons is more generated words, not a look at how the choice was made. "Definitely" or "maybe" follow the probability |
 | Lessons from a teacher | Pretraining on example text |
 | Choice of teacher (fewest steps vs. safe and dry) | Training data and the values of whoever made it |
 | The wolf in disguise as a teacher (looks like the father until a den is in sight) | Bad examples in the training data are learned just like good ones |
@@ -262,7 +262,7 @@ Where the "?" buttons are, and what makes them pulse:
 | 3. Trip alone | "In a swamp" in the status line (while she stands in one) | Swamp eats the energy budget | Her first swamp step on a trip |
 | 3. Trip alone | "Ouch, a tree!" in the status line (right after she walks into a tree) | A wrong guess wastes a step | Her first bump into a tree on a trip |
 | 3. Trip alone | "Smells cake" in the status line | More useful input | |
-| 3. Trip alone | "Her thoughts" checkbox | Thoughts are made up after the move, like a model explaining its answer | Her first thought in a session (unless another card just pulsed); toggling it |
+| 3. Trip alone | "Her thoughts" checkbox | Big models narrate their steps too, before the answer (which helps); hers come after. Either way, a stated reason is not a look inside | Her first thought in a session (unless another card just pulsed); toggling it |
 | 3. Trip alone | "Why did she do that?" | The card that fits the trip: home, hallucination, temperature, repetition, energy, swamp, reward hacking, the wolf's lessons or practice | The trip ends |
 | 3. Trip alone | "How was the trip for her?" | Answers are rated on more than being right | |
 | 3. Trip alone | "Her next move" (while walking) | Next-token probabilities | Choosing a start |
