@@ -2,16 +2,16 @@
 import { CARDS, CardKey, explainTrip } from '../explain';
 import { generateForest } from '../forest';
 import { Adam, Model, createAdam, createModel, modelFromJSON, modelToJSON } from '../model';
-import { mulberry32, normalizeCode, randomCode } from '../rng';
-import { Walker, predictAt } from '../sim';
+import { mulberry32, normalizeCode, pick, randomCode } from '../rng';
+import { Outcome, Walker, predictAt } from '../sim';
 import * as store from '../storage';
 import { LessonWalk, Teacher, TeacherChoice, costToHome, teacherMoves, walkLesson } from '../teachers';
 import { MEMORY_PAIRS, MemorySize, ModelConfig } from '../tokens';
-import { FIXED, TrainStats, chooseTeacher, evaluate, learnFromLesson, newStats, startTiles } from '../train';
-import { runTraining } from '../workerTypes';
+import { FIXED, TrainStats, chooseTeacher, learnFromLesson, newStats, recordLessonBatch, startTiles } from '../train';
+import { WorkerRequest, runTraining } from '../workerTypes';
 import {
-  Forest, HOME, MOVES, MOVE_ARROWS, MOVE_NAMES, PATH, SWAMP, SWAMP_COST, TREE, Tile, WOLF, copyForest, homeSector, unreachableTiles,
-  walkingDistances,
+  DEFAULT_SIZE, Forest, HOME, MOVES, MOVE_ARROWS, MOVE_NAMES, PATH, SECTOR_WORDS, SWAMP, SWAMP_COST, TREE, Tile, WOLF, copyForest,
+  forestFromTiles, homeSector, unreachableTiles, walkingDistances,
 } from '../world';
 import { Board } from './board';
 import { outcomeChart } from './charts';
@@ -53,19 +53,19 @@ const TEACHERS: { id: TeacherChoice; name: string; text: string }[] = [
   { id: 'both', name: 'Both', text: 'A mix of lessons; her arrows split where the two disagree.' },
 ];
 
-const OUTCOME_COLORS: Record<string, string> = { home: '#c99700', eaten: COLORS.danger, lost: COLORS.lost, mother: COLORS.mother, father: COLORS.father };
+const TRAIL_COLORS: Record<Outcome | Teacher, string> = { home: '#c99700', eaten: COLORS.danger, lost: COLORS.lost, mother: COLORS.mother, father: COLORS.father };
 
 interface Job { kind: 'lessons' | 'practice' | 'watch'; done: number; total: number; cancel: () => void }
 
 export class App {
-  forest: Forest;
+  forest!: Forest;
   edited = false;
   /** The forest tiles she was taught on (to spot a knowledge cutoff). */
   modelTiles = '';
   settings: Settings = { ...DEFAULTS };
   model: Model | null = null;
   opt: Adam | null = null;
-  stats: TrainStats;
+  stats!: TrainStats;
   tab: TabId = 'forest';
   job: Job | null = null;
   walker: Walker | null = null;
@@ -103,8 +103,6 @@ export class App {
     this.board.onTileDown = (i) => this.onTile(i, false);
     this.board.onTileDrag = (i) => this.onTile(i, true);
 
-    this.forest = generateForest('KARKULKA');
-    this.stats = newStats(this.forest);
     this.restore();
     this.board.setForest(this.forest);
     this.render();
@@ -141,30 +139,35 @@ export class App {
     this.board.clearTrails();
   }
 
+  /** Pick the forest and model from the saved game and the link, generating a forest only when needed. */
   private restore() {
     const link = store.readLink();
     const saved = store.load();
+    let forest: Forest | null = null;
     if (saved) {
       Object.assign(this.settings, saved.settings);
-      const f: Forest = generateForest(saved.forest.code, saved.forest.size);
-      if (saved.forest.tiles.length === f.tiles.length) f.tiles = saved.forest.tiles;
-      this.forest = f;
+      const { code, size, tiles } = saved.forest;
+      forest = tiles.length === size * size ? forestFromTiles(code, size, tiles) : generateForest(code, size);
       this.edited = saved.forest.edited;
       this.modelTiles = saved.modelTiles ?? '';
       try {
         this.model = saved.model ? modelFromJSON(saved.model) : null;
         this.opt = this.model ? createAdam(this.model) : null;
       } catch { this.model = null; }
-      this.stats = this.model && saved.stats ? saved.stats : newStats(this.forest);
     }
+    this.forest = forest ?? generateForest('KARKULKA');
+    this.stats = this.model && saved?.stats ? saved.stats : newStats(this.forest);
     if (link) {
       const code = normalizeCode(link.code);
-      const linked = generateForest(code);
-      if (link.tiles) {
-        const tiles = store.unpackTiles(link.tiles, linked.tiles.length);
-        if (tiles) { tiles[linked.home] = HOME; linked.tiles = tiles; }
-      }
-      const same = linked.code === this.forest.code && linked.tiles.every((t, i) => t === this.forest.tiles[i]);
+      const tiles = link.tiles ? store.unpackTiles(link.tiles, DEFAULT_SIZE * DEFAULT_SIZE) : null;
+      let linked: Forest;
+      if (tiles) {
+        linked = forestFromTiles(code, DEFAULT_SIZE, tiles);
+        tiles[linked.home] = HOME;
+      } else if (code === this.forest.code && !this.edited && this.forest.size === DEFAULT_SIZE) {
+        linked = this.forest; // the saved forest is already this unedited forest
+      } else linked = generateForest(code);
+      const same = linked === this.forest || (linked.code === this.forest.code && linked.tiles.every((t, i) => t === this.forest.tiles[i]));
       if (!same) {
         this.forest = linked;
         this.edited = !!link.tiles;
@@ -178,7 +181,7 @@ export class App {
     if (this.saveTimer) clearTimeout(this.saveTimer);
     this.saveTimer = window.setTimeout(() => {
       store.save({
-        version: 2,
+        version: store.SAVE_VERSION,
         forest: { code: this.forest.code, size: this.forest.size, tiles: this.forest.tiles, edited: this.edited },
         modelTiles: this.modelTiles,
         settings: { ...this.settings },
@@ -256,34 +259,42 @@ export class App {
 
   // ---------- lessons ----------
 
+  /** Run a training job in the worker, drawing its trails as it goes. */
+  private runJob(req: WorkerRequest, trailOpacity: number, onDone: (model: Model, stats: TrainStats) => void) {
+    const job = runTraining(req, (p) => {
+      if (!this.job) return;
+      this.job.done = p.done;
+      this.stats = p.stats;
+      for (const path of p.paths) this.board.addTrail(path.positions, TRAIL_COLORS[path.tag], trailOpacity);
+      this.renderBoard();
+      this.renderPanel();
+    });
+    this.job = { kind: req.kind, done: 0, total: req.count, cancel: job.cancel };
+    job.result.then(({ model, stats }) => {
+      this.model = model;
+      this.opt = createAdam(model);
+      this.stats = stats;
+      this.job = null;
+      onDone(model, stats);
+      this.saveSoon();
+      this.render();
+    }).catch(() => { this.job = null; this.render(); });
+  }
+
+  private seed() { return (this.rng() * 2 ** 32) >>> 0; }
+
   private startLessons() {
     const model = this.ensureModel();
     this.stopTrip();
-    const stats = structuredClone(this.stats);
-    const total = this.settings.lessons;
-    const job = runTraining(
-      { kind: 'lessons', model, forest: copyForest(this.forest), stats, count: total, seed: (this.rng() * 2 ** 32) >>> 0, teacher: this.settings.teacher },
-      (p) => {
-        if (!this.job) return;
-        this.job.done = p.done;
-        this.stats = p.stats;
-        for (const path of p.paths) this.board.addTrail(path.positions, OUTCOME_COLORS[path.tag], 0.1);
-        this.renderBoard();
-        this.renderPanel();
+    this.runJob(
+      { kind: 'lessons', model, forest: copyForest(this.forest), stats: this.stats, count: this.settings.lessons, seed: this.seed(), teacher: this.settings.teacher },
+      0.1,
+      () => {
+        this.markTrained();
+        this.showCard(this.settings.teacher === 'both' ? 'teacher' : 'coverage');
       },
     );
-    this.job = { kind: 'lessons', done: 0, total, cancel: job.cancel };
     this.render();
-    job.result.then(({ model: m, stats: st }) => {
-      this.model = m;
-      this.opt = createAdam(m);
-      this.stats = st;
-      this.markTrained();
-      this.job = null;
-      this.saveSoon();
-      this.showCard(this.settings.teacher === 'both' ? 'teacher' : 'coverage');
-      this.render();
-    }).catch(() => { this.job = null; this.render(); });
   }
 
   private watchLesson() {
@@ -292,7 +303,7 @@ export class App {
     const teacher = chooseTeacher(this.settings.teacher, this.rng);
     const starts = startTiles(this.forest);
     if (!starts.length) return;
-    const start = starts[Math.floor(this.rng() * starts.length)];
+    const start = pick(this.rng, starts);
     const walk = walkLesson(this.forest, teacher, costToHome(this.forest, teacher), start, this.rng);
     this.watch = { walk, k: 0 };
     this.board.clearTrails();
@@ -307,9 +318,8 @@ export class App {
       if (!this.watch || !this.model || !this.opt) return;
       const loss = learnFromLesson(this.model, this.opt, walk, this.stats);
       this.markTrained();
-      this.stats.lessonLoss.push({ x: this.stats.lessons, y: loss });
-      this.stats.lessonEval.push(evaluate(this.model, this.forest, this.stats.lessons));
-      this.board.addTrail(walk.positions, OUTCOME_COLORS[teacher], 0.35);
+      recordLessonBatch(this.model, this.forest, this.stats, loss);
+      this.board.addTrail(walk.positions, TRAIL_COLORS[teacher], 0.35);
       this.watch = null;
       this.job = null;
       this.saveSoon();
@@ -381,32 +391,17 @@ export class App {
   private startPractice() {
     if (!this.model) return;
     this.stopTrip();
-    const total = this.settings.practice;
-    const job = runTraining(
-      { kind: 'practice', model: this.model, forest: copyForest(this.forest), stats: structuredClone(this.stats), count: total, seed: (this.rng() * 2 ** 32) >>> 0 },
-      (p) => {
-        if (!this.job) return;
-        this.job.done = p.done;
-        this.stats = p.stats;
-        for (const path of p.paths) this.board.addTrail(path.positions, OUTCOME_COLORS[path.tag], 0.12);
-        this.renderBoard();
-        this.renderPanel();
+    this.runJob(
+      { kind: 'practice', model: this.model, forest: copyForest(this.forest), stats: this.stats, count: this.settings.practice, seed: this.seed() },
+      0.12,
+      () => {
+        this.walker = null;
+        this.showCard('judge');
       },
     );
-    this.job = { kind: 'practice', done: 0, total, cancel: job.cancel };
     this.board.clearTrails();
     this.showCard('practice');
     this.render();
-    job.result.then(({ model: m, stats: st }) => {
-      this.model = m;
-      this.opt = createAdam(m);
-      this.stats = st;
-      this.walker = null;
-      this.job = null;
-      this.saveSoon();
-      this.showCard('judge');
-      this.render();
-    }).catch(() => { this.job = null; this.render(); });
   }
 
   // ---------- rendering ----------
@@ -485,7 +480,7 @@ export class App {
   private renderTechNow() {
     renderTech(this.techEl, {
       forest: this.forest, model: this.model, stats: this.stats, walker: this.walker, boldness: this.settings.boldness, step: this.techStep,
-      onStep: (k) => { this.techStep = k; this.renderTechNow(); },
+      onStep: (k) => { this.techStep = k; },
       onExport: () => this.exportModel(),
       onImport: (f) => this.importModel(f),
     });
@@ -519,7 +514,7 @@ export class App {
       b.setTrace(walk.positions.slice(0, t + 1));
       if (t < n) {
         // Her current guess, before this lesson teaches her anything.
-        b.setArrows(walk.positions[t], predictAt(this.model, walk.history, t), MOVES.map((m) => (m === walk.history.moves[t] ? OUTCOME_COLORS[walk.teacher] : null)));
+        b.setArrows(walk.positions[t], predictAt(this.model, walk.history, t), MOVES.map((m) => (m === walk.history.moves[t] ? TRAIL_COLORS[walk.teacher] : null)));
       }
     }
     if (this.tab === 'trip' && this.walker) {
@@ -663,7 +658,7 @@ export class App {
     const status = w
       ? w.done
         ? { home: `Home after ${w.t} steps!`, eaten: `Eaten by a wolf at step ${w.t}.`, lost: `Lost: out of energy after ${w.t} steps.` }[w.outcome!]
-        : `Step ${w.t + 1} · energy ${w.energyLeft} / ${w.energy}${this.settings.hint ? ` · smells cake to the ${['east', 'north-east', 'north', 'north-west', 'west', 'south-west', 'south', 'south-east'][homeSector(this.forest, w.pos)]}` : ''}`
+        : `Step ${w.t + 1} · energy ${w.energyLeft} / ${w.energy}${this.settings.hint ? ` · smells cake to the ${SECTOR_WORDS[homeSector(this.forest, w.pos)]}` : ''}`
       : 'Click a path tile on the map to choose where she starts.';
     add(body,
       h('h2', {}, 'Trip alone'),
@@ -733,8 +728,7 @@ export class App {
   private async importModel(file: File) {
     try {
       const { file: data, model } = store.parseFile(await file.text());
-      const f = generateForest(data.forest.code, data.forest.size);
-      f.tiles = data.forest.tiles;
+      const f = forestFromTiles(data.forest.code, data.forest.size, data.forest.tiles);
       const mem = (Object.keys(MEMORY_PAIRS) as MemorySize[]).find((k) => MEMORY_PAIRS[k] === model.cfg.memory);
       if (!mem) throw new Error('Unknown memory size in this file');
       this.stopTrip();

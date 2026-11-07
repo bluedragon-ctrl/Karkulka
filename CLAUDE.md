@@ -47,7 +47,7 @@ Game logic has no DOM dependencies and is tested directly; the UI lives in `src/
 ## Things to remember
 
 - **Changing the tile kinds or the model's inputs breaks old saves.** Views are one-hot over `TILE_KINDS`, so a new tile or input changes the model's input size. When that happens:
-  - bump the version in `src/storage.ts` (save key, `SavedState.version`, `ModelFile.version`);
+  - bump `SAVE_VERSION` in `src/storage.ts` (it sets the save key and the save and model-file versions), and update the "older version" message in `parseFile`;
   - check the link format (`packTiles` packs two tiles per character, which fits up to 8 tile kinds);
   - update the tests that check sizes.
 - **Training runs in the worker**, but "Watch one lesson" trains on the main thread through the same `learnFromLesson` function. Keep both paths in sync.

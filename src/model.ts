@@ -80,7 +80,7 @@ export const zeroGrads = (m: Model): Grads => ({
 });
 
 /** Add the gradient for one step, given d(loss)/d(logits). */
-export function accumulate(model: Model, g: Grads, fw: Forward, dlogits: ArrayLike<number>) {
+export function accumulate(model: Model, g: Grads, fw: Pick<Forward, 'x' | 'nz' | 'h'>, dlogits: ArrayLike<number>) {
   const { nIn, nH, w2 } = model;
   const dh = new Float32Array(nH);
   for (let o = 0; o < N_OUT; o++) {

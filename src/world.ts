@@ -1,4 +1,4 @@
-/** World rules: tiles, moves, what she sees, and the forest generator. */
+/** World rules: tiles, moves, what she sees, and distances home. */
 
 export const PATH = 0;
 export const TREE = 1;
@@ -41,6 +41,9 @@ export interface Forest {
 }
 
 export const homeIndex = (size: number): number => 3 * size + (size - 4);
+
+/** A forest from known tiles (a save, a link or a file), without running the generator. */
+export const forestFromTiles = (code: string, size: number, tiles: Tile[]): Forest => ({ size, tiles, home: homeIndex(size), code });
 export const xyOf = (f: Forest, i: number): [number, number] => [i % f.size, Math.floor(i / f.size)];
 
 /** Tiles outside the map behave like trees. */
@@ -87,6 +90,7 @@ export function homeSector(f: Forest, pos: number): number {
   return ((Math.round(angle / (Math.PI / 4)) % 8) + 8) % 8;
 }
 export const SECTOR_NAMES = ['E', 'NE', 'N', 'NW', 'W', 'SW', 'S', 'SE'] as const;
+export const SECTOR_WORDS = ['east', 'north-east', 'north', 'north-west', 'west', 'south-west', 'south', 'south-east'] as const;
 
 export function nearWolf(f: Forest, i: number): boolean {
   const [x, y] = xyOf(f, i);
@@ -110,8 +114,11 @@ export function walkingDistances(f: Forest): Int32Array {
   return dist;
 }
 
-/** Energy needed to walk home from each tile along the cheapest route (swamps cost more). Infinity = unreachable. */
-export function energyToHome(f: Forest): Float64Array {
+/**
+ * Cheapest cost home from every tile (Dijkstra from home), where `enterCost(i)`
+ * is what one step onto tile i costs. Only walkable tiles are entered. Infinity = unreachable.
+ */
+export function cheapestToHome(f: Forest, enterCost: (i: number) => number): Float64Array {
   const n = f.tiles.length;
   const dist = new Float64Array(n).fill(Infinity);
   const done = new Uint8Array(n);
@@ -121,7 +128,7 @@ export function energyToHome(f: Forest): Float64Array {
     for (let i = 0; i < n; i++) if (!done[i] && dist[i] < Infinity && (u < 0 || dist[i] < dist[u])) u = i;
     if (u < 0) break;
     done[u] = 1;
-    const c = stepCost(f.tiles[u]);
+    const c = enterCost(u);
     for (const m of MOVES) {
       const v = neighbor(f, u, m);
       if (v >= 0 && isWalkable(f.tiles[v]) && dist[u] + c < dist[v]) dist[v] = dist[u] + c;
@@ -130,18 +137,20 @@ export function energyToHome(f: Forest): Float64Array {
   return dist;
 }
 
-/** Plain path tiles: where lessons and trips start. */
-export function pathTiles(f: Forest): number[] {
+/** Energy needed to walk home from each tile along the cheapest route (swamps cost more). Infinity = unreachable. */
+export const energyToHome = (f: Forest): Float64Array => cheapestToHome(f, (i) => stepCost(f.tiles[i]));
+
+/** Indices of the tiles that pass a test. */
+export function tilesWhere(f: Forest, test: (t: Tile, i: number) => boolean): number[] {
   const out: number[] = [];
-  f.tiles.forEach((t, i) => { if (t === PATH) out.push(i); });
+  f.tiles.forEach((t, i) => { if (test(t, i)) out.push(i); });
   return out;
 }
 
-export function walkableTiles(f: Forest): number[] {
-  const out: number[] = [];
-  f.tiles.forEach((t, i) => { if (isWalkable(t)) out.push(i); });
-  return out;
-}
+/** Plain path tiles: where lessons and trips start. */
+export const pathTiles = (f: Forest): number[] => tilesWhere(f, (t) => t === PATH);
+
+export const walkableTiles = (f: Forest): number[] => tilesWhere(f, isWalkable);
 
 /** Path or swamp tiles from which home cannot be reached without crossing a den. */
 export function unreachableTiles(f: Forest): number[] {
@@ -172,7 +181,7 @@ export function copyForest(f: Forest): Forest {
   return { ...f, tiles: f.tiles.slice() };
 }
 
-/** Generate the forest for a code: a maze with loops and clearings, then wolf dens. */
+/** Whether every path and swamp tile can reach home without crossing a den. */
 export function allReachable(f: Forest): boolean {
   const d = walkingDistances(f);
   return f.tiles.every((t, i) => !isWalkable(t) || d[i] >= 0);

@@ -6,13 +6,17 @@ import { COLORS } from './symbols';
 const W = 300;
 const H = 120;
 
-function patterns() {
-  return s('defs', {},
+/** The hatch patterns, defined once per page so their ids stay unique. */
+function ensurePatterns() {
+  if (document.getElementById('pat-eaten')) return;
+  const defs = s('defs', {},
     s('pattern', { id: 'pat-eaten', width: 6, height: 6, patternUnits: 'userSpaceOnUse', patternTransform: 'rotate(45)' },
       s('rect', { width: 6, height: 6, fill: COLORS.danger }), s('rect', { width: 2, height: 6, fill: '#ffffff66' })),
     s('pattern', { id: 'pat-lost', width: 5, height: 5, patternUnits: 'userSpaceOnUse' },
       s('rect', { width: 5, height: 5, fill: COLORS.lost }), s('circle', { cx: 2.5, cy: 2.5, r: 1, fill: '#ffffff88' })),
   );
+  // Not display:none, which would stop the patterns from painting in some browsers.
+  document.body.append(s('svg', { width: 0, height: 0, 'aria-hidden': 'true', style: 'position:absolute' }, defs));
 }
 
 const FILLS = { home: COLORS.home, eaten: 'url(#pat-eaten)', lost: 'url(#pat-lost)' };
@@ -21,7 +25,7 @@ const FILLS = { home: COLORS.home, eaten: 'url(#pat-eaten)', lost: 'url(#pat-los
 export function outcomeChart(points: EvalPoint[], xLabel: string): HTMLElement {
   const wrap = h('figure', { class: 'chart' });
   const svg = s('svg', { viewBox: `0 0 ${W} ${H + 18}`, width: '100%', role: 'img', 'aria-label': 'Outcome chart' });
-  svg.append(patterns());
+  ensurePatterns();
   const shown = points.slice(-40);
   if (!shown.length) {
     svg.append(s('text', { x: W / 2, y: H / 2, 'text-anchor': 'middle', 'font-size': 12, fill: '#666' }, 'No results yet'));
@@ -50,7 +54,7 @@ export function outcomeChart(points: EvalPoint[], xLabel: string): HTMLElement {
 
 function legend(): HTMLElement {
   const item = (fill: string, label: string) => {
-    const sw = s('svg', { width: 14, height: 14, viewBox: '0 0 14 14' }, patterns(), s('rect', { width: 14, height: 14, fill, stroke: '#333', 'stroke-width': 0.5 }));
+    const sw = s('svg', { width: 14, height: 14, viewBox: '0 0 14 14' }, s('rect', { width: 14, height: 14, fill, stroke: '#333', 'stroke-width': 0.5 }));
     return h('span', { class: 'legend-item' }, sw, label);
   };
   return h('figcaption', { class: 'legend' }, item(FILLS.home, 'home'), item(FILLS.eaten, 'eaten'), item(FILLS.lost, 'lost'));

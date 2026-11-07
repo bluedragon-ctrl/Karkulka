@@ -1,6 +1,6 @@
 /** Tokens and the context window: how her trip is turned into numbers. */
 import type { History } from './teachers';
-import { Forest, Move, Tile, TILE_KINDS, isWalkable, viewAt } from './world';
+import { Forest, Tile, TILE_KINDS, isWalkable, viewAt } from './world';
 
 export type MemorySize = 'short' | 'medium' | 'long';
 export const MEMORY_PAIRS: Record<MemorySize, number> = { short: 1, medium: 3, long: 6 };
@@ -58,10 +58,7 @@ export interface ViewToken {
   places: number[];
 }
 
-/** Output tokens get IDs 0–3; input tokens (views) follow. */
-export const MOVE_TOKEN_IDS: Record<Move, number> = { 0: 0, 1: 1, 2: 2, 3: 3 };
-
-/** Every view that can occur in this forest. */
+/** Every view that can occur in this forest. Moves are tokens 0–3, so views start at 4. */
 export function buildVocabulary(f: Forest): ViewToken[] {
   const byKey = new Map<string, ViewToken>();
   f.tiles.forEach((t, i) => {

@@ -26,6 +26,8 @@ export interface Decision {
   raw: Float32Array;
   hidden: Float32Array;
   input: Float32Array;
+  /** Indices of the non-zero inputs (kept so training can reuse this step). */
+  nz: number[];
 }
 
 export class Walker {
@@ -66,7 +68,7 @@ export class Walker {
     if (!this.pending) {
       const input = encodeContext(this.model.cfg, this.history, this.t);
       const fw = forward(this.model, input);
-      this.pending = { logits: fw.logits, raw: softmax(fw.logits), hidden: fw.h, input };
+      this.pending = { logits: fw.logits, raw: softmax(fw.logits), hidden: fw.h, input, nz: fw.nz };
     }
     return this.pending;
   }

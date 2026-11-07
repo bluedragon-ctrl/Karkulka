@@ -1,6 +1,6 @@
 /** The parents: two ways of walking home that she can learn from. */
 import { Rng, pick } from './rng';
-import { Forest, HOME, Move, MOVES, SWAMP, Tile, isWalkable, neighbor, nearWolf, viewAt, homeSector } from './world';
+import { Forest, HOME, Move, MOVES, SWAMP, Tile, cheapestToHome, isWalkable, neighbor, nearWolf, viewAt, homeSector } from './world';
 
 export type Teacher = 'mother' | 'father';
 export type TeacherChoice = Teacher | 'both';
@@ -21,26 +21,10 @@ const enterCost = (f: Forest, i: number, careful: boolean) => {
   return 1 + (t === SWAMP ? SWAMP_PENALTY : 0) + (t !== HOME && nearWolf(f, i) ? WOLF_PENALTY : 0);
 };
 
-/** Cost to walk home from every tile for one parent (Dijkstra from home). */
+/** Cost to walk home from every tile for one parent. */
 export function costToHome(f: Forest, teacher: Teacher): Float64Array {
   const careful = teacher === 'mother';
-  const n = f.tiles.length;
-  const dist = new Float64Array(n).fill(Infinity);
-  const done = new Uint8Array(n);
-  dist[f.home] = 0;
-  for (;;) {
-    let u = -1;
-    for (let i = 0; i < n; i++) if (!done[i] && dist[i] < Infinity && (u < 0 || dist[i] < dist[u])) u = i;
-    if (u < 0) break;
-    done[u] = 1;
-    const c = enterCost(f, u, careful);
-    for (const m of MOVES) {
-      const v = neighbor(f, u, m);
-      if (v < 0 || !isWalkable(f.tiles[v])) continue;
-      if (dist[u] + c < dist[v]) dist[v] = dist[u] + c;
-    }
-  }
-  return dist;
+  return cheapestToHome(f, (i) => enterCost(f, i, careful));
 }
 
 /** All moves a parent considers best from a tile (ties are possible). */

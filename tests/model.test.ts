@@ -112,3 +112,19 @@ describe('training', () => {
     }
   });
 });
+
+describe('practice reuses the walk', () => {
+  it('each stored decision matches a fresh forward pass on the same context', () => {
+    const f = generateForest('KARKULKA');
+    const model = createModel({ ...cfg, hint: true }, mulberry32(7));
+    const w = new Walker(f, model, pathTiles(f)[5], 40, FIXED.practiceBoldness, mulberry32(8));
+    w.run();
+    w.decisions.forEach((d, t) => {
+      const fw = forward(model, encodeContext(model.cfg, w.history, t));
+      expect(d.logits).toEqual(fw.logits);
+      expect(d.hidden).toEqual(fw.h);
+      expect(d.nz).toEqual(fw.nz);
+      expect(d.tempered).toEqual(softmax(fw.logits, FIXED.practiceBoldness));
+    });
+  });
+});

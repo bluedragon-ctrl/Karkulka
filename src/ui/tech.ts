@@ -1,5 +1,5 @@
 /** Tab 5, Inside the model: the real numbers behind the friendly pictures. */
-import { Model, N_OUT, forward, parameterCount, softmax } from '../model';
+import { Model, N_OUT, parameterCount, softmax } from '../model';
 import type { Walker } from '../sim';
 import { FIXED, TrainStats } from '../train';
 import { HINT_FEATS, SLOT_FEATS, VIEW_FEATS, buildVocabulary } from '../tokens';
@@ -58,8 +58,49 @@ function probTable(rows: { label: string; values: ArrayLike<number> }[]) {
     h('tbody', {}, ...rows.map((r) => h('tr', {}, h('th', {}, r.label), ...MOVES.map((m) => h('td', {}, fmt(r.values[m])))))));
 }
 
+/** The context window at one step: the slider stays put while the numbers under it are redrawn. */
+function currentInput(ctx: TechContext): HTMLElement {
+  const { model, walker } = ctx;
+  if (!model || !walker) return section('Current input', 'Send her on a trip alone to see the numbers she reads at each step.');
+  const n = walker.decisions.length;
+  const last = walker.done ? n - 1 : n;
+  const counter = h('span');
+  const body = h('div');
+  const draw = (step: number) => {
+    const k = Math.min(step, last);
+    counter.textContent = ` ${k + 1} / ${last + 1}`;
+    // Each decision keeps the numbers the model produced at the time, so nothing is recomputed.
+    const d = k < n ? walker.decisions[k] : walker.decide();
+    const x = d.input;
+    const rows: HTMLElement[] = [vectorRow('current view', x, 0, VIEW_FEATS)];
+    let off = VIEW_FEATS;
+    if (model.cfg.hint) { rows.push(vectorRow('home hint', x, off, HINT_FEATS)); off += HINT_FEATS; }
+    for (let s = 1; s <= model.cfg.memory; s++, off += SLOT_FEATS) {
+      rows.push(vectorRow(`${s} step${s === 1 ? '' : 's'} back`, x, off, SLOT_FEATS));
+    }
+    const hidden = h('span', { class: 'vec' }, ...Array.from(d.hidden, (v, j) => h('span', { class: 'bit act', style: `background:${v >= 0 ? `rgba(230,120,0,${Math.abs(v)})` : `rgba(31,120,180,${Math.abs(v)})`}`, title: `h[${j}] = ${fmt(v)}` })));
+    body.replaceChildren(
+      h('div', { class: 'vec-block' }, ...rows),
+      h('div', { class: 'vec-row' }, h('span', { class: 'vec-label' }, `hidden (${model.nH})`), hidden),
+      probTable([
+        { label: 'logits', values: d.logits },
+        { label: 'probabilities', values: d.raw },
+        { label: `after boldness ${ctx.boldness.toFixed(1)}`, values: softmax(d.logits, ctx.boldness) },
+      ]));
+  };
+  const k0 = Math.min(ctx.step, last);
+  const slider = h('input', { type: 'range', min: 0, max: last, value: k0, oninput: (e: Event) => {
+    const v = Number((e.target as HTMLInputElement).value);
+    ctx.onStep(v);
+    draw(v);
+  } });
+  draw(k0);
+  return section('Current input', `The context window at one step of her latest trip, encoded as ${model.nIn} numbers. Each view is 8 tiles × ${TILE_KINDS} tile kinds (one-hot); each remembered step adds a "present" flag, a view and a move (${SLOT_FEATS} numbers).`,
+    h('label', { class: 'row' }, 'Step ', slider, counter), body);
+}
+
 export function renderTech(el: HTMLElement, ctx: TechContext) {
-  const { forest, model, stats, walker } = ctx;
+  const { forest, model, stats } = ctx;
   const vocab = buildVocabulary(forest);
   el.replaceChildren();
   el.append(h('h2', {}, 'Inside the model'), h('p', { class: 'muted' }, 'The real numbers behind the friendly pictures. Everything here is read-only, apart from export and import.'));
@@ -70,34 +111,7 @@ export function renderTech(el: HTMLElement, ctx: TechContext) {
   el.append(section('Vocabulary', `${N_OUT} output tokens (moves) and ${vocab.length} input tokens (every view that occurs in this forest). "×n" marks look-alike views that occur in n places.`,
     h('h4', {}, 'Output tokens'), outToks, h('h4', {}, 'Input tokens'), inToks));
 
-  // Current input
-  if (model && walker) {
-    const n = walker.decisions.length;
-    const k = Math.min(ctx.step, walker.done ? n - 1 : n);
-    const d = k < n ? walker.decisions[k] : walker.decide();
-    const x = d.input;
-    const fw = forward(model, x);
-    const tempered = softmax(fw.logits, ctx.boldness);
-    const slider = h('input', { type: 'range', min: 0, max: walker.done ? n - 1 : n, value: k, oninput: (e: Event) => ctx.onStep(Number((e.target as HTMLInputElement).value)) });
-    const rows: HTMLElement[] = [vectorRow('current view', x, 0, VIEW_FEATS)];
-    let off = VIEW_FEATS;
-    if (model.cfg.hint) { rows.push(vectorRow('home hint', x, off, HINT_FEATS)); off += HINT_FEATS; }
-    for (let s = 1; s <= model.cfg.memory; s++, off += SLOT_FEATS) {
-      rows.push(vectorRow(`${s} step${s === 1 ? '' : 's'} back`, x, off, SLOT_FEATS));
-    }
-    const hidden = h('span', { class: 'vec' }, ...Array.from(fw.h, (v, j) => h('span', { class: 'bit act', style: `background:${v >= 0 ? `rgba(230,120,0,${Math.abs(v)})` : `rgba(31,120,180,${Math.abs(v)})`}`, title: `h[${j}] = ${fmt(v)}` })));
-    el.append(section('Current input', `The context window at step ${k + 1} of her latest trip, encoded as ${model.nIn} numbers. Each view is 8 tiles × ${TILE_KINDS} tile kinds (one-hot); each remembered step adds a "present" flag, a view and a move (${SLOT_FEATS} numbers).`,
-      h('label', { class: 'row' }, 'Step ', slider, ` ${k + 1} / ${walker.done ? n : n + 1}`),
-      h('div', { class: 'vec-block' }, ...rows),
-      h('div', { class: 'vec-row' }, h('span', { class: 'vec-label' }, `hidden (${model.nH})`), hidden),
-      probTable([
-        { label: 'logits', values: fw.logits },
-        { label: 'probabilities', values: softmax(fw.logits) },
-        { label: `after boldness ${ctx.boldness.toFixed(1)}`, values: tempered },
-      ])));
-  } else {
-    el.append(section('Current input', 'Send her on a trip alone to see the numbers she reads at each step.'));
-  }
+  el.append(currentInput(ctx));
 
   // Network
   if (model) {
