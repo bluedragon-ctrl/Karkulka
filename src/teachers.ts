@@ -6,7 +6,7 @@
  * every treasure before it heads home. The teachers are the same cast as the judges.
  */
 import { Rng, pick } from './rng';
-import { Basket, FLOWERS, Forest, HOME, TREASURE, TREE, headsHome, xyOf, Move, MOVES, SWAMP, Tile, WOLF, cheapestTo, cheapestToHome, fullBasket, isWalkable, neighbor, nearWolf, newBasketState, step, tilesWhere, viewAt, homeSector } from './world';
+import { Basket, FLOWERS, Forest, HOME, TREASURE, TREE, headsHome, xyOf, Move, MOVES, SWAMP, Tile, WOLF, cheapestTo, cheapestToHome, isWalkable, neighbor, nearWolf, newBasketState, pickUpAtStart, step, tilesWhere, viewAt, homeSector } from './world';
 
 export type Teacher = 'mother' | 'father' | 'wolf' | 'crow' | 'grandma' | 'magpie';
 export const TEACHER_KINDS: readonly Teacher[] = ['mother', 'father', 'wolf', 'crow', 'grandma', 'magpie'];
@@ -136,9 +136,10 @@ export const endsStuck = (walk: LessonWalk): boolean => walk.stuck === true;
  */
 export function walkLesson(f: Forest, teacher: Teacher, cost: Float64Array, start: number, rng: Rng, denCost?: Float64Array): LessonWalk {
   const positions = [start];
-  const history: History = { views: [viewAt(f, start)], moves: [], sectors: [homeSector(f, start)], baskets: [fullBasket()] };
-  // Her basket follows the same rules as on a trip alone: a flower patch or treasure on the way is picked up.
+  // Her basket follows the same rules as on a trip alone: a flower patch or treasure at the start or on the way is picked up.
   const trip = newBasketState();
+  pickUpAtStart(f, start, trip);
+  const history: History = { views: [viewAt(f, start)], moves: [], sectors: [homeSector(f, start)], baskets: [{ ...trip.basket }] };
   const toDen = teacher === 'wolf' ? denCost ?? costToDen(f) : null;
   let hunting = false;
   // Grandma and the magpie first walk to an item, then home: `goal` is the cost to the item they are after.

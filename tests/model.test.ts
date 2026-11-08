@@ -6,7 +6,7 @@ import { mulberry32 } from '../src/rng';
 import { Walker } from '../src/sim';
 import { costToHome, endsAtDen, walkLesson } from '../src/teachers';
 import { BASKET_FEATS, MEMORY_PAIRS, SLOT_FEATS, VIEW_FEATS, encodeContext, inputSize, buildVocabulary } from '../src/tokens';
-import { FIXED, JUDGES, Run, chooseTeacher, evalEvery, guessesRight, headsHome, judgeMaps, learnFromRun, practiceSetup, practiceStartTiles, practiceWalker, startTiles, judgeRewards, judgeScore, homeShare, newStats, runOf, trainLessons, trainPractice } from '../src/train';
+import { FIXED, JUDGES, Run, evalStarts, teacherCosts, chooseTeacher, evalEvery, guessesRight, headsHome, judgeMaps, learnFromRun, practiceSetup, practiceStartTiles, practiceWalker, startTiles, judgeRewards, judgeScore, homeShare, newStats, runOf, trainLessons, trainPractice } from '../src/train';
 import { FLOWERS, Forest, HOME, Move, PATH, StepResult, SWAMP, TREASURE, TREE, Tile, WOLF, allReachable, forestFromTiles, neighbor, pathTiles, walkableTiles } from '../src/world';
 
 const cfg = { memory: MEMORY_PAIRS.medium, hint: false, hidden: 16 };
@@ -324,6 +324,22 @@ describe('judges', () => {
       expect(w.pickups[t === FLOWERS ? 'flowers' : 'treasure']).toBeGreaterThanOrEqual(1);
       expect(w.trip.picked.filter((i) => i === start)).toHaveLength(1);
     }
+  });
+});
+
+describe('starting tiles', () => {
+  it('lessons and practice start on any walkable tile; test trips on path tiles only', () => {
+    const f = generateForest('KARKULKA');
+    const kinds = new Set(startTiles(f).map((i) => f.tiles[i]));
+    for (const t of [PATH, SWAMP, FLOWERS, TREASURE]) expect(kinds.has(t as Tile)).toBe(true);
+    expect(evalStarts(f).every((i) => f.tiles[i] === PATH)).toBe(true);
+  });
+  it('a lesson that starts on flowers has them in the basket from the start', () => {
+    const f = generateForest('KARKULKA');
+    const start = f.tiles.indexOf(FLOWERS as Tile);
+    const walk = walkLesson(f, 'grandma', teacherCosts(f).grandma, start, mulberry32(4));
+    expect(walk.history.baskets[0].flowers).toBe(1);
+    expect(walk.positions[walk.positions.length - 1]).toBe(f.home); // errand done: Grandma's lesson heads home
   });
 });
 

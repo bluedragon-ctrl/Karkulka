@@ -32,6 +32,15 @@ export const fullBasket = (): Basket => ({ cake: true, flowers: 0, treasure: 0 }
 export interface BasketState { basket: Basket; picked: number[] }
 export const newBasketState = (): BasketState => ({ basket: fullBasket(), picked: [] });
 
+/** Starting on flowers or treasure, she picks them up before her first move (trips alone, lessons and practice alike). */
+export function pickUpAtStart(f: Forest, start: number, trip: BasketState) {
+  const t = f.tiles[start];
+  if (!isItem(t) || trip.picked.includes(start)) return;
+  trip.picked.push(start);
+  if (t === FLOWERS) trip.basket.flowers++;
+  else trip.basket.treasure++;
+}
+
 /** What a forest event can do to her basket on a trip alone: take the cake, give flowers, give a treasure. */
 export const EFFECTS = ['takeCake', 'giveFlowers', 'giveTreasure'] as const;
 export type Effect = typeof EFFECTS[number];

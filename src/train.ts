@@ -4,7 +4,7 @@ import { Rng, mulberry32, pick, rngFrom, shuffle } from './rng';
 import { Outcome, Walker } from './sim';
 import { LessonWalk, Teacher, TeacherChoice, costToDen, costToHome, walkLesson } from './teachers';
 import { encodeContext } from './tokens';
-import { Basket, Forest, Move, PATH, headsHome, StepResult, SWAMP, energyToHome, nearWolf, tilesWhere, walkingDistances } from './world';
+import { Basket, Forest, Move, PATH, headsHome, isWalkable, StepResult, SWAMP, energyToHome, nearWolf, tilesWhere, walkingDistances } from './world';
 
 /** Internals the user never sets; shown read-only in the technical tab. */
 export const FIXED = {
@@ -107,13 +107,17 @@ export const teacherCosts = (f: Forest): Teachers => {
   return { mother, father, wolf: father, crow: father, grandma: mother, magpie: father, den: costToDen(f) };
 };
 
-/** Starting tiles: path tiles that can reach home. */
-export function startTiles(f: Forest, minDist = 1, maxDist = Infinity, dist = walkingDistances(f)): number[] {
-  return tilesWhere(f, (t, i) => t === PATH && dist[i] >= minDist && dist[i] <= maxDist);
+/**
+ * Starting tiles for lessons and practice: any tile she can walk on (path, swamp, flowers,
+ * treasure) that can reach home. `pathOnly`: path tiles only, for the fixed test trips.
+ */
+export function startTiles(f: Forest, minDist = 1, maxDist = Infinity, dist = walkingDistances(f), pathOnly = false): number[] {
+  return tilesWhere(f, (t, i) => (pathOnly ? t === PATH : isWalkable(t)) && dist[i] >= minDist && dist[i] <= maxDist);
 }
 
+/** The test trips' fixed starts: path tiles only, so the benchmark stays the same and no item is in her basket before she walks. */
 export function evalStarts(f: Forest): number[] {
-  const all = startTiles(f, 2);
+  const all = startTiles(f, 2, Infinity, walkingDistances(f), true);
   return shuffle(rngFrom(`eval:${f.code}`), all).slice(0, FIXED.evalStarts);
 }
 
