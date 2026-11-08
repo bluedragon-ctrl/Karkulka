@@ -42,11 +42,13 @@ input[type="text"] { font: inherit; font-size: 0.92rem; padding: 0.35em 0.5em; b
 
 .banner { margin: 0 1.2rem; padding: 0.6em 1em; background: #fff3cd; border: 1px solid #e0b84a; border-radius: 0 0 10px 10px; font-size: 0.92rem; }
 
-.stage { display: grid; grid-template-columns: minmax(0, 1fr) 432px; gap: 1rem; padding: 0.8rem 1.2rem 1.2rem; align-items: start; }
+/* The forest column is exactly as wide as the square forest (sized by the window height, and never so wide that the
+   panel drops below 432px); the side panel takes the rest of the width, up to 720px, and the pair is centred. */
+.stage { --board: max(300px, min(100vh - 290px, 100vw - 432px - 4.6rem - 20px)); display: grid; grid-template-columns: auto minmax(432px, 720px); justify-content: center; gap: 1rem; padding: 0.8rem 1.2rem 1.2rem; align-items: start; }
 .stage > .tech { grid-column: 1 / -1; }
-.main-col { display: flex; flex-direction: column; gap: 0.7rem; min-width: 0; }
+.main-col { display: flex; flex-direction: column; gap: 0.7rem; min-width: 0; width: calc(var(--board) + 1.2rem + 2px); }
 .board-wrap { background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 0.6rem; display: flex; justify-content: center; }
-.board { width: 100%; max-width: calc(100vh - 290px); min-width: 300px; height: auto; display: block; touch-action: none; user-select: none; transition: opacity 0.8s; }
+.board { width: var(--board); max-width: 100%; height: auto; display: block; touch-action: none; user-select: none; transition: opacity 0.8s; }
 .board.faded .layer-tiles, .board.faded .layer-trace, .board.faded .layer-actors { opacity: 0.35; transition: opacity 0.8s; }
 .actor { transition: transform 0.22s ease; }
 .actor.no-anim { transition: none; }
@@ -207,8 +209,9 @@ input[type="text"] { font: inherit; font-size: 0.92rem; padding: 0.35em 0.5em; b
   .brush svg { width: 18px; height: 18px; }
   .brush.active { padding: calc(0.35em - 1px); }
   .stage { grid-template-columns: 1fr; }
+  .main-col { width: auto; }
   .panel { position: static; max-height: none; }
-  .board { max-width: 100%; }
+  .board { width: 100%; }
 }
 .why.alarm { background: #fff3cd; border-color: #e0b84a; }
 .report { display: flex; flex-direction: column; gap: 0.3em; background: #faf7ef; border: 1px solid var(--line); border-radius: 10px; padding: 0.5em 0.7em; }
