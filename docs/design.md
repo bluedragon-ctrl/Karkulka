@@ -427,8 +427,9 @@ This turns the story into the game's clearest hallucination lesson. The storytel
 
 **Rules**
 
-- **Placement.** Each forest gets about 12 event spots (proposed; tuned so an average trip meets 2–4 events). They come from their own seeded stream, `story:` + code + size, worked out from the current tiles: the same forest code always has the same events in the same spots, so a class can compare ("did yours meet the owl?"). Forest codes, the tiles, saves and links do not change. Editing or changing the forest works the placement out again from the new tiles, so a spot whose tile is no longer walkable drops out and other spots may move.
-- **Where they go.** On path or swamp tiles only, never on a den, home, flowers or treasure; at most one spot of each kind per forest; no two spots within each other's 3 × 3 view. Each kind has a place it fits (below), so stories hang together: a frog by a swamp, paw prints near a den, a hut at a dead end, Grandma's cat near the house. A kind with no fitting tile is left out of that forest.
+- **Placement.** Each forest gets about 12 event spots (proposed; tuned so an average trip meets 2–4 events). The number of spots does not grow with the cast: as more kinds are added, each forest gets a different mix of them, so forests feel more different from each other. Spots come from their own seeded stream, `story:` + code + size, worked out from the current tiles: the same forest code always has the same events in the same spots, so a class can compare ("did yours meet the owl?"). Forest codes, the tiles, saves and links do not change. Editing or changing the forest works the placement out again from the new tiles, so a spot whose tile is no longer walkable drops out and other spots may move.
+- **Spots first, then kinds.** Placement first picks the spots from the tiles alone (shuffled walkable tiles, taken one by one while they keep their distance), then gives each spot a kind that fits its place and is not used yet in this forest, from a second seeded stream. So adding or removing kinds in the data file never moves the spots, only changes which events sit on some of them. It still changes the events of existing forest codes; say so in the pull request that changes the cast. A spot where no unused kind fits stays empty; "Anywhere" kinds keep that rare.
+- **Where they go.** On path or swamp tiles only, never on a den, home, flowers or treasure; at most one spot of each kind per forest; no two spots within each other's 3 × 3 view. Each kind has a place it fits (below), so stories hang together: a frog by a swamp, paw prints near a den, a hut at a dead end, Grandma's cat near the house.
 - **What sets one off.** Most events happen when she steps onto the spot. A few sound events (marked *hear* in the cast) happen when the spot first comes into her 3 × 3 view. Each spot happens at most once per trip; starting on a spot does not set it off.
 - **Same spot, varying outcome.** How an event turns out is picked when it happens, from 2–3 versions (the owl asks a riddle, or is fast asleep), using the story's own randomness. Like her thoughts, events and the story never use the walk's randomness, so they never change her walk.
 - **No effect on anything else.** `step()`, her views, the vocabulary, lessons, practice and every judge's points stay as they are. Events happen on a trip alone only; lessons and practice (watched or not) ignore them.
@@ -452,6 +453,14 @@ This turns the story into the game's clearest hallucination lesson. The storytel
   - 0.5 up to 1.2: borrowed events, one made-up sentence in about every other story at the default, about one per story at 1.0. A borrowed event is a kind placed in this forest that she did not meet on this trip (with events off, any kind from the cast);
   - from 1.2: borrowed events and pure fantasy, more of both as boldness rises, up to about half the sentences at 2.5.
 - **Tell it again.** A button under the story tells the same trip again: the true parts and their order stay, the wording and the made-up parts are new. Walking again from the same tile makes a different trip, so a different story.
+
+**The event data file.** The cast will grow, so it lives in its own data file, `src/data/storyEvents.json`, not in code: adding an event means adding an entry there, with no code change, as long as it uses a place and a trigger the code already knows. The code imports it (Vite reads JSON directly; `tsconfig.json` gets `resolveJsonModule`), so it is built into the page and the game still needs no server.
+
+- Each entry: `id` (the kind number), `name`, `fits` (one of the places below), `trigger` (`step` or `hear`), `versions` (2 or more story sentences), `thoughts` (1 or more lines in her voice), `popup` (one short word or two). The file also holds the `fantasy` sentences and the story's opening and ending lines, so all story wording is in one place.
+- Places the code knows: `anywhere`, `swamp` (a swamp, or a path next to one), `den` (within 2 steps of a den), `home` (within 4 steps of home), `deadEnd` (one way out), `corridor` (two ways out, straight), `crossing` (3–4 ways out), `open` (a crossing or meadow, 3–4 ways out). A new place needs a few lines of code and a line here.
+- **Kind numbers are permanent.** A new event takes the next free number; numbers are never reused or renumbered, so the number the "Show events" button draws always means the same event. A removed event leaves a gap.
+- A test checks the file: unique ids, a known place and trigger for each, at least 2 versions and 1 thought, short pop-ups (16 characters at most), no empty strings. A wrong entry fails `npm test`, not the game.
+- Later, if it ever helps: a `weight` for rare events, and events that only some versions of the forest offer.
 
 **The cast (draft, for review).** Numbers are the kind numbers the "Show events" button draws.
 
@@ -496,14 +505,15 @@ Fantasy sentences (high boldness only, draft): "A dragon asked her the way to th
 
 **Code (planned)**
 
-- `src/storyEvents.ts`: the cast, seeded placement (`placeStoryEvents`), and what a trip set off, worked out from her positions; no DOM.
+- `src/data/storyEvents.json`: the cast, the fantasy sentences and the story's opening and ending lines (see the data file above).
+- `src/storyEvents.ts`: loads and types the data file, seeded placement (`placeStoryEvents`: spots, then kinds), the place tests, and what a trip set off, worked out from her positions; no DOM.
 - `src/story.ts`: builds the story from the trip record, the events met, the boldness and the story's own randomness, with each sentence marked true or made up; no DOM.
-- `src/thoughts.ts`: the event thought lines. `src/explain.ts`: the three cards. `src/ui/`: the checkbox, the "Show events" numbers, the pop-up words and the story box. `src/ui/symbols.ts`: the footprint and cloud marks.
+- `src/thoughts.ts`: says an event's thought line (taken from the data file). `src/explain.ts`: the three cards. `src/ui/`: the checkbox, the "Show events" numbers, the pop-up words and the story box. `src/ui/symbols.ts`: the footprint and cloud marks.
 - Settings: `events: true` by default. "Show events" is not saved.
 
 **Tests and numbers**
 
-- Tests: the same code gives the same spots; no spot on a den, home or item, and none within another's view; each spot happens once per trip; a trip walks the same and every judge gives the same points with events on and off; at boldness below 0.5 nothing is made up; the start, basket, wolf and ending sentences always match the record.
+- Tests: the data file is valid (see above); the same code gives the same spots, and adding a kind to the cast does not move them; no spot on a den, home or item, and none within another's view; each spot happens once per trip; a trip walks the same and every judge gives the same points with events on and off; at boldness below 0.5 nothing is made up; the start, basket, wolf and ending sentences always match the record.
 - Measure across 32 forest codes after 100 lessons from each parent, default energy and boldness: events met per trip (target 2–4, set the spot count from it), how often each kind is left out for lack of a fitting tile, and the share of made-up sentences at boldness 0.3, 0.7, 1.0, 1.5 and 2.5. Put the numbers in the pull request.
 
 ### Later
