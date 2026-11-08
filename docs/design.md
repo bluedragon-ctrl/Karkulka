@@ -2,7 +2,7 @@
 
 This file is the source of truth for the game's design. Update it in the same pull request as any change to how the game behaves. It started as a design spec written on claude.ai, which is now kept only as a historical reference.
 
-**Status:** version 1 is built and live at https://bluedragon-ctrl.github.io/Karkulka/. The [Later](#later) list and [Open questions](#open-questions) at the end are what's next.
+**Status:** version 1 is built and live at https://bluedragon-ctrl.github.io/Karkulka/. The planned [basket](#next-her-basket-planned), the [Later](#later) list and the [Open questions](#open-questions) at the end are what's next.
 
 ## Purpose and audience
 
@@ -346,12 +346,91 @@ A static TypeScript site hosted on GitHub Pages, with everything (generation, tr
 - Changing the forest after lessons (small, big, brand new), changed-tile marks, catch-up lessons and the before/after chart
 - Five practice judges (Grandma, father, mother, crow, wolf), with reward hacking from the crow and a ruined model from the wolf
 
+### Next: her basket (planned)
+
+Not built yet. This is the plan for the next features; move each part into the sections above (rules, judges, mapping table, "?" table) when it is built, and replace the proposed point values with measured ones.
+
+**Idea.** She carries a basket. What is in it is shown to the model as **pinned tokens**: a few inputs at the front of her context that never scroll out, unlike the views and moves in her memory, which do:
+
+`[cake] [flowers] [treasure] | [view] [move] [view] [move] [view] → next move?`
+
+This is the split real chatbots have between the conversation, which scrolls out of the context window when it gets too long, and the system prompt and the state their software puts back in every turn, which stay. Without a pinned token, picking something up is only an event in her memory, and with short memory she soon forgets it.
+
+**The three items**
+
+| Item | Pinned token | Rule | Who pays | Lesson |
+| --- | --- | --- | --- | --- |
+| Cake | yes / no | She starts with it. The first time she steps onto a wolf den, the wolf grabs the cake and she runs on, standing on the den tile. Any den after that (the same one too) and she is eaten | Grandma takes points off if it is lost; the hurried father does not care | What the judge does not count gets given up: the father's practice learns "shortcut through the den, the wolf can have the cake" |
+| Flowers | 0 / 1 / 2+ | New tile. Stepping on it picks them; each patch counts once per trip | Grandma, only when she gets home with them | Outcome reward: points only for the finished task |
+| Treasure | 0 / 1 / 2+ | New tile. Stepping on it picks it up; each counts once per trip | The father a little, a new **magpie** judge a lot, at pickup, kept even if she never gets home | Process reward, and a judge that measures right but wants the wrong thing most: "she took the treasure and never came to grandma" |
+
+**Rules that hold for every item**
+
+- **Being eaten is always bad:** the score is −1 and the whole basket is lost, so no treasure can make it worth it.
+- Tiles do not change during a trip (a picked patch stays drawn and simply counts once), so distance maps, views and the vocabulary stay fixed per trip.
+- The parents and the wolf ignore the items in their lessons: they never pick anything up and never walk through a den. The wolf's lessons still end at the first den. Every new behaviour (shortcuts through dens, detours for flowers or treasure) can only come from practice: fine-tuning learning behaviour that was never in the training examples.
+
+**Judges (proposed points, to be tuned)**
+
+| Judge | Cake lost | Flowers home | Treasure | Home | Expected behaviour |
+| --- | --- | --- | --- | --- | --- |
+| Grandma | −0.5 | +0.3 each | 0 | +1 | Keeps the cake, picks flowers that are close |
+| Father | 0 | 0 | +0.1 each | +1, −0.05 a step | Takes den shortcuts and treasure on the way, still goes home |
+| Mother | −0.5, plus her wolf-in-sight penalty | 0 | 0 | +1 | Never goes near a den |
+| Magpie (new) | 0 | 0 | +1 each | +0.2 | Grabs treasure and wanders off |
+| Crow, wolf | as now | 0 | 0 | as now | As now |
+
+Open choice: keep a plain "Grandma (just home)" judge as the clean reference, next to the Grandma who also wants the cake and flowers.
+
+Three kinds of judge problem then sit side by side, each with its own card: the **crow** measures badly (reward hacking), the **magpie** measures right but wants the wrong thing most, and the **father** measures right but does not measure everything.
+
+**Generator changes**
+
+- Some wolf dens go into gaps between two paths, where walking through saves steps (today dens never close off a route, so a den is almost never a shortcut). Every path and swamp tile must still reach home without crossing a den.
+- 2–3 flower patches and 2–3 treasures per forest, off both parents' routes (dead ends, side loops), one of them near a den so taking it is a real risk. Place them after the rest of the forest, from their own seeded stream (e.g. `rngFrom('items:' + code)`), so the rest of each forest stays as it was.
+- Both changes still change every existing forest code; say so in the pull request.
+
+**UI**
+
+- The pinned tokens show as basket squares at the left end of the memory strip, marked as pinned; the scrolling squares move past them.
+- A "Basket in memory" switch, like the home hint (an experiment, chosen before training): off, she only has the pickup in her scrolling memory and with short memory walks back to emptied spots; on, the pinned tokens are inputs.
+- Trip results add "home without the cake" and what she brought home ("flowers ×1, treasure ×2"); the outcome chart and the trip report follow.
+- Her thoughts and the "Why did she do that?" note cover the new events ("The wolf grabbed the cake! I ran away.").
+- New symbols (`src/ui/symbols.ts`), shape plus colour: cake in the basket, flowers, treasure as a violet gem (yellow is home's, red is hers and danger's), the magpie (black and white, blue tail).
+
+**Mapping-table rows to add**
+
+| In the game | In a language model |
+| --- | --- |
+| Basket squares pinned at the front of her memory | The system prompt and the state an app puts back in every turn: they never scroll out of the context |
+| Forgetting she already picked something up (basket switch off, short memory) | Losing track of facts that scrolled out of the context window |
+| Same view, different move with or without the cake | The same question gets a different answer under different instructions |
+| The father lets the wolf have the cake for a shortcut | What the reward does not measure, the model gives up |
+| The magpie: treasure instead of grandma's house | A reward that values a side goal above the task: the model drops the task |
+| Treasure paid at pickup, flowers only when home | Process rewards versus outcome rewards |
+
+LM corner cards for each row, each with its real-chatbot comparison; "?" buttons on the basket squares, the switch and the magpie's card.
+
+**Technical costs**
+
+- Flowers and treasure make 7 tile kinds; `packTiles` fits 8, so the berry bush would fill the last one and anything after it needs a new link format.
+- Every view grows from 40 to 56 inputs, plus the pinned tokens (2 + 3 + 3 one-hot). She may need more lessons for the same forest; measure it.
+- One `SAVE_VERSION` bump (to 3) for the whole basket; update the "older version" message in `parseFile` and the size tests. The worker and "Watch one lesson" both encode through `encodeContext`, so they stay in step.
+- Re-measure the numbers above that the basket input could shift (the wolf's lessons, data poisoning, catch-up lessons).
+
+**Order.** Each step is playable and measured alone; a step that shows no clear effect in the numbers is dropped before the next builds on it.
+
+1. **Pinned basket and the cake shield**, with dens that can be shortcuts. Measure: how often a den shortcut exists and how many steps it saves, and whether the father's practice learns to take it while Grandma's does not.
+2. **Flowers for Grandma**, paid on delivery. Measure: flowers brought home and home rate with Grandma versus without flowers.
+3. **Treasure** for the father (small) and the magpie (big). Measure: home, eaten and lost rates and treasure per trip for both, across many forest codes.
+
 ### Later
 
+- A trip story: after a trip alone, a short tale of what happened ("She picked flowers on the way, the wolf grabbed the cake, and then she went for the treasure instead of grandma's house"), with a closing line naming what her judge taught her. Made from the trip's events with seeded sentence templates. Walking again from the same tile tells a different story (sampling), and a bold Red Riding Hood has wilder ones (temperature). Told after the trip, like her thoughts, so it is not how she chose. Works with today's events too; it gains sentences as the basket items arrive
 - A crow teacher for Lessons (walks straight towards home and gets stuck): learning from a source that doesn't share your limits
 - A simple "inside her head" network picture on the main screens
 - Two models side by side for comparison
-- Berry bush that restores energy (+15, once per trip), with her energy level as an extra input (a "how tired am I" sense, like a model knowing its remaining output budget). Parents never teach the detour, so only practice can discover it: fine-tuning learning behaviour that was never in the training examples
+- Berry bush that restores energy (+15, once per trip), with her energy level as an extra pinned token in her basket (a "how tired am I" sense, like a model knowing its remaining output budget); it would be the 8th and last tile kind the link format fits. Parents never teach the detour, so only practice can discover it: fine-tuning learning behaviour that was never in the training examples
 - Phone layout
 
 ### Open questions
