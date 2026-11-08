@@ -1277,11 +1277,9 @@ export class App {
     if (!job) {
       return h('div', { class: 'run-controls' },
         h('div', { class: 'row' },
-          h('button', { class: 'primary', onclick: o.all }, 'Do ', h('span', { class: 'n-add' }, String(o.total)), ` ${o.what}s`)),
-        h('div', { class: 'row' },
-          h('span', { class: 'muted' }, 'Or watch:'),
           h('button', { onclick: () => o.watch(1, 'slow'), title: `One ${o.what}, slowly` }, `One ${o.what}`),
           h('button', { onclick: () => o.watch(o.total, 'normal'), title }, `Watch ${o.what}s`),
+          h('button', { class: 'primary', onclick: o.all, title: `Do all ${o.what}s quickly, without watching` }, 'Jump to ', h('span', { class: 'n-add' }, String(o.total)), ` ${o.what}s`),
           this.q(o.watchCard)));
     }
     const watching = this.watching;
