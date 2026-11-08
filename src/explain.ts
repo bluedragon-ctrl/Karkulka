@@ -2,16 +2,16 @@
 import type { EffectDone, Walker } from './sim';
 import { FIXED, TrainStats, headsHome } from './train';
 import { buildVocabulary, viewKey } from './tokens';
-import { SWAMP_PENALTY, WOLF_PENALTY } from './teachers';
-import { Forest, MOVE_NAMES, SWAMP, SWAMP_COST, VIEW_OFFSETS, WOLF, tileAt, walkingDistances, xyOf } from './world';
+import { HUNTSMAN_ENERGY, SWAMP_PENALTY, WOLF_PENALTY } from './teachers';
+import { Forest, MOVE_NAMES, densInSight, SWAMP, SWAMP_COST, VIEW_OFFSETS, WOLF, tileAt, walkingDistances, xyOf } from './world';
 
 export type CardKey =
   | 'forest' | 'view' | 'memory' | 'memorySize' | 'hint' | 'lessons' | 'teacher' | 'coverage' | 'arrows'
   | 'boldness' | 'energy' | 'hallucination' | 'repetition' | 'exposure' | 'practice' | 'outdated' | 'home'
   | 'tech' | 'vocabulary' | 'judge' | 'swamp' | 'tree' | 'thoughts' | 'stop'
   | 'tripReport' | 'judgeGrandma' | 'judgeFather' | 'judgeMother' | 'judgeCrow' | 'rewardHacking' | 'teacherVsJudge'
-  | 'wolfTeacher' | 'crowTeacher' | 'grandmaTeacher' | 'magpieTeacher' | 'poisonedData' | 'judgeWolf' | 'fixBadData'
-  | 'basket' | 'cakeShield' | 'judgeMagpie' | 'processReward' | 'events' | 'newPlaces' | 'basketEvents' | 'story' | 'retell'
+  | 'wolfTeacher' | 'crowTeacher' | 'grandmaTeacher' | 'magpieTeacher' | 'huntsmanTeacher' | 'poisonedData' | 'judgeWolf' | 'fixBadData'
+  | 'basket' | 'cakeShield' | 'judgeMagpie' | 'judgeHuntsman' | 'processReward' | 'events' | 'newPlaces' | 'basketEvents' | 'story' | 'retell'
   | 'newWorld' | 'movedHome' | 'catchUp' | 'forestCode' | 'editForest' | 'recipe'
   | 'compute' | 'tokenFreq' | 'ambiguous' | 'uncertainty'
   | 'moreData' | 'guess' | 'watchMany' | 'runScore' | 'testTrips' | 'sampling' | 'curriculum' | 'oneHot' | 'weights' | 'loss' | 'hyper' | 'modelFile';
@@ -62,6 +62,7 @@ export const CARDS: Record<CardKey, string> = {
   crowTeacher: "The crow flies over trees on its way home. She can't, so she bumps into them, but she copies the move anyway. A model copies what its examples do, even what it can't do itself: a chatbot that learned from people who looked things up may write as if it had, and make up the details.",
   grandmaTeacher: "Grandma shows the whole errand: first flowers, then home. The flowers in her basket tell her which half she is on. Chatbots learn a task the same way, from example answers that show every step, and the instructions they are given decide what they do next.",
   magpieTeacher: "The magpie leads her from treasure to treasure before it heads home. She copies what it wants along with how it walks, so now she hunts treasure too. A chatbot trained on text written for another aim, like adverts, picks up that aim as well.",
+  huntsmanTeacher: "The huntsman goes the long way round to look at every wolf den, then brings her home. She copies the long walks, and sometimes her energy runs out before she is home. A chatbot that learned from long-winded answers rambles too, and can run out of room before it gets to the point.",
   poisonedData: "Only a few of her lessons came from the wolf, yet she now walks into dens much more often. That is called data poisoning: a few bad pages hidden among billions of good ones can teach a chatbot a bad habit.",
   judgeWolf: "The wolf gives points only when she comes to his den. Practice makes her better at whatever the judge rewards, so a bad judge can ruin a model that was doing well. That is why chatbot makers guard who can retrain their chatbots.",
   moreData: "More lessons means more training data. The first lessons help the most; after a while each extra lesson adds less. Chatbots are the same: more text and bigger brains make them better, but each step up costs much more computer power.",
@@ -79,6 +80,7 @@ export const CARDS: Record<CardKey, string> = {
   basket: "Her basket sits at the front of her memory and never scrolls out, unlike her steps. A chatbot has the same: the instructions its makers give it (the system prompt) and facts its app puts back in every turn stay, while the oldest parts of a long chat drop out.",
   cakeShield: "The first wolf den only takes the cake. The hurried father doesn't count the cake, so his practice teaches her to cut through dens and let the wolf have it. What a judge doesn't measure, the model gives up. A chatbot rated only on speed may drop care the same way.",
   judgeMagpie: "The magpie pays a lot for treasure and little for getting home, so practice teaches her to grab treasure and wander off. A judge can measure right and still want the wrong thing most: a chatbot rewarded mostly for a side goal drops the real task.",
+  judgeHuntsman: "The huntsman pays more for a longer walk home and for every wolf den she sees, so practice makes her walks longer, and more of them run out of energy. People who rate chatbot answers often like longer ones, so chatbots learn to write more than is needed.",
   processReward: "Treasure counts the moment she picks it up; Grandma's flowers count only if she brings them home. A judge can reward each step on the way or only the finished task. Chatbots are trained both ways: points for each step of the working, or only for the final answer.",
   events: "The forest is full of little events, but she cannot see them and no judge scores them, so most never change her walk. A chatbot is the same: only what is in its input and what its training rewarded steer what it writes.",
   story: "Her story is made after the trip from what really happened (footprints), plus bits the storyteller makes up (clouds). The bolder she is, the more it invents. Chatbots do this too: what rests on facts they were given is reliable, and where they fill gaps they invent things that sound just as true.",
@@ -122,6 +124,12 @@ export const CARD_DETAILS: Partial<Record<CardKey, { title: string; lines: () =>
     'When no treasure is left that it can reach, home the father\'s way',
     'It never steps onto a wolf den',
   ] },
+  huntsmanTeacher: { title: 'How the huntsman walks', lines: () => [
+    'To the nearest spot where a wolf den he has not seen yet comes in sight, in the fewest steps (like the father), then the next',
+    `He only goes on to a den if he can still get her home from there on ${HUNTSMAN_ENERGY} energy`,
+    'Then home the father\'s way',
+    'He never steps onto a wolf den',
+  ] },
   poisonedData: { title: 'The numbers', lines: () => [
     `About 1 lesson in ${Math.round(1 / FIXED.wolfLessonShare)} (${Math.round(FIXED.wolfLessonShare * 100)}%) comes from the wolf; the rest from the careful mother`,
   ] },
@@ -161,6 +169,12 @@ export const CARD_DETAILS: Partial<Record<CardKey, { title: string; lines: () =>
     `${num(FIXED.magpieHome)} for reaching home`,
     `${num(FIXED.rewardEaten)} for being eaten, and the treasure is lost`,
     '0 when she runs out of energy',
+  ] },
+  judgeHuntsman: { title: 'How the huntsman scores a run', lines: () => [
+    "Grandma's points for home, eaten and lost, plus:",
+    `${num(FIXED.huntsmanStep)} for every step of a walk that gets home (bumps into trees don't count)`,
+    `${num(FIXED.huntsmanDen)} for each wolf den she sees, when it first comes in sight, kept even if she never gets home`,
+    'Being eaten takes the den points back',
   ] },
   cakeShield: { title: 'The cake and the dens', lines: () => [
     'She sets out with the cake. The first wolf den she steps onto takes the cake, and she runs on',
@@ -292,6 +306,23 @@ function basketNote(w: Walker, stats: TrainStats | null, dist: ArrayLike<number>
   return null;
 }
 
+/**
+ * A long walk after the huntsman's lessons or practice: how many dens she saw and why.
+ * Null when the huntsman never taught or judged her.
+ */
+function huntsmanNote(w: Walker, f: Forest, stats: TrainStats | null, opening: string): Explanation | null {
+  const runs = stats?.judgeRuns?.huntsman ?? 0;
+  const lessons = stats?.teacherCounts.huntsman ?? 0;
+  if (!runs && !lessons) return null;
+  const seen = new Set<number>();
+  for (const p of w.positions) for (const d of densInSight(f, p)) seen.add(d);
+  const dens = seen.size === 0 ? '' : ` She saw ${seen.size === 1 ? 'a wolf den' : `${seen.size} wolf dens`} on the way.`;
+  const why = runs > 0
+    ? ' The huntsman paid more for a longer walk home and for every den she saw, so long walks past the wolves are what she learned.'
+    : ' The huntsman\'s lessons took the long way round to look at the dens, so she does too.';
+  return { title: 'Why did she do that?', text: opening + dens + why, card: runs > 0 ? 'judgeHuntsman' : 'huntsmanTeacher' };
+}
+
 export function explainTrip(w: Walker, f: Forest, stats: TrainStats | null, outdated: boolean): Explanation {
   const dist = walkingDistances(f);
   const vocab = buildVocabulary(f);
@@ -309,6 +340,8 @@ export function explainTrip(w: Walker, f: Forest, stats: TrainStats | null, outd
     const shortest = dist[w.start];
     const extra = n - shortest;
     const d = w.decisions[worst];
+    const hunt = huntsmanNote(w, f, stats, `She got home in ${n} steps; the shortest way was ${shortest}.`);
+    if (hunt && extra >= 10) return hunt;
     const basket = basketNote(w, stats, dist);
     if (basket) return basket;
     return {
@@ -390,6 +423,11 @@ export function explainTrip(w: Walker, f: Forest, stats: TrainStats | null, outd
       text: `She picked up ${w.basket.treasure === 1 ? 'a treasure' : `${w.basket.treasure} treasures`} and never came to grandma. The magpie's lessons went from treasure to treasure before heading home, and the hunt used up her energy.${cutoff}`,
       card: 'magpieTeacher',
     };
+  }
+
+  if (w.outcome === 'lost') {
+    const hunt = huntsmanNote(w, f, stats, `She walked ${n} steps, but her energy ran out before she got home.`);
+    if (hunt) return { ...hunt, text: hunt.text + cutoff };
   }
 
   const bumpsHome = w.history.moves.filter((m, i) => w.blocked[i] && headsHome(f, w.positions[i], m)).length;

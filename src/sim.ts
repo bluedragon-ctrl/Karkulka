@@ -3,7 +3,7 @@ import { Model, forward, softmax } from './model';
 import type { Rng } from './rng';
 import type { History } from './teachers';
 import { encodeContext, snapBasket } from './tokens';
-import { Basket, Effect, FLOWERS, Forest, Move, StepResult, TREASURE, BasketState, homeSector, newBasketState, step, viewAt } from './world';
+import { Basket, Effect, FLOWERS, Forest, Move, StepResult, TREASURE, BasketState, homeSector, newBasketState, pickUpAtStart, step, viewAt } from './world';
 
 export type Outcome = 'home' | 'eaten' | 'lost';
 
@@ -71,6 +71,7 @@ export class Walker {
   ) {
     this.pos = start;
     this.positions = [start];
+    pickUpAtStart(forest, start, this.trip);
     this.history = { views: [viewAt(forest, start)], moves: [], sectors: [homeSector(forest, start)], baskets: [snapBasket(this.trip.basket)] };
     this.baskets = [snapBasket(this.trip.basket)];
     this.energyLeft = energy;

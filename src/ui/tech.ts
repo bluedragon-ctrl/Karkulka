@@ -5,7 +5,7 @@ import type { Walker } from '../sim';
 import { FIXED, TrainStats } from '../train';
 import { BASKET_FEATS, HINT_FEATS, SLOT_FEATS, VIEW_FEATS, ViewToken, buildVocabulary } from '../tokens';
 import { Forest, MOVE_ARROWS, MOVE_NAMES, MOVES, SWAMP_COST, TILE_KINDS } from '../world';
-import { SWAMP_PENALTY, WOLF_PENALTY } from '../teachers';
+import { HUNTSMAN_ENERGY, SWAMP_PENALTY, WOLF_PENALTY } from '../teachers';
 import {
   Ambiguous, BIG_MODEL, OPS_PER_WEIGHT, RARE, ambiguityByTeacher, chanceText, frequencySummary, sci, sup, tokenCounts, trainingCompute, tripMeasures,
 } from '../measures';
@@ -235,10 +235,10 @@ export function renderTech(el: HTMLElement, ctx: TechContext) {
     ['Practice learning rate (gradient descent, clipped)', String(FIXED.practiceLearningRate)],
     ['Reward: home / eaten', `${FIXED.rewardHome} / ${FIXED.rewardEaten}`],
     ['Score when lost', `−${FIXED.lostPenalty}, plus up to ${FIXED.partialCreditWeight} for ending closer (energy still needed to get home)`],
-    ['Judges', `Grandma: the scores above. Father: also −${FIXED.fatherStepCost} per step. Mother: also −${FIXED.motherSwampPenalty} per swamp step, −${FIXED.motherWolfPenalty} per step with a den in sight. Crow: ±${FIXED.crowHeading} per step towards or away from home in a straight line, +${FIXED.crowHomeBonus} home, ${FIXED.rewardEaten} eaten, 0 lost. Magpie: +${FIXED.magpieTreasure} per treasure at pickup, +${FIXED.magpieHome} home, ${FIXED.rewardEaten} eaten, 0 lost. Wolf: +${FIXED.wolfDen} per step into a den (cake grabbed or eaten), ${FIXED.wolfHome} home, 0 lost`],
+    ['Judges', `Grandma: the scores above. Father: also −${FIXED.fatherStepCost} per step. Mother: also −${FIXED.motherSwampPenalty} per swamp step, −${FIXED.motherWolfPenalty} per step with a den in sight. Crow: ±${FIXED.crowHeading} per step towards or away from home in a straight line, +${FIXED.crowHomeBonus} home, ${FIXED.rewardEaten} eaten, 0 lost. Magpie: +${FIXED.magpieTreasure} per treasure at pickup, +${FIXED.magpieHome} home, ${FIXED.rewardEaten} eaten, 0 lost. Huntsman: Grandma's home, eaten and lost scores, +${FIXED.huntsmanStep} per step walked if she gets home, +${FIXED.huntsmanDen} per den when it first comes in sight (taken back if eaten). Wolf: +${FIXED.wolfDen} per step into a den (cake grabbed or eaten), ${FIXED.wolfHome} home, 0 lost`],
     ['Basket points', `Grandma and mother: −${FIXED.cakeLost} when the wolf grabs the cake. Grandma: +${FIXED.grandmaFlowers} per bunch of flowers brought home. Father: +${FIXED.fatherTreasure} per treasure at pickup. Being eaten takes back all basket points`],
     ['Wolf in disguise (teacher)', `Walks the father's route until a den is in her view, then takes the quickest way into it. "Mother, and sometimes the wolf": ${FIXED.wolfLessonShare * 100}% of lessons are the wolf's`],
-    ['Grandma and magpie (teachers)', 'Grandma: to the nearest flower patch the mother\'s way, then home the mother\'s way. Magpie: to the nearest treasure not yet picked in the fewest steps, then the next, then home the father\'s way. Neither steps onto a den'],
+    ['Grandma, magpie and huntsman (teachers)', `Grandma: to the nearest flower patch the mother's way, then home the mother's way. Magpie: to the nearest treasure not yet picked in the fewest steps, then the next, then home the father's way. Huntsman: to the nearest tile with a den not yet seen in sight, in the fewest steps, while he can still get her home on ${HUNTSMAN_ENERGY} energy, then the next, then home the father's way. None steps onto a den`],
     ['Crow (teacher)', 'Steps towards home in a straight line, the longer way first, onto any tile she can walk but a den. With only trees ahead it flies over one: the lesson ends with her move into the tree. With only a den ahead the lesson ends'],
     ['Practice credit', 'Reward to go: each move is credited with the points from that move to the end of the run, minus a running average (baseline), clipped to ±1'],
     ['Energy per step', `1 on path, ${SWAMP_COST} in a swamp, 1 for bumping into a tree`],

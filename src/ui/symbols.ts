@@ -40,6 +40,8 @@ export const COLORS = {
   icing: '#fff6e8',
   /** The magpie's blue tail and wing. */
   magpie: '#2d6cdf',
+  /** The huntsman's olive coat. */
+  huntsman: '#6b8e23',
 };
 
 /** A small flower centred on (cx, cy): five white petals round a pink middle. */
@@ -149,7 +151,7 @@ export function redFigure(S: number): SVGGElement {
 }
 
 /** Who can teach her: the same cast as the judges (the wolf comes in disguise). */
-export type TeacherFigure = 'mother' | 'father' | 'wolf' | 'crow' | 'grandma' | 'magpie';
+export type TeacherFigure = 'mother' | 'father' | 'wolf' | 'crow' | 'grandma' | 'magpie' | 'huntsman';
 
 /** A teacher: mother has a long skirt, father a hat; the others have their own figures. */
 export function parentFigure(S: number, who: TeacherFigure): SVGGElement {
@@ -157,6 +159,7 @@ export function parentFigure(S: number, who: TeacherFigure): SVGGElement {
   if (who === 'crow') return crowFigure(S);
   if (who === 'grandma') return grandmaFigure(S);
   if (who === 'magpie') return magpieFigure(S);
+  if (who === 'huntsman') return huntsmanFigure(S);
   const c = who === 'mother' ? COLORS.mother : COLORS.father;
   const g = s('g', { class: 'parent-figure' });
   if (who === 'mother') {
@@ -228,6 +231,22 @@ export function magpieFigure(S: number): SVGGElement {
     s('line', { x1: -S * 0.02, y1: S * 0.24, x2: -S * 0.04, y2: S * 0.38, stroke: COLORS.ink, 'stroke-width': S * 0.03 }),
     s('line', { x1: S * 0.08, y1: S * 0.24, x2: S * 0.08, y2: S * 0.38, stroke: COLORS.ink, 'stroke-width': S * 0.03 }),
     gem(S * 0.42, S * 0.3, S * 0.09),
+  );
+}
+
+/** The huntsman, centred on (0, 0): an olive coat with a brown belt, a brown hat with a feather, and a horn at his side. */
+export function huntsmanFigure(S: number): SVGGElement {
+  const c = COLORS.huntsman;
+  return s('g', { class: 'huntsman-figure' },
+    s('rect', { x: -S * 0.18, y: -S * 0.16, width: S * 0.36, height: S * 0.54, rx: S * 0.06, fill: c }),
+    s('rect', { x: -S * 0.18, y: S * 0.08, width: S * 0.36, height: S * 0.05, fill: COLORS.trunk }),
+    s('circle', { cx: 0, cy: -S * 0.26, r: S * 0.12, fill: COLORS.skin, stroke: c, 'stroke-width': S * 0.03 }),
+    s('path', { d: `M ${-S * 0.06} ${-S * 0.2} Q 0 ${-S * 0.15} ${S * 0.06} ${-S * 0.2}`, stroke: COLORS.trunk, 'stroke-width': S * 0.03, fill: 'none' }),
+    s('ellipse', { cx: 0, cy: -S * 0.37, rx: S * 0.2, ry: S * 0.04, fill: COLORS.trunk }),
+    s('path', { d: `M ${-S * 0.11} ${-S * 0.37} Q ${-S * 0.1} ${-S * 0.52} 0 ${-S * 0.52} Q ${S * 0.1} ${-S * 0.52} ${S * 0.11} ${-S * 0.37} Z`, fill: COLORS.trunk }),
+    s('path', { d: `M ${S * 0.08} ${-S * 0.44} Q ${S * 0.22} ${-S * 0.58} ${S * 0.3} ${-S * 0.52}`, stroke: c, 'stroke-width': S * 0.04, fill: 'none', 'stroke-linecap': 'round' }),
+    s('path', { d: `M ${S * 0.16} ${S * 0.02} Q ${S * 0.36} ${S * 0.06} ${S * 0.32} ${S * 0.3}`, stroke: '#e0a020', 'stroke-width': S * 0.05, fill: 'none', 'stroke-linecap': 'round' }),
+    s('circle', { cx: S * 0.32, cy: S * 0.31, r: S * 0.05, fill: '#e0a020', stroke: COLORS.trunk, 'stroke-width': S * 0.015 }),
   );
 }
 

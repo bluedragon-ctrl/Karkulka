@@ -167,7 +167,8 @@
       "wolf": "The wolf in disguise had taught her his sneaky ways.",
       "crow": "The crow had taught her to head straight for home.",
       "grandma": "Grandma had taught her that flowers make a visit nicer.",
-      "magpie": "The magpie had taught her that shiny things matter most."
+      "magpie": "The magpie had taught her that shiny things matter most.",
+      "huntsman": "The huntsman had taught her that the long way round is the best way."
     },
     "judge": {
       "grandma": "Grandma's practice had taught her to come home safe, with the cake.",
@@ -175,6 +176,7 @@
       "mother": "Her mother's practice had taught her to stay dry and keep away from wolves.",
       "crow": "The crow's practice had taught her that every step towards home looks good.",
       "magpie": "The magpie had taught her that shiny things matter most.",
+      "huntsman": "The huntsman's practice had taught her that a long walk past the wolves is worth the most.",
       "wolf": "The wolf's practice had taught her to like his dens far too much."
     }
   }

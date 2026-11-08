@@ -2,18 +2,28 @@
  * The teachers: two parents who walk her home their own way, the wolf in
  * disguise, whose lessons look like the father's until a den comes in sight, the
  * crow, who heads straight for home and flies on over the first tree in the way,
- * Grandma, who fetches a bunch of flowers first, and the magpie, who collects
- * every treasure before it heads home. The teachers are the same cast as the judges.
+ * Grandma, who fetches a bunch of flowers first, the magpie, who collects
+ * every treasure before it heads home, and the huntsman, who goes the long way
+ * round to have a look at every wolf den. The teachers are the same cast as the judges.
  */
 import { Rng, pick } from './rng';
-import { Basket, FLOWERS, Forest, HOME, TREASURE, TREE, headsHome, xyOf, Move, MOVES, SWAMP, Tile, WOLF, cheapestTo, cheapestToHome, fullBasket, isWalkable, neighbor, nearWolf, newBasketState, step, tilesWhere, viewAt, homeSector } from './world';
+import { Basket, densInSight, stepCost, FLOWERS, Forest, HOME, TREASURE, TREE, headsHome, xyOf, Move, MOVES, SWAMP, Tile, WOLF, cheapestTo, cheapestToHome, isWalkable, neighbor, nearWolf, newBasketState, pickUpAtStart, step, tilesWhere, viewAt, homeSector } from './world';
 
-export type Teacher = 'mother' | 'father' | 'wolf' | 'crow' | 'grandma' | 'magpie';
-export const TEACHER_KINDS: readonly Teacher[] = ['mother', 'father', 'wolf', 'crow', 'grandma', 'magpie'];
-/** Who walks carefully (around swamps and away from dens): the mother, and Grandma, who walks home the mother's way. */
-const isCareful = (teacher: Teacher) => teacher === 'mother' || teacher === 'grandma';
+export type Teacher = 'mother' | 'father' | 'wolf' | 'crow' | 'grandma' | 'magpie' | 'huntsman';
+export const TEACHER_KINDS: readonly Teacher[] = ['mother', 'father', 'wolf', 'crow', 'grandma', 'magpie', 'huntsman'];
+/**
+ * How a teacher counts a step: carefully (around swamps and away from dens: the mother, and
+ * Grandma, who walks home the mother's way), steadily (by the energy it takes: the huntsman,
+ * who saves his strength for a long walk), or quickly (one step is one step: everyone else).
+ */
+export type Way = 'careful' | 'steady' | 'quick';
+const wayOf = (teacher: Teacher): Way =>
+  teacher === 'mother' || teacher === 'grandma' ? 'careful' : teacher === 'huntsman' ? 'steady' : 'quick';
 /** "both" mixes the parents half and half; "motherWolf" is the mother with a few of the wolf's lessons slipped in. */
 export type TeacherChoice = Teacher | 'both' | 'motherWolf';
+
+/** The energy the huntsman plans his walk around: he only goes on to another den if he can still get her home on it. */
+export const HUNTSMAN_ENERGY = 90;
 
 /** Extra cost the careful mother gives to tiles next to a wolf den. */
 export const WOLF_PENALTY = 6;
@@ -25,25 +35,34 @@ export const SWAMP_PENALTY = 8;
  * steps, so he wades straight through swamps and walks right past dens. The
  * careful mother avoids both, even if her route is longer.
  */
-const enterCost = (f: Forest, i: number, careful: boolean) => {
+const enterCost = (f: Forest, i: number, way: Way) => {
   const t = f.tiles[i];
   // Flowers and treasure are ordinary path to the parents: they don't detour for them or around them.
-  if (!careful) return 1;
+  if (way === 'quick') return 1;
+  if (way === 'steady') return stepCost(t);
   return 1 + (t === SWAMP ? SWAMP_PENALTY : 0) + (t !== HOME && nearWolf(f, i) ? WOLF_PENALTY : 0);
 };
 
 /**
  * Cost to walk home from every tile for one teacher. The wolf pretends to be the
- * hurried father; Grandma walks home the mother's way, the magpie the father's.
+ * hurried father; Grandma walks home the mother's way, the magpie the father's. The
+ * huntsman walks the way that takes the least energy.
  */
 export function costToHome(f: Forest, teacher: Teacher): Float64Array {
-  const careful = isCareful(teacher);
-  return cheapestToHome(f, (i) => enterCost(f, i, careful));
+  const way = wayOf(teacher);
+  return cheapestToHome(f, (i) => enterCost(f, i, way));
 }
 
-/** Cost to reach the nearest of some tiles (flower patches, treasures), the careful or the quick way. */
-export const costToTiles = (f: Forest, targets: readonly number[], careful: boolean): Float64Array =>
-  cheapestTo(f, targets, (i) => enterCost(f, i, careful));
+/** Cost to reach the nearest of some tiles (flower patches, treasures, spots to see a den from), one teacher's way. */
+export const costToTiles = (f: Forest, targets: readonly number[], way: Way): Float64Array =>
+  cheapestTo(f, targets, (i) => enterCost(f, i, way));
+
+/** Energy to walk from `from` to every tile (the step onto each tile counts; never through a den). */
+function energyFrom(f: Forest, from: number): Float64Array {
+  // Walking a route backwards swaps which end's step is counted: cost(from → i) = cost(i → from) − step onto from + step onto i.
+  const back = cheapestTo(f, [from], (i) => stepCost(f.tiles[i]));
+  return back.map((c, i) => c - stepCost(f.tiles[from]) * (i === from ? 0 : 1) + (i === from ? 0 : stepCost(f.tiles[i])));
+}
 
 /** Steps to the nearest wolf den from every tile: where the wolf really leads her. */
 export const costToDen = (f: Forest): Float64Array => cheapestTo(f, tilesWhere(f, (t) => t === WOLF), () => 1);
@@ -65,10 +84,10 @@ export function denMoves(f: Forest, denCost: Float64Array, pos: number): Move[] 
 
 /**
  * All moves a teacher considers best from a tile (ties are possible), given the cost
- * to its goal from every tile: home, or for Grandma and the magpie the next item.
+ * to its goal from every tile: home, or for Grandma and the magpie the next item, for the huntsman the next den.
  */
 export function teacherMoves(f: Forest, cost: Float64Array, teacher: Teacher, pos: number): Move[] {
-  const careful = isCareful(teacher);
+  const way = wayOf(teacher);
   let best = Infinity;
   let opts: Move[] = [];
   for (const m of MOVES) {
@@ -76,7 +95,7 @@ export function teacherMoves(f: Forest, cost: Float64Array, teacher: Teacher, po
     if (n < 0) continue;
     const t = f.tiles[n];
     if (!isWalkable(t) && t !== HOME) continue;
-    const c = enterCost(f, n, careful) + cost[n];
+    const c = enterCost(f, n, way) + cost[n];
     if (c < best - 1e-9) { best = c; opts = [m]; }
     else if (Math.abs(c - best) < 1e-9) opts.push(m);
   }
@@ -136,31 +155,46 @@ export const endsStuck = (walk: LessonWalk): boolean => walk.stuck === true;
  */
 export function walkLesson(f: Forest, teacher: Teacher, cost: Float64Array, start: number, rng: Rng, denCost?: Float64Array): LessonWalk {
   const positions = [start];
-  const history: History = { views: [viewAt(f, start)], moves: [], sectors: [homeSector(f, start)], baskets: [fullBasket()] };
-  // Her basket follows the same rules as on a trip alone: a flower patch or treasure on the way is picked up.
+  // Her basket follows the same rules as on a trip alone: a flower patch or treasure at the start or on the way is picked up.
   const trip = newBasketState();
+  pickUpAtStart(f, start, trip);
+  const history: History = { views: [viewAt(f, start)], moves: [], sectors: [homeSector(f, start)], baskets: [{ ...trip.basket }] };
   const toDen = teacher === 'wolf' ? denCost ?? costToDen(f) : null;
   let hunting = false;
-  // Grandma and the magpie first walk to an item, then home: `goal` is the cost to the item they are after.
+  // The dens the huntsman has had a look at so far.
+  const seen = new Set<number>(densInSight(f, start));
+  let spent = 0;
+  // Grandma, the magpie and the huntsman first walk to something, then home: `goal` is the cost to what they are after.
   const errand = (): Float64Array | null => {
-    if (teacher === 'grandma' && trip.basket.flowers === 0) return reachable(costToTiles(f, tilesWhere(f, (t) => t === FLOWERS), true), pos);
-    if (teacher === 'magpie') return reachable(costToTiles(f, tilesWhere(f, (t, i) => t === TREASURE && !trip.picked.includes(i)), false), pos);
+    if (teacher === 'grandma' && trip.basket.flowers === 0) return reachable(costToTiles(f, tilesWhere(f, (t) => t === FLOWERS), 'careful'), pos);
+    if (teacher === 'magpie') return reachable(costToTiles(f, tilesWhere(f, (t, i) => t === TREASURE && !trip.picked.includes(i)), 'quick'), pos);
+    if (teacher === 'huntsman') {
+      // A spot to see a new den from, if he can still get her home from there on her energy.
+      // He walks by energy, so the cost there and home is what the walk will really take.
+      const left = HUNTSMAN_ENERGY - spent;
+      const fromHere = energyFrom(f, pos);
+      return reachable(costToTiles(f, tilesWhere(f, (t, i) => isWalkable(t) && fromHere[i] + cost[i] <= left && densInSight(f, i).some((d) => !seen.has(d))), 'steady'), pos);
+    }
     return null;
   };
   let goal: Float64Array | null = null;
-  let pickedSoFar = -1;
+  let doneSoFar = -1;
   let pos = start;
   for (let guard = 0; guard < f.tiles.length * 2 && pos !== f.home && f.tiles[pos] !== WOLF; guard++) {
     if (toDen && !hunting && nearWolf(f, pos) && denMoves(f, toDen, pos).length) hunting = true;
     const crow = teacher === 'crow' ? crowMoves(f, pos) : null;
-    // A new errand after each pickup (the magpie looks for the next treasure; Grandma heads home).
-    if (pickedSoFar !== trip.picked.length) { goal = errand(); pickedSoFar = trip.picked.length; }
+    // A new errand after each pickup or new den (the magpie looks for the next treasure, the huntsman for the next den; Grandma heads home).
+    const done = teacher === 'huntsman' ? seen.size : trip.picked.length;
+    if (doneSoFar !== done) { goal = errand(); doneSoFar = done; }
     const opts = crow ? crow.moves : hunting && toDen ? denMoves(f, toDen, pos) : teacherMoves(f, goal ?? cost, teacher, pos);
     if (!opts.length) break;
     const m = pick(rng, opts);
-    pos = step(f, pos, m, trip).pos;
+    const stepped = step(f, pos, m, trip);
+    pos = stepped.pos;
+    spent += stepped.cost;
     history.moves.push(m);
     positions.push(pos);
+    for (const d of densInSight(f, pos)) seen.add(d);
     // The crow flew over a tree; she stays put, and the lesson ends there.
     if (crow?.flies) return { teacher, positions, history, stuck: true };
     if (pos !== f.home && f.tiles[pos] !== WOLF) {

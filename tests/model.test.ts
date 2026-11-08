@@ -6,8 +6,8 @@ import { mulberry32 } from '../src/rng';
 import { Walker } from '../src/sim';
 import { costToHome, endsAtDen, walkLesson } from '../src/teachers';
 import { BASKET_FEATS, MEMORY_PAIRS, SLOT_FEATS, VIEW_FEATS, encodeContext, inputSize, buildVocabulary } from '../src/tokens';
-import { FIXED, JUDGES, Run, chooseTeacher, evalEvery, guessesRight, headsHome, judgeMaps, learnFromRun, practiceSetup, practiceStartTiles, practiceWalker, startTiles, judgeRewards, judgeScore, homeShare, newStats, runOf, trainLessons, trainPractice } from '../src/train';
-import { Forest, HOME, Move, PATH, StepResult, SWAMP, TREE, Tile, WOLF, allReachable, forestFromTiles, neighbor, pathTiles, walkableTiles } from '../src/world';
+import { FIXED, JUDGES, Run, evalStarts, teacherCosts, chooseTeacher, evalEvery, guessesRight, headsHome, judgeMaps, learnFromRun, practiceSetup, practiceStartTiles, practiceWalker, startTiles, judgeRewards, judgeScore, homeShare, newStats, runOf, trainLessons, trainPractice } from '../src/train';
+import { FLOWERS, Forest, HOME, Move, PATH, StepResult, SWAMP, TREASURE, TREE, Tile, WOLF, allReachable, forestFromTiles, neighbor, pathTiles, walkableTiles } from '../src/world';
 
 const cfg = { memory: MEMORY_PAIRS.medium, hint: false, hidden: 16 };
 
@@ -278,6 +278,25 @@ describe('judges', () => {
     expect(judgeScore('magpie', field, maps, { ...run, outcome: 'lost' })).toBeCloseTo(FIXED.magpieTreasure);
   });
 
+  it('the huntsman pays for a longer walk home and for each den when it first comes in sight', () => {
+    // Longer is better, but only for walks that get home.
+    expect(judgeScore('huntsman', field, maps, straight)).toBeCloseTo(FIXED.rewardHome + 3 * FIXED.huntsmanStep);
+    expect(judgeScore('huntsman', field, maps, detour)).toBeCloseTo(FIXED.rewardHome + 5 * FIXED.huntsmanStep);
+    // The den at (1, 1) comes in sight at (2, 1): paid once, to that move, even when she walks back past it.
+    const look = walk(at(3, 1), [L, R, L, R, R, D, D, R], 'home');
+    const r = judgeRewards('huntsman', field, maps, look);
+    expect(r[0]).toBeCloseTo(FIXED.huntsmanDen);
+    expect(r[2]).toBe(0);
+    expect(judgeScore('huntsman', field, maps, look)).toBeCloseTo(FIXED.rewardHome + FIXED.huntsmanDen + 8 * FIXED.huntsmanStep);
+    // Lost: the den is kept, the steps are not.
+    const lost = { ...look, outcome: 'lost' as const };
+    expect(judgeScore('huntsman', field, maps, lost)).toBeCloseTo(judgeScore('grandma', field, maps, lost) + FIXED.huntsmanDen);
+    // A bump into a tree is not a step walked.
+    const bump = walk(at(5, 4), [D, U], 'home');
+    expect(bump.positions).toEqual([at(5, 4), at(5, 4), field.home]);
+    expect(judgeScore('huntsman', field, maps, bump)).toBeCloseTo(FIXED.rewardHome + FIXED.huntsmanStep);
+  });
+
   it('being eaten takes back every good basket point, but not the lost cake', () => {
     const eaten = withResults(walk(at(2, 3), [D, R, R, U, R], 'eaten'), ['treasure', 'grabbed', 'moved', 'moved', 'eaten'], { cake: false, flowers: 0, treasure: 0 });
     expect(judgeScore('magpie', field, maps, eaten)).toBeCloseTo(FIXED.rewardEaten);
@@ -308,6 +327,38 @@ describe('judges', () => {
       if (outcome === 'lost') expect(w.energyLeft).toBe(0);
       expect(w.energy - w.energyLeft).toBeGreaterThanOrEqual(w.t); // swamp steps cost more than 1
     }
+  });
+
+  it('starting on flowers or treasure picks them up before the first move', () => {
+    const f = generateForest('KARKULKA');
+    const m = createModel(cfg, mulberry32(9));
+    for (const t of [FLOWERS, TREASURE]) {
+      const start = f.tiles.indexOf(t as Tile);
+      expect(start).toBeGreaterThanOrEqual(0);
+      const w = new Walker(f, m, start, 30, 1, mulberry32(3));
+      expect(w.basket[t === FLOWERS ? 'flowers' : 'treasure']).toBe(1);
+      expect(w.history.baskets[0]).toEqual(w.baskets[0]);
+      w.run();
+      // Never picked twice, even if she walks back over it.
+      expect(w.pickups[t === FLOWERS ? 'flowers' : 'treasure']).toBeGreaterThanOrEqual(1);
+      expect(w.trip.picked.filter((i) => i === start)).toHaveLength(1);
+    }
+  });
+});
+
+describe('starting tiles', () => {
+  it('lessons and practice start on any walkable tile; test trips on path tiles only', () => {
+    const f = generateForest('KARKULKA');
+    const kinds = new Set(startTiles(f).map((i) => f.tiles[i]));
+    for (const t of [PATH, SWAMP, FLOWERS, TREASURE]) expect(kinds.has(t as Tile)).toBe(true);
+    expect(evalStarts(f).every((i) => f.tiles[i] === PATH)).toBe(true);
+  });
+  it('a lesson that starts on flowers has them in the basket from the start', () => {
+    const f = generateForest('KARKULKA');
+    const start = f.tiles.indexOf(FLOWERS as Tile);
+    const walk = walkLesson(f, 'grandma', teacherCosts(f).grandma, start, mulberry32(4));
+    expect(walk.history.baskets[0].flowers).toBe(1);
+    expect(walk.positions[walk.positions.length - 1]).toBe(f.home); // errand done: Grandma's lesson heads home
   });
 });
 
