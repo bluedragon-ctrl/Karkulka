@@ -126,6 +126,186 @@
       "versions": ["A magpie dropped something shiny into her basket: a treasure!", "A magpie gave her a glittering stone, then flew away laughing."],
       "thoughts": ["Ooh, shiny!", "A present from a magpie!"],
       "popup": "Shiny!"
+    },
+    {
+      "id": 22, "name": "Rabbit", "fits": "open", "trigger": "step",
+      "versions": ["A rabbit popped out of a burrow and wiggled its nose at her.", "A rabbit thumped its foot and hopped away."],
+      "thoughts": ["A bunny! Hello!", "Thump, thump, off it goes."],
+      "popup": "A rabbit!"
+    },
+    {
+      "id": 23, "name": "Cuckoo", "fits": "anywhere", "trigger": "hear",
+      "versions": ["Somewhere a cuckoo called, again and again.", "A cuckoo counted out loud, and she lost count with it."],
+      "thoughts": ["Cuckoo! Cuckoo!", "How many cuckoos was that?"],
+      "popup": "Cuckoo!"
+    },
+    {
+      "id": 24, "name": "Snail", "fits": "corridor", "trigger": "step",
+      "versions": ["A snail was crossing the path, and she waited for it.", "She tiptoed around a snail with a stripy shell."],
+      "thoughts": ["A snail! No rush.", "Slow and steady, little snail."],
+      "popup": "A snail!"
+    },
+    {
+      "id": 25, "name": "Fireflies", "fits": "anywhere", "trigger": "step",
+      "versions": ["Tiny lights blinked around her like fireflies.", "A few fireflies lit up the path for a moment."],
+      "thoughts": ["Fireflies! Like tiny lamps.", "Blink, blink, how pretty."],
+      "popup": "Fireflies!"
+    },
+    {
+      "id": 26, "name": "Wild strawberries", "fits": "open", "trigger": "step",
+      "versions": ["She found wild strawberries and ate just one.", "Wild strawberries grew by the path, red and sweet."],
+      "thoughts": ["Yum, strawberries!", "Just one. The rest are for the birds."],
+      "popup": "Strawberries!"
+    },
+    {
+      "id": 27, "name": "Stream", "fits": "crossing", "trigger": "step",
+      "versions": ["She hopped over a little stream on three flat stones.", "A little stream bubbled across the path, and she splashed her hands in it."],
+      "thoughts": ["Splash! Cold water.", "Hop, hop, across the stones."],
+      "popup": "A stream!"
+    },
+    {
+      "id": 28, "name": "Rainbow", "fits": "open", "trigger": "step",
+      "versions": ["A small rainbow hung over the trees for a moment.", "She saw a rainbow, and it ended right behind a bush."],
+      "thoughts": ["A rainbow! Wow.", "Where does it end?"],
+      "popup": "A rainbow!"
+    },
+    {
+      "id": 29, "name": "Bee", "fits": "anywhere", "trigger": "step",
+      "versions": ["A bee buzzed around her hood and flew off.", "A fat bee bumped her basket and said sorry, in bee."],
+      "thoughts": ["Bzzz! Hello, bee.", "Easy, bee, I'm not a flower."],
+      "popup": "Bzzz!"
+    },
+    {
+      "id": 30, "name": "Toadstool", "fits": "swamp", "trigger": "step",
+      "versions": ["A fat red toadstool stood in the mud, and she did not touch it.", "She saw a toadstool with white spots and walked around it."],
+      "thoughts": ["Pretty, but not for eating.", "A toadstool! Look, don't touch."],
+      "popup": "A toadstool!"
+    },
+    {
+      "id": 31, "name": "Dragonfly", "fits": "swamp", "trigger": "step",
+      "versions": ["A dragonfly zipped over the water, shiny blue.", "A dragonfly sat on her basket handle, then zoomed away."],
+      "thoughts": ["A dragonfly! So quick.", "Zoom! Gone already."],
+      "popup": "A dragonfly!"
+    },
+    {
+      "id": 32, "name": "Beaver", "fits": "swamp", "trigger": "step",
+      "versions": ["A beaver slapped its tail on the water, splash!", "She saw a beaver building a little dam."],
+      "thoughts": ["A busy beaver!", "Splash! That was loud."],
+      "popup": "A beaver!"
+    },
+    {
+      "id": 33, "name": "Cobweb", "fits": "corridor", "trigger": "step",
+      "versions": ["She walked into a cobweb and wiped it off her nose.", "A cobweb sparkled with dew, and she ducked under it."],
+      "thoughts": ["Ugh, cobweb!", "Pretty web. Sorry, spider."],
+      "popup": "A cobweb!"
+    },
+    {
+      "id": 34, "name": "Acorns", "fits": "anywhere", "trigger": "step",
+      "versions": ["She stepped on a pile of acorns, crunch, crunch.", "An acorn bonked her on the head, and a squirrel giggled."],
+      "thoughts": ["Crunch, crunch, acorns.", "Ow! Who threw that?"],
+      "popup": "Acorns!"
+    },
+    {
+      "id": 35, "name": "Fairy door", "fits": "deadEnd", "trigger": "step",
+      "versions": ["She found a tiny door at the foot of a tree, no bigger than a thimble.", "A tiny door in a tree stump had a tiny welcome mat."],
+      "thoughts": ["A door! For someone very small.", "Knock, knock. Nobody home."],
+      "popup": "A tiny door!"
+    },
+    {
+      "id": 36, "name": "Old well", "fits": "deadEnd", "trigger": "step",
+      "versions": ["She found an old stone well, and the echo said hello from deep down.", "An old well stood in the grass, with a bucket and no rope."],
+      "thoughts": ["A well! Hello-o-o down there.", "No water today, only echoes."],
+      "popup": "An old well!"
+    },
+    {
+      "id": 37, "name": "Bird's nest", "fits": "anywhere", "trigger": "step",
+      "versions": ["She saw a nest with three blue eggs and tiptoed by.", "A bird's nest in a low branch held three sleepy chicks."],
+      "thoughts": ["A nest! Shh, quietly.", "Little chicks, sleep well."],
+      "popup": "A nest!"
+    },
+    {
+      "id": 38, "name": "Stork", "fits": "open", "trigger": "step",
+      "versions": ["A tall stork stood on one leg and stared at her.", "A stork clacked its beak, and she clacked back."],
+      "thoughts": ["A stork! So tall.", "Clack, clack, hello!"],
+      "popup": "A stork!"
+    },
+    {
+      "id": 39, "name": "Wind", "fits": "anywhere", "trigger": "hear",
+      "versions": ["The wind rustled all the leaves at once, like applause.", "The wind whistled through the trees, and she whistled back."],
+      "thoughts": ["Whoo-oosh, the wind.", "The trees are whispering."],
+      "popup": "Whoosh!"
+    },
+    {
+      "id": 40, "name": "Bells", "fits": "home", "trigger": "hear",
+      "versions": ["Far away, a bell rang from the village.", "She heard Grandma's goat bell, clink, clink."],
+      "thoughts": ["Bells! Home is near.", "Clink, clink. I know that bell."],
+      "popup": "Ding-dong!"
+    },
+    {
+      "id": 41, "name": "Washing line", "fits": "home", "trigger": "step",
+      "versions": ["Grandma's washing was drying on a line, and a sock waved at her.", "She ducked under Grandma's washing line, full of striped socks."],
+      "thoughts": ["Grandma's socks!", "Almost there. I see the washing."],
+      "popup": "Washing!"
+    },
+    {
+      "id": 42, "name": "Stray ducklings", "fits": "corridor", "trigger": "step",
+      "versions": ["Five little ducklings waddled across the path in a row.", "A duckling lost its mum, and she showed it the way to the pond."],
+      "thoughts": ["Quack! A line of ducklings.", "Follow your mum, little one."],
+      "popup": "Ducklings!"
+    },
+    {
+      "id": 43, "name": "Badger", "fits": "den", "trigger": "step",
+      "versions": ["A sleepy badger looked up, yawned and went back to sleep.", "A badger was digging a hole and covered her boots with soil."],
+      "thoughts": ["Just a badger. Phew.", "Shh, don't wake the badger."],
+      "popup": "A badger!"
+    },
+    {
+      "id": 44, "name": "Bat", "fits": "den", "trigger": "hear",
+      "versions": ["A bat fluttered past, squeaking, and was gone.", "Something squeaked overhead: only a bat out early."],
+      "thoughts": ["Eek! A bat.", "Squeak! Just a bat."],
+      "popup": "Squeak!"
+    },
+    {
+      "id": 45, "name": "Rope swing", "fits": "open", "trigger": "step",
+      "versions": ["She found a rope swing and had one quick swing.", "A rope swing hung from a big oak, and she gave it a push."],
+      "thoughts": ["A swing! Just one go.", "Wheee!"],
+      "popup": "A swing!"
+    },
+    {
+      "id": 46, "name": "Cave", "fits": "deadEnd", "trigger": "step",
+      "versions": ["She peeked into a tiny cave, and her own voice came back.", "A little cave was full of glittering stones, and she took none."],
+      "thoughts": ["A cave! Hello-o-o.", "Sparkly stones. Look, don't take."],
+      "popup": "A cave!"
+    },
+    {
+      "id": 47, "name": "Stepping stones", "fits": "crossing", "trigger": "step",
+      "versions": ["She counted seven mossy stones on the way across.", "She hopped from stone to stone and did not wobble once."],
+      "thoughts": ["One, two, three… seven!", "Hop, hop, hop. Don't slip."],
+      "popup": "Hop, hop!"
+    },
+    {
+      "id": 48, "name": "Falling leaf", "fits": "anywhere", "trigger": "step",
+      "versions": ["A red leaf floated down and landed in her basket.", "A golden leaf landed on her nose, and she blew it off."],
+      "thoughts": ["A leaf! Like a gift.", "Ha-choo! Leaf on my nose."],
+      "popup": "A leaf!"
+    },
+    {
+      "id": 49, "name": "Signpost", "fits": "crossing", "trigger": "step",
+      "versions": ["A crooked signpost pointed three ways, and all the arrows said \"Forest\".", "She read an old signpost, but the words had faded."],
+      "thoughts": ["A signpost! Not much help.", "Which way? It says nothing."],
+      "popup": "A signpost!"
+    },
+    {
+      "id": 50, "name": "Moss", "fits": "corridor", "trigger": "step",
+      "versions": ["The moss was so soft that she walked on it on tiptoe.", "She sat on a mossy stone for a moment, and it was warm."],
+      "thoughts": ["Soft moss, like a pillow.", "Just a short rest. Not too long."],
+      "popup": "Soft moss!"
+    },
+    {
+      "id": 51, "name": "Hunting horn", "fits": "anywhere", "trigger": "hear",
+      "versions": ["A hunting horn sounded far away, and then there was quiet.", "Somewhere a horn blew two notes."],
+      "thoughts": ["A horn! Who is that?", "Hmm, somebody is far away."],
+      "popup": "Toot-toot!"
     }
   ],
   "fantasy": [
@@ -134,31 +314,36 @@
     "A talking mushroom told her a joke.",
     "The trees bowed to let her pass.",
     "She found a door in a tree, and behind it the mice were having a tea party.",
-    "The moon came out at noon to say hello."
+    "The moon came out at noon to say hello.",
+    "A tiny dragon sneezed and warmed her hands like a stove.",
+    "She crossed a bridge made of rainbow, and it tickled her feet.",
+    "A cloud came down to ask if she wanted a lift.",
+    "The river sang her a song and gave her a pebble as a present.",
+    "A wise old turtle taught her a magic word, but she forgot it right away."
   ],
   "openings": {
-    "swamp": ["Red Riding Hood set out by a muddy swamp.", "She started her walk at the edge of a swamp."],
-    "deadEnd": ["Red Riding Hood set out from a quiet dead end.", "She started her walk in a quiet corner of the forest."],
-    "den": ["Red Riding Hood set out not far from a wolf den.", "She started her walk a little too close to a wolf den."],
-    "home": ["Red Riding Hood set out not far from Grandma's house.", "She started her walk quite close to Grandma's house."],
-    "open": ["Red Riding Hood set out from a sunny meadow.", "She started her walk in an open, sunny spot."],
-    "corridor": ["Red Riding Hood set out along a long, straight path.", "She started her walk on a narrow path between the trees."],
-    "crossing": ["Red Riding Hood set out from a crossing of forest paths.", "She started her walk where several paths meet."],
-    "anywhere": ["Red Riding Hood set out along a forest path.", "One day, Red Riding Hood set off through the forest."]
+    "swamp": ["Red Riding Hood set out by a muddy swamp.", "She started her walk at the edge of a swamp.", "She set out with her basket by a swamp full of croaking.", "Red Riding Hood began her walk where the ground was soft and wet."],
+    "deadEnd": ["Red Riding Hood set out from a quiet dead end.", "She started her walk in a quiet corner of the forest.", "Red Riding Hood set out from a still, hidden corner.", "She began her walk in a tucked-away spot, far from any crowd."],
+    "den": ["Red Riding Hood set out not far from a wolf den.", "She started her walk a little too close to a wolf den.", "Red Riding Hood set out where the wolf's tracks were fresh.", "She began her walk close to where a wolf liked to hide."],
+    "home": ["Red Riding Hood set out not far from Grandma's house.", "She started her walk quite close to Grandma's house.", "Red Riding Hood set out almost in sight of Grandma's chimney.", "She began her walk so near to Grandma's that she could smell the soup."],
+    "open": ["Red Riding Hood set out from a sunny meadow.", "She started her walk in an open, sunny spot.", "Red Riding Hood set out in the open, with the sky wide above her.", "She began her walk in a bright clearing full of flowers."],
+    "corridor": ["Red Riding Hood set out along a long, straight path.", "She started her walk on a narrow path between the trees.", "Red Riding Hood set out down a path with trees on both sides.", "She began her walk in a long green tunnel of branches."],
+    "crossing": ["Red Riding Hood set out from a crossing of forest paths.", "She started her walk where several paths meet.", "Red Riding Hood set out where the paths split in many directions.", "She began her walk at a busy junction and had to choose."],
+    "anywhere": ["Red Riding Hood set out along a forest path.", "One day, Red Riding Hood set off through the forest.", "Red Riding Hood set off into the forest with her basket.", "Once upon a time, Red Riding Hood went walking in the woods."]
   },
   "basket": {
-    "grabbed": ["The wolf jumped out and grabbed the cake, but she ran away.", "A wolf snatched the cake from her basket, and she ran for it."],
-    "flowers": ["She picked a bunch of flowers for Grandma.", "She found pretty flowers and put them in her basket."],
-    "treasure": ["She found a shiny treasure and took it along.", "Something glittered on the path: a treasure!"]
+    "grabbed": ["The wolf jumped out and grabbed the cake, but she ran away.", "A wolf snatched the cake from her basket, and she ran for it.", "A wolf pounced on her basket and took the cake, but she got away.", "The wolf snapped up the cake, and she ran off without it."],
+    "flowers": ["She picked a bunch of flowers for Grandma.", "She found pretty flowers and put them in her basket.", "She gathered some flowers on the way for Grandma.", "Pretty flowers grew by the path, so she picked a few."],
+    "treasure": ["She found a shiny treasure and took it along.", "Something glittered on the path: a treasure!", "She spotted something shiny and tucked it into her basket.", "Hidden in the grass lay a little treasure, and she took it."]
   },
-  "swamp": ["Her socks got soaked in the swamp.", "She waded through a swamp, squelch, squelch.", "Her boots got muddy in a swamp."],
-  "bumps": ["She bumped into a tree.", "She walked right into a tree. Ouch!", "A tree got in her way, and she bumped her nose."],
+  "swamp": ["Her socks got soaked in the swamp.", "She waded through a swamp, squelch, squelch.", "Her boots got muddy in a swamp.", "She set out with her basket by a swamp full of croaking.", "Red Riding Hood began her walk where the ground was soft and wet."],
+  "bumps": ["She bumped into a tree.", "She walked right into a tree. Ouch!", "A tree got in her way, and she bumped her nose.", "She did not see the tree in time and bonked into it.", "Thump! A tree stood exactly where she wanted to go."],
   "endings": {
-    "home": ["And at last she knocked on Grandma's door.", "And at last she reached Grandma's house, and Grandma hugged her."],
-    "homeNoCake": ["And at last she knocked on Grandma's door, with no cake but a big story.", "And at last she reached Grandma's house, without the cake."],
-    "eaten": ["But then she walked right into the wolf's den, and that was the end of her trip.", "But the wolf was waiting at his den, and the trip ended there."],
-    "lost": ["And then she was so tired that she sat down under a tree for a long nap.", "And then, far from Grandma's house, she sat down for a long nap."],
-    "stopped": ["And there the story stops, somewhere in the forest.", "And that is where we left her, still in the forest."]
+    "home": ["And at last she knocked on Grandma's door.", "And at last she reached Grandma's house, and Grandma hugged her.", "Red Riding Hood set out almost in sight of Grandma's chimney.", "She began her walk so near to Grandma's that she could smell the soup."],
+    "homeNoCake": ["And at last she knocked on Grandma's door, with no cake but a big story.", "And at last she reached Grandma's house, without the cake.", "And at last she arrived, with no cake but a happy heart.", "And at last she knocked, hungry and cakeless, and Grandma laughed."],
+    "eaten": ["But then she walked right into the wolf's den, and that was the end of her trip.", "But the wolf was waiting at his den, and the trip ended there.", "But then the wolf at his den was too quick, and her trip ended there.", "But she walked too close to the wolf's den, and that was it for this trip."],
+    "lost": ["And then she was so tired that she sat down under a tree for a long nap.", "And then, far from Grandma's house, she sat down for a long nap.", "And then her legs gave out, and she curled up for a long rest.", "And then she ran out of steps and fell asleep in the middle of the forest."],
+    "stopped": ["And there the story stops, somewhere in the forest.", "And that is where we left her, still in the forest.", "And that is as far as she got this time.", "And the story ends here, with her still on the path."]
   },
   "shapedBy": {
     "teacher": {
