@@ -9,7 +9,7 @@ import {
   fixedSeed, metText, placeStoryEvents, placeTests, tripSeed,
 } from '../src/storyEvents';
 import { FIXED, JUDGES, judgeMaps, judgeRewards, newStats, runOf, trainLessons } from '../src/train';
-import { HOME, PATH, SWAMP, Tile, TREE, applyEffect, forestFromTiles, homeIndex, xyOf } from '../src/world';
+import { HOME, PATH, SWAMP, Tile, TREE, applyEffect, walkingDistances, forestFromTiles, homeIndex, xyOf } from '../src/world';
 
 const CODES = ['KARKULKA', 'A1', 'B2', 'C3', 'D4', 'E5'];
 
@@ -293,7 +293,10 @@ describe('basket events in the notes after a trip', () => {
   });
 
   it('home after the neighbour\'s flowers, after Grandma\'s lessons: the flowers told her the errand was done', () => {
-    const { w, stats, f } = findTrip('grandma', (w) => w.outcome === 'home' && w.basket.cake && w.pickups.flowers === 0 && w.effects.some((e) => e.effect === 'giveFlowers'));
+    const { w, stats, f } = findTrip('grandma', (w) => {
+      const gift = w.effects.find((e) => e.effect === 'giveFlowers');
+      return w.outcome === 'home' && w.basket.cake && w.pickups.flowers === 0 && !!gift && w.t - gift.t <= walkingDistances(w.forest)[w.positions[gift.t]] + 2;
+    });
     const e = explainTrip(w, f, stats, false);
     expect(e.card).toBe('basketEvents');
     expect(e.text).toMatch(/neighbour gave her flowers/);

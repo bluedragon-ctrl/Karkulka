@@ -2,7 +2,7 @@
 
 This file is the source of truth for the game's design. Update it in the same pull request as any change to how the game behaves. It started as a design spec written on claude.ai, which is now kept only as a historical reference.
 
-**Status:** version 1, her basket, and the [forest events and her story](#forest-events-and-her-story) are built and live at https://bluedragon-ctrl.github.io/Karkulka/. The planned [events that change her basket](#next-events-that-change-her-basket-planned), the [Later](#later) list and the [Open questions](#open-questions) at the end are what's next.
+**Status:** version 1, her basket, the [forest events and her story](#forest-events-and-her-story) and the [events that change her basket](#events-that-change-her-basket) are built and live at https://bluedragon-ctrl.github.io/Karkulka/. The [Later](#later) list and the [Open questions](#open-questions) at the end are what's next.
 
 ## Purpose and audience
 
@@ -85,6 +85,7 @@ Every feature should map to a language-model idea. This table is the map:
 | Made-up parts of the story (clouds), more when bold | Hallucination, and temperature making it wilder |
 | Made-up events borrowed from this forest | Believable hallucinations, built from things the model knows |
 | "Tell it again" | Regenerating an answer: the same facts, a new telling |
+| A fox takes the cake, a neighbour gives flowers: events that change her pinned basket, so her next steps change | Text that lands in a chatbot's context (a search result, a tool's answer, a prompt injection) steers what it writes, true or not |
 | "New places every trip": events move between trips | The same question can bring back different search results; the model works with whatever it gets |
 | Real-chatbot comparison in the LM corner cards | The same ideas at real scale: training data, tokenizers, attention, pretraining, supervised fine-tuning, RLHF, transformers |
 
@@ -224,7 +225,7 @@ One small neural network learns in two phases, mirroring how real LLMs are built
   - She waits at least 2 steps after a thought before the next event thought, and 6 before plain chatter, so most steps stay quiet. Each line is picked at random from a few variants, never the same one twice in a row.
   - Walk through goes at an easy pace (about 0.43 s a move) so you can follow her, and after a thought it adds a small pause (0.6 s to 1.4 s, longer for longer thoughts) before she moves on. While walking, the bubble stays long enough to read (from 1.8 s for a short line to 4.5 s for a long one), so it keeps showing for a few moves; the last thought of a trip stays until the next trip. Instant run shows no thoughts at all. Thoughts use their own randomness, so they never change her walk.
 
-- **Forest events and her story.** On the way she meets hidden forest events (an owl, a frog…): a pop-up word and a thought, but never a change to her walk. After every trip, also one cut short with Stop, a "Her story" box under the trip report retells it, with true sentences (footprints) and made-up ones (clouds), more of them the bolder she is, and a "Tell it again" button. See [Forest events and her story](#forest-events-and-her-story).
+- **Forest events and her story.** On the way she meets hidden forest events (an owl, a frog…): a pop-up word and a thought, but no change to her walk, except three that change her basket (a fox takes the cake, Grandma's neighbour gives flowers, a magpie a treasure; see [Events that change her basket](#events-that-change-her-basket)). After every trip, also one cut short with Stop, a "Her story" box under the trip report retells it, with true sentences (footprints) and made-up ones (clouds), more of them the bolder she is, and a "Tell it again" button. See [Forest events and her story](#forest-events-and-her-story).
 
 ### Fixed internals (never user-set)
 
@@ -413,7 +414,7 @@ A static TypeScript site hosted on GitHub Pages, with everything (generation, tr
 
 **Forest events and her story (done)**
 
-- Hidden forest events from a data file, seeded per forest (or placed afresh every trip, an option); pop-up words and thoughts on a trip alone; her story after each trip with true and made-up parts by boldness, and "Tell it again". Rules and measurements are in [Forest events and her story](#forest-events-and-her-story).
+- Hidden forest events from a data file, seeded per forest (or placed afresh every trip, an option), three of them changing her basket on a trip alone; pop-up words and thoughts on a trip alone; her story after each trip with true and made-up parts by boldness, and "Tell it again". Rules and measurements are in [Forest events and her story](#forest-events-and-her-story).
 
 ### Her basket
 
@@ -444,15 +445,15 @@ This is the game's clearest hallucination lesson. The storyteller is like a chat
 
 **Rules**
 
-- **Placement.** Each forest gets 18 event spots (`SPOT_COUNT`). Measured over 32 forest codes after 100 lessons from either parent (default energy and boldness, the 40 test-trip starts), an average trip meets 2.2 events: none on 14% of trips, 1 on 24%, 2 on 24%, 3 on 18%, 4 or more on 20%. (12 spots, as first proposed, gave 1.6.) The number of spots does not grow with the cast: as more kinds are added, each forest gets a different mix of them. Spots come from their own seeded stream, `story:` + code + size, worked out from the current tiles: the same forest code always has the same events in the same spots, so a class can compare ("did yours meet the owl?"). Forest codes, the tiles, saves and links do not change. Editing or changing the forest works the placement out again from the new tiles, so a spot whose tile is no longer walkable drops out and other spots may move.
+- **Placement.** Each forest gets 18 event spots (`SPOT_COUNT`). Measured over 32 forest codes after 100 lessons from either parent (default energy and boldness, the 40 test-trip starts), an average trip met 2.2 events with the first 18 kinds (2.4 with all 21): none on 14% of trips, 1 on 24%, 2 on 24%, 3 on 18%, 4 or more on 20%. (12 spots, as first proposed, gave 1.6.) The number of spots does not grow with the cast: as more kinds are added, each forest gets a different mix of them. Spots come from their own seeded stream, `story:` + code + size, worked out from the current tiles: the same forest code always has the same events in the same spots, so a class can compare ("did yours meet the owl?"). Forest codes, the tiles, saves and links do not change. Editing or changing the forest works the placement out again from the new tiles, so a spot whose tile is no longer walkable drops out and other spots may move.
 - **Spots first, then kinds.** Placement first picks the spots from the tiles alone (shuffled path and swamp tiles, taken one by one while none is within another's 3 × 3 view), then gives each spot a kind that fits its place and is not used yet in this forest, from a second seeded stream (`storyKinds:` + code + size, one draw per spot). A kind with its own place goes first, and the "anywhere" kinds fill the rest, so they do not take the rarer spots. Adding or removing kinds in the data file never moves the spots, only changes which events sit on some of them. It still changes the events of existing forest codes; say so in the pull request that changes the cast. A spot where no unused kind fits stays empty.
 - **Where they go.** On path or swamp tiles only, never on a den, home, flowers or treasure; at most one spot of each kind per forest; no two spots within each other's 3 × 3 view. Each kind has a place it fits (see the data file below), so stories hang together: a frog by a swamp, paw prints near a den, a hut in a quiet corner, Grandma's cat near the house.
-- **Measured placement** (32 forest codes): 16.2 of the 18 spots get a kind on average. The hut and the mole (quiet corners only, about 3 free per forest) are left out of 23 and 22 of the 32 forests, Grandma's cat of 7, the echo of 4, the frog of 2 and the paw prints of 1; every other kind is in every forest. So the hut and the mole are the rare finds.
+- **Measured placement** (32 forest codes, the first 18 kinds; for all 21 see [basket events](#events-that-change-her-basket)): 16.2 of the 18 spots get a kind on average. The hut and the mole (quiet corners only, about 3 free per forest) are left out of 23 and 22 of the 32 forests, Grandma's cat of 7, the echo of 4, the frog of 2 and the paw prints of 1; every other kind is in every forest. So the hut and the mole are the rare finds.
 - **What sets one off.** Most events happen when she steps onto the spot (not when she starts there, and not when she stays on it after bumping into a tree). Sound events (*hear* in the cast) happen when the spot comes into her 3 × 3 view (one already in view at the start waits until it comes into view again). Each spot happens at most once per trip.
 - **Same spot, varying outcome.** How an event turns out is picked when it happens, from its 2–3 versions (the owl asks a riddle, or is fast asleep), using the story's own randomness. Like her thoughts, events and the story never use the walk's randomness, so they never change her walk.
-- **No effect on anything else.** `step()`, her views, the vocabulary, lessons, practice and every judge's points stay as they are (a test walks the same trips with and without events and compares the positions and every judge's points). Events happen on a trip alone only; lessons and practice (watched or not) ignore them.
+- **No effect on anything else** (except the three [basket events](#events-that-change-her-basket)). `step()`, her views, the vocabulary, lessons, practice and every judge's points stay as they are (a test walks the same trips with and without events and compares the positions and every judge's points). Events happen on a trip alone only; lessons and practice (watched or not) ignore them.
 - **Events on or off.** A checkbox in the Forest tab's options, "Things happen in the forest", on by default, kept in the browser save with the other settings (not in links; no save-version bump, a missing setting means on). With it off there are no event spots, pop-ups or event thoughts, and the story tells only her own trip (start, basket, wolf, swamps, bumps, ending) and its made-up parts.
-- **Fixed places or new each trip.** A second checkbox under it, shown while events are on: "New places every trip", off by default, kept in the browser save (not in links; a missing setting means off; no save-version bump). Off, the events sit in the fixed places above, the same for every trip in a forest code. On, each trip alone places them afresh when she starts, by the same rules (spots first, then kinds that fit, one per kind, none within another's view), seeded from the story's own randomness (`trip:` + a random number) instead of the forest code: nobody can learn where the fox lives. Like asking a chatbot the same question twice and its search bringing back different pages. Either way events stay out of lessons, practice and test trips, so it changes nothing she learns or any measured number, and the walk's randomness is never touched. The trip keeps its own placement, for "Show events" and for the story's borrowed events (a borrowed event was in the forest that time). **Measured** (32 forest codes, 100 lessons from either parent, 2560 trips at the defaults): 2.30 events met per trip with new places against 2.23 with fixed ones, and 16.0 of the 18 spots get a kind against 16.2.
+- **Fixed places or new each trip.** A second checkbox under it, shown while events are on: "New places every trip", off by default, kept in the browser save (not in links; a missing setting means off; no save-version bump). Off, the events sit in the fixed places above, the same for every trip in a forest code. On, each trip alone places them afresh when she starts, by the same rules (spots first, then kinds that fit, one per kind, none within another's view), seeded from the story's own randomness (`trip:` + a random number) instead of the forest code: nobody can learn where the fox lives. Like asking a chatbot the same question twice and its search bringing back different pages. Either way events stay out of lessons, practice and test trips, so it changes nothing she learns or any measured number, and the walk's randomness is never touched. The trip keeps its own placement, for "Show events" and for the story's borrowed events (a borrowed event was in the forest that time). **Measured** (32 forest codes, 100 lessons from either parent, 2560 trips at the defaults): 2.30 events met per trip with new places against 2.23 with fixed ones, and 16.0 of the 18 spots get a kind against 16.2 (with the first 18 kinds).
 - **"Show events" button (for testing).** On the Forest tab (under the checkboxes) and the Trip alone tab (in the settings box), shown while events are on. With new places every trip, the Forest tab shows a muted line instead ("The events move to new places on every trip."), and the Trip alone tab shows this trip's places once she has started. It toggles each spot's kind number on its tile, in a small white circle with a dark border at the tile's lower right, drawn above the fog; hovering a number names the event. It is off by default and not saved. Event spots are otherwise never drawn on the board. It may be removed or hidden once the events are well tested.
 
 **During the trip** (Next step and Walk through; Instant run skips both, but the story still has the events)
@@ -477,10 +478,10 @@ This is the game's clearest hallucination lesson. The storyteller is like a chat
 
 **The event data file.** The cast will grow, so it lives in its own data file, `src/data/storyEvents.json`, not in code: adding an event means adding an entry there, with no code change, as long as it uses a place and a trigger the code already knows. The code imports it (Vite reads JSON directly; `tsconfig.json` has `resolveJsonModule`), so it is built into the page and the game still needs no server.
 
-- Each entry: `id` (the kind number), `name`, `fits` (one of the places below), `trigger` (`step` or `hear`), `versions` (2 or more story sentences), `thoughts` (1 or more lines in her voice), `popup` (one short word or two). The file also holds the `fantasy` sentences and all other story wording (`openings` per place, `basket`, `swamp`, `bumps`, `endings`, and the `shapedBy` closing lines per teacher and judge), so all story wording is in one place.
+- Each entry: `id` (the kind number), `name`, `fits` (one of the places below), `trigger` (`step` or `hear`), `versions` (2 or more story sentences), `thoughts` (1 or more lines in her voice), `popup` (one short word or two), and for a [basket event](#events-that-change-her-basket) `effect` (`takeCake`, `giveFlowers` or `giveTreasure`; step events only) and, for `takeCake`, `quiet` versions for when there is no cake to take. The file also holds the `fantasy` sentences and all other story wording (`openings` per place, `basket`, `swamp`, `bumps`, `endings`, and the `shapedBy` closing lines per teacher and judge), so all story wording is in one place.
 - Places the code knows: `anywhere`, `swamp` (a swamp, or a path next to one), `den` (within 2 steps of a den, counted along the grid), `home` (within 4 steps of home, walking), `deadEnd` (one way out, or a quiet corner off both parents' routes: true dead ends are rare, about 0.3 per forest, so the quiet corners the basket items use count too), `corridor` (two ways out, straight), `crossing` (3–4 ways out, not in a meadow), `open` (3–4 ways out, crossings and meadows). A way out is any neighbour that is not a tree or the map edge. The story's opening uses the first place that fits her start, in the order den, swamp, home, dead end, crossing, open, corridor, anywhere. A new place needs a few lines of code (`placeTests` in `src/storyEvents.ts`), an `openings` entry and a line here.
 - **Kind numbers are permanent.** A new event takes the next free number; numbers are never reused or renumbered, so the number the "Show events" button draws always means the same event. A removed event leaves a gap.
-- A test checks the file (`checkStoryData`): unique ids, a known place and trigger for each, at least 2 versions and 1 thought, short pop-ups (16 characters at most), no empty strings, and every story list filled. A wrong entry fails `npm test`, not the game.
+- A test checks the file (`checkStoryData`): unique ids, a known place and trigger for each, at least 2 versions and 1 thought, short pop-ups (16 characters at most), no empty strings, every story list filled, and a known effect on a step event (with quiet versions for `takeCake`, and quiet versions only there). A wrong entry fails `npm test`, not the game.
 - Later, if it ever helps: a `weight` for rare events, and events that only some versions of the forest offer.
 
 **The cast.** Numbers are the kind numbers the "Show events" button draws.
@@ -505,6 +506,9 @@ This is the game's clearest hallucination lesson. The storyteller is like a chat
 | 16 | Mole | Dead end | Step | A mole popped out of the ground, blinked and went back down. / A mole poked its nose out of a molehill. | A mole! |
 | 17 | Echo | Crossing (3–4 ways out) | Step | She shouted "Hello!" and the forest shouted back. / She sang a song, and the echo sang along. | Hello-o-o! |
 | 18 | Woodpecker | Anywhere | Hear | A woodpecker drummed: knock, knock, knock. / A woodpecker was busy making a new door in a tree. | Knock knock! |
+| 19 | Sly fox (`takeCake`) | Within 2 steps of a den | Step | A sly fox pretended to be lost, and while she showed it the way, it ran off with the cake. / A fox snatched the cake from her basket and vanished into the bushes. Quiet: The fox sniffed her empty basket and trotted off. / A fox peeked into her basket, found no cake and slunk away. | A fox! |
+| 20 | Grandma's neighbour (`giveFlowers`) | Within 4 steps of home | Step | Grandma's neighbour waved from her garden and gave her a bunch of flowers. / A kind old neighbour picked some flowers for Grandma and put them in her basket. | Flowers! |
+| 21 | Magpie's gift (`giveTreasure`) | Open ground | Step | A magpie dropped something shiny into her basket: a treasure! / A magpie gave her a glittering stone, then flew away laughing. | Shiny! |
 
 Fantasy sentences (from boldness 1.2): "A dragon asked her the way to the sea." / "She rode a goose over the treetops for a while." / "A talking mushroom told her a joke." / "The trees bowed to let her pass." / "She found a door in a tree, and behind it the mice were having a tea party." / "The moon came out at noon to say hello." Each event also has one or two thought lines in her voice ("Who's there? Just an owl.", "A hut! Nobody home.").
 
@@ -516,67 +520,48 @@ Fantasy sentences (from boldness 1.2): "A dragon asked her the way to the sea." 
 - `src/thoughts.ts`: says an event's thought line. `src/explain.ts`: the events, new places, story and "Tell it again" cards. `src/ui/app.ts`: the checkboxes, the "Show events" button, the pop-up words and the story box; `src/ui/board.ts`: the event numbers layer; `src/ui/symbols.ts`: the footprint and cloud marks.
 - Settings: `events: true` and `newPlaces: false` by default. "Show events" is not saved.
 
-### Next: events that change her basket (planned)
+### Events that change her basket
 
-Not built yet. This is the plan; move each part into [Forest events and her story](#forest-events-and-her-story) and the sections above when it is built, and replace the proposed numbers with measured ones.
-
-**Idea.** A few new forest events do something to her basket: a fox snatches the cake, Grandma's neighbour gives her flowers, a magpie drops a treasure. Every event so far stays harmless. The two kinds side by side make one lesson from both ends: the owl is not in her input, so her walk does not change; the fox changes what is pinned in her memory (the basket tokens), so her next steps change. After Grandma's lessons, flowers from the neighbour make her turn for home as if she had done the errand herself; without the cake, the next den is the end.
+Three forest events do something to her basket on a trip alone: a sly fox takes the cake, Grandma's neighbour gives her flowers, a magpie drops a treasure. Every other event stays harmless. The two kinds side by side make one lesson from both ends: the owl is not in her input, so her walk does not change; the fox changes what is pinned in her memory (the basket tokens), so her next steps change. Without the cake, the next den is the end.
 
 This is a chatbot reading whatever lands in its context: a search result, a pasted text, a tool's answer. It acts on it, true or not, and a planted instruction (prompt injection) steers it the same way.
 
-**Events stay optional.** Basket events are forest events, so the same Forest tab checkbox, "Things happen in the forest", turns them off with all the others; there is no second switch. With it off a trip alone is exactly as before: no spots, no pop-ups, no effects, and the story tells only her own trip. Lessons, practice and the test trips never have events, whether the checkbox is on or off, so the charts and every measured number stay comparable.
-
-**Fixed places or new each trip** is built: see [Forest events and her story](#forest-events-and-her-story). The basket events below follow it like any other kind: with new places, the fox moves every trip too.
-
 **Rules**
 
-- **Trip alone only.** Effects never happen in lessons (the teachers would have to react to events she cannot see), in practice (the judges would score luck: flowers from the neighbour would earn Grandma's points, and a cake taken by the fox would cost −0.5 blamed on her own moves) or on test trips. So she never trained on them: a stolen cake in mid-forest is new to her, like a model meeting something its training never showed.
-- **The effect belongs to the kind, not the version.** The fox always takes the cake; only the wording varies. Whether an event happens depends only on where she walks, so the walk stays reproducible from the walk's own randomness; the story's randomness still picks only the wording.
-- **Effects the code knows** (a new data-file field, `effect`, like places and triggers):
-  - `takeCake`: the cake is gone (the basket's cake token turns to no), exactly as when the wolf grabs it, so the next den eats her. Without the cake there is nothing to take: the event still happens, told with one of its `quiet` versions ("The fox sniffed her empty basket and trotted off."), and nothing changes.
+- **Optional, with the other events.** "Things happen in the forest" turns them off with all the others; there is no second switch. With it off a trip alone is exactly as before. With "New places every trip" the fox moves every trip too.
+- **Trip alone only.** Effects never happen in lessons (the teachers would have to react to events she cannot see), in practice (the judges would score luck: the neighbour's flowers would earn Grandma's points, and a cake taken by the fox would cost −0.5 blamed on her own moves) or on test trips. So she never trained on them: a stolen cake in mid-forest is new to her, like a model meeting something its training never showed. The charts and every measured number stay comparable.
+- **The effect belongs to the kind, not the version.** The fox always takes the cake; only the wording varies. Whether an event happens depends only on where she walks, so a trip is reproducible from the walk's randomness and the placement; the story's randomness still picks only the wording.
+- **Effects** (the data file's `effect` field, `applyEffect` in `src/world.ts`):
+  - `takeCake`: the cake is gone (the basket's cake token turns to no), exactly as when the wolf grabs it, so the next den eats her. Without the cake there is nothing to take: the event still happens, told with one of its `quiet` versions ("The fox sniffed her empty basket and trotted off."), with no thought and no change.
   - `giveFlowers`: one bunch of flowers into her basket (the flowers token counts up, 0 / 1 / 2+), as if she had picked a patch.
   - `giveTreasure`: one treasure into her basket.
-- **When it takes effect.** Right after the step that sets it off, before her next move: the basket she reads at the next step already shows it (in the memory strip's pinned squares too).
-- **Placement.** The same spots and the same rules as the other events: the new kinds only change which events sit on some spots, never the spots themselves. Adding them changes the events of existing forest codes; say so in the pull request.
+- **When it takes effect.** Right after the step that sets it off, before her next move: `Walker` calls its `events` (the trip's `EventTracker`) after each step, before the basket snapshot, so the basket she reads at the next step already shows it (in the memory strip's pinned squares too). Changes are kept in `Walker.effects` (step, kind, effect).
+- **Placement.** The same spots and rules as the other events: the new kinds only change which events sit on some spots, never the spots themselves. Adding them changed the events of existing forest codes.
 - **No save-version bump.** No new tile kind and no new model input: the cake, flowers and treasure tokens already exist.
 
-**The new kinds (draft, for review).** The next free kind numbers.
+**On a trip alone**
 
-| # | Event | Fits | Set off | Effect | Versions (story sentence) | Quiet versions | Pop-up |
-| --- | --- | --- | --- | --- | --- | --- | --- |
-| 19 | Sly fox | Within 2 steps of a den | Step | `takeCake` | A sly fox pretended to be lost, and while she showed it the way, it ran off with the cake. / A fox snatched the cake from her basket and vanished into the bushes. | The fox sniffed her empty basket and trotted off. | A fox! |
-| 20 | Grandma's neighbour | Within 4 steps of home | Step | `giveFlowers` | Grandma's neighbour waved from her garden and gave her a bunch of flowers. / A kind old neighbour picked some flowers for Grandma and put them in her basket. | | Flowers! |
-| 21 | Magpie's gift | Open ground | Step | `giveTreasure` | A magpie dropped something shiny into her basket: a treasure! / A magpie gave her a glittering stone, then flew away laughing. | | Shiny! |
+- Pop-up words as for the other events; the fox's with the crossed-out cake, the magpie's with the gem.
+- Thoughts in her voice: "Hey! My cake!", "Thank you! Flowers for Grandma.", "Ooh, shiny!".
+- The status line's "no cake: the next den is the end!" also after the fox, with the basket-events "?" instead of the cake-shield one.
+- The trip report's basket row names the source: "the fox took the cake at step 7", "picked 1 of 3 flower patches and 0 of 2 treasures, plus a bunch of flowers from Grandma's neighbour at step 9". The "picked … of …" counts stay pickups from tiles only.
+- **Why did she do that?** Eaten after the fox took the cake: "At step 7 a sly fox took the cake. Without the cake, the next den at step 12 was the end." Home without the cake after the fox: it says so. Home after the neighbour's flowers, after Grandma's lessons, with no flowers of her own, when she went straight home after the gift (at most 2 steps more than the shortest way): the flowers told her the errand was done, though she never picked any. The magpie and Grandma notes about her own pickups count tile pickups only.
+- **Her story.** A basket event she met is always told, as it turned out (the quiet version when the fox found no cake). A made-up part is never a basket event: a borrowed "the fox stole her cake" would contradict how she arrived, and made-up parts never change the basket or the ending.
+- **Card.** *Basket events*: by "A few change her basket" under "Things happen in the forest", and on the status line after the fox; it pulses at the first basket event in a session.
 
-Thoughts in her voice: "Hey! My cake!", "Thank you! Flowers for Grandma.", "Ooh, shiny!".
+**Measured** (32 forest codes, 100 lessons from each teacher, default energy 80 and boldness 0.7, the 40 test-trip starts, fixed places; each trip walked with events on and off from the same walk randomness):
 
-**What it changes elsewhere**
+| Teacher | Events met per trip | Walks changed | Fox / neighbour / magpie met per trip | Off: home with cake, without, eaten, lost | On: home with cake, without, eaten, lost |
+| --- | --- | --- | --- | --- | --- |
+| Mother | 2.70 | 3.8% | 0.08 / 0.17 / 0.18 | 69.8%, 13.0%, 7.3%, 9.9% | 65.7%, 15.9%, 8.4%, 10.0% |
+| Father | 2.03 | 3.3% | 0.08 / 0.17 / 0.10 | 73.6%, 11.7%, 6.4%, 8.3% | 68.2%, 16.4%, 7.3%, 8.1% |
+| Grandma | 4.03 | 7.9% | 0.19 / 0.20 / 0.28 | 79.1%, 10.2%, 5.2%, 5.5% | 65.2%, 23.0%, 6.3%, 5.5% |
 
-- **Her basket on a trip.** `Walker` gets the event effects applied after each step (a small hook it calls with the step's positions), and records them as `effects` (step and effect), so the trip record, the status line ("no cake: the next den is the end!" also after the fox), the trip report and the memory strip all show them. The trip report's basket row names the source: "the fox took the cake at step 7", "picked 1 of 3 flower patches, plus a bunch from Grandma's neighbour". The "picked … of …" counts stay pickups from tiles only.
-- **Why did she do that?** When she is eaten after the fox took the cake: "The fox took the cake at step 7, so the next wolf den was the end." When she heads home right after the neighbour's flowers after Grandma's lessons: a note that the flowers in her basket told her the errand was done.
-- **Her story.** An effect event she met is always told (like the basket and the wolf), in the version that happened, and stands in for a basket sentence. A made-up part is never an effect event: a borrowed "the fox stole her cake" would contradict how she arrived, and made-up parts never change the basket or the ending.
-- **Pop-ups and thoughts** as for the other events; the cake pop-up uses the crossed-out cake icon, the gifts the flower and gem icons.
-- **Tests change.** "A trip walks the same with events on and off" holds for the harmless events only. New tests: an effect kind changes the basket at the right step and only once; `takeCake` without the cake changes nothing; a trip with effect events is reproducible from the same walk randomness and spots; with events off nothing differs from before; lessons, practice and test trips never apply effects; a made-up sentence is never an effect event.
+- The fox's cost is mostly the cake, not her life: home with the cake drops 4–14 points, eaten rises about 1. Grandma's trips are longer (they detour for flowers), so they meet more events and the fox more often.
+- After Grandma's lessons, the 3 steps after the neighbour's flowers go towards home 59% of the time (145 steps), against 46% in the first 3 steps of a trip and 91% after flowers she picked herself. So the gift does push her homewards, but much less than her own flowers: the neighbour stands near the house, where she is often still on her way to a flower patch, and a gift in a place her lessons never had flowers is new to her. That is why the note is shown only when she really went straight home.
+- With the new kinds 17.7 of the 18 spots get a kind (16.2 before). Left out of the 32 forests: the mole 25, the hut 23, Grandma's cat 15 and the neighbour 10 (both want the few tiles near home), the frog, squirrel, mitten and echo 4, the mushroom ring and woodpecker 3, the owl, growl, butterflies 2, the paw prints, rain, fox and magpie 1.
 
-**Mapping row (to add when built)**
-
-| In the game | In a language model |
-| --- | --- |
-| A fox takes the cake, a neighbour gives flowers: events that change her pinned basket, so her next steps change | Text that lands in a chatbot's context (a search result, a tool's answer, a prompt injection) steers what it writes, true or not |
-
-**LM corner card (draft, under 300 characters).** *Basket events* (by "Things happen in the forest" too, and on the status line or story after one; pulses at the first basket event in a session): "The owl doesn't change her walk, but the fox does: it changed her basket, which she reads at every step. A chatbot is the same: whatever lands in its context, a search result or a planted instruction, steers what it writes, true or not."
-
-**Numbers to measure** (32 forest codes, 100 lessons from the mother, from the father and from Grandma, default energy and boldness): how often each new kind is placed and met per trip; home, home without the cake and eaten with events on against off (the fox's cost); after Grandma's lessons, how often she turns for home within 3 steps of the neighbour's flowers, against a trip where she has picked them herself. Put the numbers in the pull request.
-
-**Build order** (each step its own commit; the design doc updated as parts are built)
-
-1. ~~New places every trip~~ (built).
-2. ~~Data and effects~~ (built; moved into the design in step 5): the `effect` field and `quiet` versions in the data file and its test, the three kinds, the effect hook in `Walker` and `effects` on the trip, and the tests above.
-3. ~~Trip alone~~ (built): pop-ups, thoughts, the status line, the trip report's basket row, "Why did she do that?", and the basket-events card.
-4. ~~The story~~ (built): effect events always told, never borrowed.
-5. Measure, then move the finished parts into [Forest events and her story](#forest-events-and-her-story) and the sections above.
-
-**Not in this plan.** Events that change her energy (a snack, a stumble): energy is not in her input, so she cannot react to them, and on short trips ±5 energy rarely changes how a trip ends. They fit better with the berry bush below, once energy is a pinned token she can sense.
+**Not built.** Events that change her energy (a snack, a stumble): energy is not in her input, so she cannot react to them, and on short trips ±5 energy rarely changes how a trip ends. They fit better with the berry bush below, once energy is a pinned token she can sense.
 
 ### Later
 

@@ -1,7 +1,8 @@
 /**
  * Hidden forest events: an owl, a frog, an empty hut… She cannot see them and no judge
- * scores them, so they never change her walk. Walking through one makes it happen, and
- * the trip story tells about it afterwards. The cast and all story wording live in
+ * scores them, so they never change her walk, except a few that change her basket on a trip
+ * alone (a fox takes the cake): the basket is in her input. Walking through one makes it
+ * happen, and the trip story tells about it afterwards. The cast and all story wording live in
  * `data/storyEvents.json`; this module types it, places the events in a forest (seeded,
  * from the current tiles) and works out which events a trip set off.
  */

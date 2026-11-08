@@ -22,14 +22,14 @@ Game logic has no DOM dependencies and is tested directly; the UI lives in `src/
 
 | Module | Purpose |
 | --- | --- |
-| `src/world.ts` | Tiles, moves, energy costs, her basket and the step rules (cake shield, pickups), what she sees, distances |
+| `src/world.ts` | Tiles, moves, energy costs, her basket and the step rules (cake shield, pickups, forest events' basket effects), what she sees, distances |
 | `src/forest.ts` | Seeded forest generator: maze, loops, meadows, swamps, wolf dens, then her basket's tiles (shortcut dens, flowers, treasure) |
 | `src/teachers.ts` | The teachers' lesson walks: the two parents' route costs, the wolf in disguise, the crow, Grandma's and the magpie's errands |
 | `src/tokens.ts` | Vocabulary and context-window encoding (one-hot views and moves) |
 | `src/model.ts` | One-hidden-layer network, softmax with temperature, Adam and SGD |
 | `src/sim.ts` | A trip alone: the `Walker` samples one move at a time |
 | `src/train.ts` | Lessons (imitation), practice (policy gradient), evaluation; fixed internals in `FIXED` |
-| `src/storyEvents.ts`, `src/data/storyEvents.json` | Hidden forest events: the cast and all story wording (JSON), seeded placement, what a trip sets off |
+| `src/storyEvents.ts`, `src/data/storyEvents.json` | Hidden forest events: the cast and all story wording (JSON), seeded placement (fixed per forest code or new each trip), what a trip sets off, and the basket effects of a few |
 | `src/story.ts` | Her story after a trip alone: true sentences from the trip record plus made-up ones by boldness |
 | `src/thoughts.ts` | Her thought bubbles on a trip alone ("Scary wolf below me! Let's go down."), made up after each move |
 | `src/explain.ts` | "Why did she do that?" notes, LM corner card texts (`CARDS`), each with its real-chatbot comparison |

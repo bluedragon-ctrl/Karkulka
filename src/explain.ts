@@ -80,7 +80,7 @@ export const CARDS: Record<CardKey, string> = {
   cakeShield: "The first wolf den only takes the cake. The hurried father doesn't count the cake, so his practice teaches her to cut through dens and let the wolf have it. What a judge doesn't measure, the model gives up. A chatbot rated only on speed may drop care the same way.",
   judgeMagpie: "The magpie pays a lot for treasure and little for getting home, so practice teaches her to grab treasure and wander off. A judge can measure right and still want the wrong thing most: a chatbot rewarded mostly for a side goal drops the real task.",
   processReward: "Treasure counts the moment she picks it up; Grandma's flowers count only if she brings them home. A judge can reward each step on the way or only the finished task. Chatbots are trained both ways: points for each step of the working, or only for the final answer.",
-  events: "The forest is full of little events, but she cannot see them and no judge scores them, so they never change her walk. A chatbot is the same: only what is in its input and what its training rewarded steer what it writes.",
+  events: "The forest is full of little events, but she cannot see them and no judge scores them, so most never change her walk. A chatbot is the same: only what is in its input and what its training rewarded steer what it writes.",
   story: "Her story is made after the trip from what really happened (footprints), plus bits the storyteller makes up (clouds). The bolder she is, the more it invents. Chatbots do this too: what rests on facts they were given is reliable, and where they fill gaps they invent things that sound just as true.",
   basketEvents: "The owl doesn't change her walk, but the fox does: it changed her basket, which she reads at every step. A chatbot is the same: whatever lands in its context, a search result or a planted instruction, steers what it writes, true or not.",
   newPlaces: "Off, the owl always lives in the same tree. On, the events move every trip, so you never know what she will meet. A chatbot's world is like that too: the same question can bring back different search results, and it works with whatever it gets.",
@@ -249,7 +249,7 @@ export function pickupLine(p: { flowers: number; treasure: number; flowersInFore
 }
 
 /** After she got home: a note about her basket when there is something to tell (the cake, flowers, treasure). */
-function basketNote(w: Walker, stats: TrainStats | null): Explanation | null {
+function basketNote(w: Walker, stats: TrainStats | null, dist: ArrayLike<number>): Explanation | null {
   const n = w.decisions.length;
   const things = basketWords(w.basket);
   const brought = things ? ` She brought ${things}.` : '';
@@ -257,9 +257,10 @@ function basketNote(w: Walker, stats: TrainStats | null): Explanation | null {
   if (fox) {
     return { title: 'Why did she do that?', text: `She got home in ${n} steps, but without the cake: at step ${fox.t} a sly fox took it.${brought}`, card: 'basketEvents' };
   }
-  // Grandma's lessons come home once there are flowers in the basket, whoever put them there.
+  // Grandma's lessons come home once there are flowers in the basket, whoever put them there:
+  // told only when she really went straight home after the gift (at most 2 steps more than the shortest way).
   const gift = w.effects.find((e) => e.effect === 'giveFlowers');
-  if (gift && (stats?.teacherCounts.grandma ?? 0) > 0 && w.baskets[gift.t - 1].flowers === 0) {
+  if (gift && (stats?.teacherCounts.grandma ?? 0) > 0 && w.baskets[gift.t - 1].flowers === 0 && n - gift.t <= dist[w.positions[gift.t]] + 2) {
     return {
       title: 'Why did she do that?',
       text: `She got home in ${n} steps with the cake.${brought} At step ${gift.t} Grandma's neighbour gave her flowers. Grandma's lessons head home once flowers are in the basket, so the flowers told her the errand was done, though she never picked any.`,
@@ -308,7 +309,7 @@ export function explainTrip(w: Walker, f: Forest, stats: TrainStats | null, outd
     const shortest = dist[w.start];
     const extra = n - shortest;
     const d = w.decisions[worst];
-    const basket = basketNote(w, stats);
+    const basket = basketNote(w, stats, dist);
     if (basket) return basket;
     return {
       title: 'Why did she do that?',
