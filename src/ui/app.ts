@@ -1,11 +1,12 @@
-/** The app: five tabs that tell the story in order, and a Settings tab. */
-import { CardKey, Explanation, basketWords, effectWords, explainTrip, pickupLine, tripReport } from '../explain';
+/** The app: six tabs that tell the story in order, and a Settings tab. */
+import { CardKey, Explanation, basketWords, effectWords, explainTrip, pct, pickupLine, tripReport } from '../explain';
 import { CHANGE_SIZES, changeForest, generateForest } from '../forest';
 import { Adam, Model, createAdam, createModel, modelFromJSON, modelToJSON } from '../model';
 import { mulberry32, normalizeCode, pick, randomCode } from '../rng';
 import { Outcome, Walker, predictAt } from '../sim';
 import { CAST, EventMet, EventSpot, EventTracker, SPOT_COUNT, eventKind, placeStoryEvents, tripSeed } from '../storyEvents';
 import { StorySentence, TripRecord, shapedBy, storyCount, tellStory } from '../story';
+import { TEST_SIZES, TestReport, runTest } from '../testRuns';
 import { Thoughts } from '../thoughts';
 import * as store from '../storage';
 import { LessonWalk, TEACHER_KINDS, Teacher, TeacherChoice, costToHome, endsAtDen, endsStuck, teacherMoves, walkLesson } from '../teachers';
@@ -24,13 +25,14 @@ import { renderStrip } from './strip';
 import { COLORS, cake, cloudMark, crowFigure, footprintMark, gem, grandmaFigure, huntsmanFigure, magpieFigure, parentFigure, tileSymbol, wolfHead } from './symbols';
 import { renderTech } from './tech';
 
-type TabId = 'forest' | 'lessons' | 'trip' | 'practice' | 'inside' | 'settings';
+type TabId = 'forest' | 'lessons' | 'trip' | 'practice' | 'test' | 'inside' | 'settings';
 const TABS: { id: TabId; label: string }[] = [
   { id: 'forest', label: '1. Forest' },
   { id: 'lessons', label: '2. Lessons' },
   { id: 'trip', label: '3. Trip alone' },
   { id: 'practice', label: '4. Practice' },
-  { id: 'inside', label: '5. Inside the model' },
+  { id: 'test', label: '5. Big test' },
+  { id: 'inside', label: '6. Inside the model' },
   { id: 'settings', label: '⚙ Settings' },
 ];
 
@@ -142,6 +144,20 @@ const WATCH_TEST_EVERY = 5;
 const MAX_MARKED = 60;
 const MAX_CHANGE_POINTS = 8;
 
+/** A big test, with what it was run on, so a test of an older model or forest is not shown as the current one. */
+interface TestRun {
+  report: TestReport;
+  model: Model;
+  lessons: number;
+  practiceRuns: number;
+  tiles: string;
+  energy: number;
+  boldness: number;
+  events: boolean;
+  /** The tile every trip started on, or null for random spots. */
+  start: number | null;
+}
+
 interface Job {
   kind: 'lessons' | 'practice' | 'watch' | 'watchRuns';
   done: number;
@@ -230,6 +246,11 @@ export class App {
   /** The judge's score for the last watched practice run. */
   lastRun: { outcome: Outcome; score: number; judge: Judge; noCake: boolean; flowers: number; treasure: number } | null = null;
   lastPractice: PracticeSummary | null = null;
+  /** Big test: the tile every trip starts on (null: random spots), the latest test and the one before it. */
+  testStart: number | null = null;
+  test: TestRun | null = null;
+  testBefore: TestRun | null = null;
+  private testing = false;
   private auto: number | null = null;
   private saveTimer: number | null = null;
   private rng = mulberry32((Math.random() * 2 ** 32) >>> 0);
@@ -483,6 +504,10 @@ export class App {
     if (this.busy) return;
     if (this.tab === 'forest') this.paint(i);
     else if (this.tab === 'trip' && !drag) this.chooseStart(i);
+    else if (this.tab === 'test' && !drag && !this.testing && isWalkable(this.forest.tiles[i])) {
+      this.testStart = this.testStart === i ? null : i;
+      this.render();
+    }
   }
 
   private paint(i: number) {
@@ -1001,13 +1026,13 @@ export class App {
     this.watchedEnd = null;
     this.board.clearTrails();
     closeHint();
-    const cards: Record<TabId, CardKey | null> = { forest: 'forest', lessons: 'lessons', trip: 'view', practice: 'practice', inside: 'tech', settings: null };
+    const cards: Record<TabId, CardKey | null> = { forest: 'forest', lessons: 'lessons', trip: 'view', practice: 'practice', test: 'bigTest', inside: 'tech', settings: null };
     this.fresh = cards[id];
     this.render();
   }
 
   private locked(id: TabId) {
-    return (id === 'trip' || id === 'practice') && !this.trained;
+    return (id === 'trip' || id === 'practice' || id === 'test') && !this.trained;
   }
 
   render() {
@@ -1017,8 +1042,8 @@ export class App {
     this.techEl.hidden = !inside;
     this.panel.hidden = inside;
     (this.boardWrap.parentElement as HTMLElement).hidden = inside;
-    // The forest and settings tabs are for building; she has no memory to show there.
-    this.stripEl.hidden = this.tab === 'forest' || this.tab === 'settings';
+    // The forest and settings tabs are for building, and the big test is many trips at once: no one memory to show there.
+    this.stripEl.hidden = this.tab === 'forest' || this.tab === 'settings' || this.tab === 'test';
     if (inside) this.renderTechNow();
     else {
       this.renderBoard();
@@ -1080,7 +1105,7 @@ export class App {
 
   private renderBoard() {
     const b = this.board;
-    b.interactive = (this.tab === 'forest' || this.tab === 'trip') && !this.busy;
+    b.interactive = (this.tab === 'forest' || this.tab === 'trip' || this.tab === 'test') && !this.busy;
     b.setStart(null);
     b.setTrace(null);
     b.setArrows(null);
@@ -1117,6 +1142,13 @@ export class App {
       b.setRed(w.pos, { energy: w.energyLeft / w.energy, sitting: w.outcome === 'lost', animate: w.t > 0 });
       if (this.tripLive(w) && this.settings.arrows) b.setArrows(w.pos, w.tempered(), this.tints(w.pos));
       if (this.settings.fog && this.tripLive(w)) b.setFog(w.pos);
+    }
+    if (this.tab === 'test') {
+      if (this.testStart !== null && !isWalkable(this.forest.tiles[this.testStart])) this.testStart = null;
+      b.setStart(this.testStart);
+      // Her trails of the latest test, coloured by how each ended.
+      b.clearTrails();
+      for (const t of this.currentTest()?.report.trips ?? []) b.addTrail(t.positions, TRAIL_COLORS[t.outcome], 0.1);
     }
     if (this.tab === 'practice') {
       const d = walkingDistances(this.forest);
@@ -1168,6 +1200,7 @@ export class App {
     else if (this.tab === 'lessons') this.lessonsPanel(body);
     else if (this.tab === 'trip') this.tripPanel(body);
     else if (this.tab === 'practice') this.practicePanel(body);
+    else if (this.tab === 'test') this.testPanel(body);
     else if (this.tab === 'settings') this.settingsPanel(body);
     placeHint();
   }
@@ -1461,7 +1494,115 @@ export class App {
       w && !walking && w.t > 0 ? this.reportBox(w, this.why) : null,
       w && !walking && w.t > 0 ? this.storyBox() : null,
       this.settingsLink('Energy, boldness, fog, ', this.hq('her thoughts', 'thoughts'), ' and the arrows'),
-      h('div', { class: 'row' }, this.next('Practice', 'practice'), this.next('Inside the model', 'inside')),
+      h('div', { class: 'row' }, this.next('Practice', 'practice'), this.next('Big test', 'test')),
+    );
+  }
+
+  // ---------- big test ----------
+
+  /**
+   * The latest big test, if it was run on the model and forest she has now. A test of an
+   * older model or forest becomes "the test before" and is no longer shown as hers.
+   */
+  private currentTest(): TestRun | null {
+    const t = this.test;
+    if (t && (t.model !== this.model || t.lessons !== this.stats.lessons || t.practiceRuns !== this.stats.practiceRuns || t.tiles !== store.packTiles(this.forest.tiles))) {
+      this.testBefore = t;
+      this.test = null;
+    }
+    if (!this.trained) { this.test = null; this.testBefore = null; }
+    return this.test;
+  }
+
+  /** Walk `count` trips alone with the energy, boldness and forest events from Settings, then count them up. */
+  private runBigTest(count: number) {
+    if (!this.model || this.testing || this.busy) return;
+    this.currentTest();
+    this.testing = true;
+    this.render();
+    // Let the page show "She is walking…" before the trips run.
+    window.setTimeout(() => {
+      const model = this.model;
+      if (!model) { this.testing = false; return; }
+      const st = this.settings;
+      const report = runTest(model, this.forest, {
+        count, energy: st.energy, boldness: st.boldness, events: st.events, newPlaces: st.newPlaces, start: this.testStart, seed: (this.rng() * 2 ** 32) >>> 0,
+      });
+      if (this.test) this.testBefore = this.test;
+      this.test = {
+        report, model, lessons: this.stats.lessons, practiceRuns: this.stats.practiceRuns, tiles: store.packTiles(this.forest.tiles),
+        energy: st.energy, boldness: st.boldness, events: st.events, start: this.testStart,
+      };
+      this.testing = false;
+      this.showCard('bigTest');
+      this.render();
+    }, 30);
+  }
+
+  private testPanel(body: HTMLElement) {
+    const run = this.currentTest();
+    const st = this.settings;
+    const off = this.testing || this.busy;
+    add(body,
+      h('h2', {}, this.hq('Big test', 'bigTest')),
+      h('p', {}, 'One trip tells you little, because every move is picked by chance. Here she walks many trips alone, one after another, and we count what happened.'),
+      this.testStart === null
+        ? h('p', { class: 'muted' }, 'Each trip starts on a random spot. Click a tile on the map to start them all there.')
+        : h('p', { class: 'muted' }, 'All trips start on the marked tile. ',
+          h('button', { class: 'subtle', disabled: off, onclick: () => { this.testStart = null; this.render(); } }, 'Random spots instead')),
+      h('div', { class: 'row' }, ...TEST_SIZES.map((n, k) => h('button', { class: k === 0 ? 'primary' : '', disabled: off, onclick: () => this.runBigTest(n) }, `Walk ${n} trips`))),
+      this.testing ? h('p', { class: 'status' }, 'She is walking…') : null,
+      run ? this.testResults(run, this.testBefore) : this.testBefore ? this.testBeforeLine(this.testBefore, 'Her last test was before her latest training or a change to the forest') : null,
+      this.settingsLink(`Energy ${st.energy}, boldness ${st.boldness.toFixed(1)}, forest events ${st.events ? 'on' : 'off'}`),
+      this.next('Inside the model', 'inside'),
+    );
+  }
+
+  private testBeforeLine(b: TestRun, what: string): HTMLElement {
+    const r = b.report;
+    return h('p', { class: 'compare' }, this.hq(`${what} (${r.count} trips, energy ${b.energy}, boldness ${b.boldness.toFixed(1)}): ${pct(r.home)} home, ${pct(r.eaten)} eaten, ${pct(r.lost)} lost.`, 'sampling', 'before'));
+  }
+
+  private testResults(run: TestRun, before: TestRun | null): HTMLElement {
+    const r = run.report;
+    const n = r.count;
+    const icon = (...kids: SVGElement[]) => { const svg = s('svg', { width: 24, height: 24, viewBox: '-13 -13 26 26', 'aria-hidden': 'true' }); svg.append(...kids); return svg; };
+    const emptyBattery = icon(
+      s('rect', { x: -10, y: -5, width: 18, height: 10, rx: 2, fill: '#fff', stroke: COLORS.ink, 'stroke-width': 1.5 }),
+      s('rect', { x: 8, y: -2, width: 2.5, height: 4, fill: COLORS.ink }));
+    const row = (ic: SVGElement, label: string, share: number, color: string, was?: number) => h('div', { class: 'test-row' },
+      ic, h('span', {}, label),
+      h('span', { class: 'pbar', 'aria-hidden': 'true' }, h('span', { style: `width:${share * 100}%;background:${color}` })),
+      h('span', { class: 'pct' }, pct(share), was !== undefined ? h('small', { class: 'muted', title: 'in the test before' }, ` (${pct(was)})`) : null));
+    const b = before?.report;
+    const num = (v: number) => (Math.abs(v - Math.round(v)) < 0.05 ? String(Math.round(v)) : v.toFixed(1));
+    const line = (label: string, value: string) => h('div', { class: 'test-line' }, h('span', {}, label), h('strong', {}, value));
+    const total = (avg: number) => Math.round(avg * n);
+    const times = (k: number) => (k === 1 ? 'once' : `${k} times`);
+    return h('div', { class: 'test-results' },
+      h('h3', {}, `How her ${n} trips ended`),
+      row(icon(cake(0, 0, 10)), 'Home with the cake', r.home - r.homeNoCake, COLORS.home, b ? b.home - b.homeNoCake : undefined),
+      row(icon(crossedCake()), 'Home, no cake', r.homeNoCake, COLORS.home, b?.homeNoCake),
+      row(icon(wolfHead(22)), 'Eaten by a wolf', r.eaten, COLORS.danger, b?.eaten),
+      row(emptyBattery, 'Lost: out of energy', r.lost, COLORS.lost, b?.lost),
+      b && before ? h('p', { class: 'muted' }, `In brackets: the test before (${b.count} trips${before.start !== run.start ? (before.start === null ? ' from random spots' : run.start === null ? ' all from one tile' : ' from another tile') : ''}${before.model !== run.model || before.lessons !== run.lessons || before.practiceRuns !== run.practiceRuns ? ', before her latest training' : ''}${before.tiles !== run.tiles ? ', in the forest before it changed' : ''}${before.energy !== run.energy || before.boldness !== run.boldness ? `, energy ${before.energy}, boldness ${before.boldness.toFixed(1)}` : ''}).`) : null,
+      h('h3', {}, this.hq('On an average trip', 'tripReport', 'test')),
+      h('div', { class: 'test-lines' },
+        r.stepsHome !== null && r.shortestHome !== null ? line('Steps to get home', `${num(r.stepsHome)} (shortest way: ${num(r.shortestHome)})`) : null,
+        line('Energy used', `${num(r.energyUsed)} of ${run.energy}`),
+        line('Bumps into trees', num(r.bumps)),
+        line('Steps in a swamp', num(r.swampSteps)),
+        line('Wolf dens seen', num(r.densSeen)),
+        run.events ? line('Forest events met', num(r.eventsMet)) : null),
+      h('h3', {}, `In all ${n} trips`),
+      h('div', { class: 'test-lines' },
+        line('The wolf grabbed the cake', times(r.cakeByWolf)),
+        run.events ? line('The sly fox took the cake', times(r.cakeByFox)) : null,
+        line('Flowers brought home', String(total(r.flowersHome))),
+        line('Treasure kept', String(total(r.treasure))),
+        r.topEvents.length ? line('Events met most', r.topEvents.slice(0, 3).map((e) => `${e.name} (${e.trips})`).join(', ')) : null),
+      r.facts.length ? h('h3', {}, this.hq('Did you know?', 'sampling', 'facts')) : null,
+      r.facts.length ? h('ul', { class: 'facts' }, ...r.facts.slice(0, 6).map((f) => h('li', {}, f))) : null,
     );
   }
 
@@ -1549,7 +1690,7 @@ export class App {
       outcomeChart(st.practiceEval, 'lessons + runs'),
       before && after ? h('p', { class: 'compare' }, this.hq(`On the same test trips: after lessons ${pct(before.home)} home, ${pct(before.eaten)} eaten; after practice ${pct(after.home)} home, ${pct(after.eaten)} eaten.`, 'recipe')) : null,
       this.practiceSummary(),
-      this.next('Back to Trip alone to compare', 'trip'),
+      h('div', { class: 'row' }, this.next('Back to Trip alone to compare', 'trip'), this.next('Big test', 'test')),
     );
   }
 

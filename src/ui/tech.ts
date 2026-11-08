@@ -1,4 +1,4 @@
-/** Tab 5, Inside the model: the real numbers behind the friendly pictures. */
+/** Tab 6, Inside the model: the real numbers behind the friendly pictures. */
 import type { CardKey } from '../explain';
 import { Model, N_OUT, parameterCount, softmax } from '../model';
 import type { Walker } from '../sim';

@@ -66,6 +66,8 @@ Every feature should map to a language-model idea. This table is the map:
 | Catch-up lessons in the changed forest | Training a model further on new data instead of starting over |
 | Each move picked by chance; starting again from the same tile walks differently | Sampling: the same prompt can give different answers |
 | Test trips from the same fixed starts (outcome chart) | A benchmark: the same questions every time, to measure progress |
+| Big test: 100 or 500 trips alone, counted up (home, eaten, lost, cake, flowers, bumps, events) | Evaluating a model by sampling many answers and counting: one answer says little, rates over many say what it usually does |
+| Two big tests in a row give slightly different numbers | Sampling noise in evaluations: more samples, steadier numbers |
 | Practice starting near home, moving outward (or anywhere, to compare) | Curriculum learning: easy examples first |
 | Lesson loss (how surprised she is by the teacher's move) | Training loss, the number pretraining pushes down |
 | "She guessed 12 of 18 moves right" while watching lessons in a row | Next-token accuracy rising as training goes on |
@@ -234,6 +236,21 @@ One small neural network learns in two phases, mirroring how real LLMs are built
 
 - **Forest events and her story.** On the way she meets hidden forest events (an owl, a frog…): a pop-up word and a thought, but no change to her walk, except three that change her basket (a fox takes the cake, Grandma's neighbour gives flowers, a magpie a treasure; see [Events that change her basket](#events-that-change-her-basket)). After every trip, also one cut short with Stop, a "Her story" box under the trip report retells it, with true sentences (footprints) and made-up ones (clouds), more of them the bolder she is, and a "Tell it again" button. See [Forest events and her story](#forest-events-and-her-story).
 
+### Big test: many trips alone
+
+The Big test tab (tab 5, after Practice) walks 100 or 500 trips alone in one go ("Walk 100 trips", "Walk 500 trips") and counts them up, because one trip is one roll of the dice. Code: `src/testRuns.ts` (no DOM, tested), panel `testPanel` in `src/ui/app.ts`.
+
+- **Settings:** the energy, boldness and forest events (and "New places every trip") from the Settings tab; a line under the panel names them, with a ⚙ Settings button.
+- **Starts:** each trip from a random tile she can walk on, at least 2 steps from home; or click a tile on the map to start every trip there (marked with the start flag; click it again, or "Random spots instead", to go back).
+- **Randomness:** each test draws a new seed, and each trip has its own walk randomness, so one trip never shifts the next and events (their own randomness) never change a walk unless they change her basket. Two tests in a row differ a little by chance alone, which the panel shows.
+- **The board** shows the trails of all trips of the latest test, coloured by how each ended.
+- **How her trips ended:** home with the cake, home without it, eaten, lost, each with an icon (cake, crossed-out cake, wolf head, empty battery), a bar and a percentage. The test before is shown in brackets, with what was different about it (before her latest training, in the forest before it changed, other starts, other energy or boldness).
+- **On an average trip:** steps to get home (with the shortest way from the same starts), energy used, bumps into trees, swamp steps, wolf dens seen, forest events met.
+- **In all the trips:** how often the wolf grabbed the cake and the fox took it, flowers brought home, treasure kept, and the three events met on most trips.
+- **Did you know?** Up to six short, true factoids, the most telling first: how sure she was (the share of moves with a boldness-adjusted chance of 75% or more), how many different walks one start gave, trips that found the shortest way exactly, her longest way round (10 or more steps over the shortest), the cake lost and whether she still got home, the den that ended the most trips, her bumpiest trip, trips in circles (coming to one tile 3 times or more; bumps do not count), treasure picked up and lost.
+- A test of an older model or forest is not shown as hers: after more training or a change to the forest, the last test becomes "the test before".
+- 500 trips take well under a second, so the test runs on the main thread, after the page shows "She is walking…".
+
 ### Fixed internals (never user-set)
 
 Learning rate, network size, reward values, curriculum pace and exploration during practice are fixed. They are shown read-only in the technical tab. The values live in `FIXED` in `src/train.ts`.
@@ -242,7 +259,7 @@ Learning rate, network size, reward values, curriculum pace and exploration duri
 
 ## User flow
 
-The app is a row of tabs that tells the story in order: Forest, Lessons, Trip alone, Practice, Inside the model. Later tabs unlock when the earlier step is done, and the user can always go back. Practice is optional and sends her back to Trip alone, so users can compare her before and after. A last tab, ⚙ Settings, unnumbered and never locked, holds all the options in one place, so the story tabs keep only what the story needs. The Forest, Lessons and Trip alone tabs each end with a short line naming their options and a ⚙ Settings button that opens it.
+The app is a row of tabs that tells the story in order: Forest, Lessons, Trip alone, Practice, Big test, Inside the model. Later tabs unlock when the earlier step is done, and the user can always go back. Practice is optional and sends her back to Trip alone, so users can compare her before and after. A last tab, ⚙ Settings, unnumbered and never locked, holds all the options in one place, so the story tabs keep only what the story needs. The Forest, Lessons and Trip alone tabs each end with a short line naming their options and a ⚙ Settings button that opens it.
 
 | Tab | What happens | User controls |
 | --- | --- | --- |
@@ -250,14 +267,15 @@ The app is a row of tabs that tells the story in order: Forest, Lessons, Trip al
 | 2. Lessons | Parents walk her home; the model trains per step | Teacher (mother / father / both / wolf in disguise / mother and sometimes the wolf / crow / Grandma / magpie / huntsman), lessons to add, watch them or give them all at once; after a change: 30 / 100 / 300 catch-up lessons |
 | 3. Trip alone | She walks from a chosen start using the model | Click the start tile, Next step, Walk through (pause any time), Instant run or Stop (end the trip now, when she goes in circles or keeps bumping into trees); after a trip, "Tell it again" under her story |
 | 4. Practice (optional) | Her own runs, scored by a judge; then back to Trip alone to compare | Judge (Grandma / father / mother / crow / magpie / huntsman / wolf), number of practice runs |
-| 5. Inside the model | Numbers and model details for technical users | Read-only views, export or import the model |
+| 5. Big test | Many trips alone at once, counted up: how they ended, averages, totals and a few factoids | Walk 100 trips or Walk 500 trips; click a tile to start every trip there, or Random spots instead |
+| 6. Inside the model | Numbers and model details for technical users | Read-only views, export or import the model |
 | ⚙ Settings | All the options, in four boxes; the board shows the forest, not editable | *Her memory*: memory size (short / medium / long), home-hint toggle, Start over with a new Red Riding Hood (the model reset). *Trip alone*: energy (step budget), boldness dial, fog, her thoughts, arrows around her. *Lessons*: the heatmap toggle. *Forest events*: "Things happen in the forest", "New places every trip" and "Show events (for testing)" |
 
 The teacher and the judge are each picked from a drop-down list, with a card under it for the chosen one: its picture and a plain line for children ("Just come home safe, dear!"). The exact points a judge gives are not in the panel but in its LM corner card, listed under the card text (`CARD_DETAILS` in `src/explain.ts`): the panel is for children, the LM corner for numbers and technical hints. The same rule holds on every tab: panel lines stay plain ("A swamp can be crossed, but it is slow and tiring.", "Now and then she walks the same test trips alone…"), and the numbers sit in a short list under the LM corner card: energy per step (swamp card), how the parents pick a route and the half-and-half mix (teacher card), the wolf's share of lessons (data poisoning card), what the test trips are (test trips card), and how the practice circle grows (curriculum card). Results of her own trips and training (steps, energy left, scores, home rates) stay in the panel. The Inside the model tab is for technical users and keeps its numbers.
 
 **Rules between tabs**
 
-- Trip alone and Practice stay locked until at least one round of lessons is done.
+- Trip alone, Practice and Big test stay locked until at least one round of lessons is done.
 - Changing the memory size or the home hint requires new lessons; the app says so instead of silently retraining.
 - Editing or changing the forest after training keeps the model but shows a note that her lessons are outdated, with changed tiles marked. This is the knowledge-cutoff experiment. Any new round of lessons brings her up to date.
 - The trained model and the forest are saved in the browser, so a lesson can continue the next day.
@@ -351,8 +369,11 @@ Where the "?" buttons are, and what makes them pulse:
 | 4. Practice | "How she does alone" | Test trips as a benchmark | |
 | 4. Practice | "Same … test trips: after lessons … after practice …" | Lessons first, then practice: the usual recipe | |
 | 4. Practice | "What … taught her" (after practice) | Reward hacking, teacher versus judge, bad judge (wolf), the magpie, the huntsman, the cake given up (father, when she gets home without it in over 5% of test trips and at least 5 points more often than before this practice), fixing bad data, or the general judge card | Practice ends |
-| 5. Inside the model | Title | The real numbers | Entering the tab |
-| 5. Inside the model | Vocabulary, Training data, Look-alike tokens, Current input, Her latest trip, Network, Loss curves, Training compute, Fixed settings, Export and import | Vocabulary, token frequency, context-dependent tokens, one-hot inputs, uncertainty and sampling, weights, loss, training cost, hyperparameters, shared model files | |
+| 5. Big test | Title | One trip is one roll of the dice: only many show what she usually does, as chatbots are tested on thousands of questions | Entering the tab; finishing a test |
+| 5. Big test | "On an average trip" | Answers are rated on more than being right | |
+| 5. Big test | "Did you know?"; what the earlier test was, in brackets | Sampling | |
+| 6. Inside the model | Title | The real numbers | Entering the tab |
+| 6. Inside the model | Vocabulary, Training data, Look-alike tokens, Current input, Her latest trip, Network, Loss curves, Training compute, Fixed settings, Export and import | Vocabulary, token frequency, context-dependent tokens, one-hot inputs, uncertainty and sampling, weights, loss, training cost, hyperparameters, shared model files | |
 | ⚙ Settings | "Her memory" | Context window | |
 | ⚙ Settings | "Chosen before her lessons…" | Context length is fixed before training | Changing the memory size |
 | ⚙ Settings | Smell of grandma's cake | More useful input | Toggling it |

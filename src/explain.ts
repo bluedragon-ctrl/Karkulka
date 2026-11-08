@@ -13,7 +13,7 @@ export type CardKey =
   | 'wolfTeacher' | 'crowTeacher' | 'grandmaTeacher' | 'magpieTeacher' | 'huntsmanTeacher' | 'poisonedData' | 'judgeWolf' | 'fixBadData'
   | 'basket' | 'cakeShield' | 'judgeMagpie' | 'judgeHuntsman' | 'processReward' | 'events' | 'newPlaces' | 'basketEvents' | 'story' | 'retell'
   | 'newWorld' | 'movedHome' | 'catchUp' | 'forestCode' | 'editForest' | 'recipe'
-  | 'compute' | 'tokenFreq' | 'ambiguous' | 'uncertainty'
+  | 'compute' | 'tokenFreq' | 'ambiguous' | 'uncertainty' | 'bigTest'
   | 'moreData' | 'guess' | 'watchMany' | 'runScore' | 'testTrips' | 'sampling' | 'curriculum' | 'oneHot' | 'weights' | 'loss' | 'hyper' | 'modelFile';
 
 export const CARDS: Record<CardKey, string> = {
@@ -69,6 +69,7 @@ export const CARDS: Record<CardKey, string> = {
   guess: "In a lesson she first guesses the next move, then sees the teacher's move and adjusts a little. A chatbot is trained the same way: guess the next word, see the real one, adjust a little. Billions of times.",
   watchMany: "Watch lesson after lesson: at first many of her guesses are wrong, later most match the teacher. A language model learns the same way, and its next-word guesses get better and better.",
   runScore: "The judge gives a whole run one score, and every move in it shares the credit or blame. One run is partly luck; over many runs the good moves win. RLHF scores a language model's answers the same way.",
+  bigTest: "One trip is one roll of the dice; the next can end quite differently. Only many trips show what she usually does, and how often rare things go wrong. Chatbot makers test the same way: thousands of questions, often each asked many times, counting how often the answers are good.",
   testTrips: "She is tested on the same fixed trips every time, like a language model tested on a benchmark: the same questions each time, so you can see whether she really got better.",
   sampling: "At each step she decides how likely each move is, then picks one by chance, like rolling a dice. From the same start she can walk a different way each time. Ask a chatbot the same question twice and you can get two different answers, but it skips very unlikely words.",
   curriculum: "Easy trips first, then harder ones: that is curriculum learning. It matters most when she knows little: with no lessons and starting anywhere, she rarely gets home, so most trips score the same and teach little. Real chatbots are often trained on easy tasks before hard ones too.",
@@ -132,6 +133,12 @@ export const CARD_DETAILS: Partial<Record<CardKey, { title: string; lines: () =>
   ] },
   poisonedData: { title: 'The numbers', lines: () => [
     `About 1 lesson in ${Math.round(1 / FIXED.wolfLessonShare)} (${Math.round(FIXED.wolfLessonShare * 100)}%) comes from the wolf; the rest from the careful mother`,
+  ] },
+  bigTest: { title: 'The big test', lines: () => [
+    'Energy, boldness and the forest events come from Settings',
+    'Random spots: any tile she can walk on, at least 2 steps from home',
+    'Each test walks new trips, so two tests in a row differ a little: by chance alone',
+    'More trips give steadier numbers',
   ] },
   testTrips: { title: 'The test', lines: () => [
     `${FIXED.evalStarts} trips from the same fixed starting spots every time`,

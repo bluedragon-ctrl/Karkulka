@@ -29,6 +29,7 @@ Game logic has no DOM dependencies and is tested directly; the UI lives in `src/
 | `src/model.ts` | One-hidden-layer network, softmax with temperature, Adam and SGD |
 | `src/sim.ts` | A trip alone: the `Walker` samples one move at a time |
 | `src/train.ts` | Lessons (imitation), practice (policy gradient), evaluation; fixed internals in `FIXED` |
+| `src/testRuns.ts` | The Big test tab's logic: many trips alone, counted up (outcomes, averages, totals), and its factoids |
 | `src/storyEvents.ts`, `src/data/storyEvents.json` | Hidden forest events: the cast and all story wording (JSON), seeded placement (fixed per forest code or new each trip), what a trip sets off, and the basket effects of a few |
 | `src/story.ts` | Her story after a trip alone: true sentences from the trip record plus made-up ones by boldness |
 | `src/thoughts.ts` | Her thought bubbles on a trip alone ("Scary wolf below me! Let's go down."), made up after each move |
