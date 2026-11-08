@@ -3,7 +3,7 @@ import { Model, forward, softmax } from './model';
 import type { Rng } from './rng';
 import type { History } from './teachers';
 import { encodeContext, snapBasket } from './tokens';
-import { Basket, Forest, Move, StepResult, TripState, homeSector, newTrip, step, viewAt } from './world';
+import { Basket, FLOWERS, Forest, Move, StepResult, TREASURE, TripState, homeSector, newTrip, step, viewAt } from './world';
 
 export type Outcome = 'home' | 'eaten' | 'lost';
 
@@ -62,6 +62,16 @@ export class Walker {
   }
 
   get basket(): Basket { return this.trip.basket; }
+
+  /**
+   * What she picked on this trip, out of how many are in the forest. Counts pickups even if
+   * the wolf later ate her (her basket is then empty, but she did pick them).
+   */
+  get pickups(): { flowers: number; treasure: number; flowersInForest: number; treasureInForest: number } {
+    const kind = (t: number) => this.trip.picked.filter((i) => this.forest.tiles[i] === t).length;
+    const all = (t: number) => this.forest.tiles.filter((x) => x === t).length;
+    return { flowers: kind(FLOWERS), treasure: kind(TREASURE), flowersInForest: all(FLOWERS), treasureInForest: all(TREASURE) };
+  }
 
   /** The step at which the wolf grabbed the cake (0-based move index), or -1. */
   get cakeLostAt(): number { return this.results.indexOf('grabbed'); }

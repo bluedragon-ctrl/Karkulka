@@ -1,5 +1,5 @@
 /** The app: five tabs that tell the story in order. */
-import { CardKey, Explanation, basketWords, explainTrip, tripReport } from '../explain';
+import { CardKey, Explanation, basketWords, explainTrip, pickupLine, tripReport } from '../explain';
 import { CHANGE_SIZES, changeForest, generateForest } from '../forest';
 import { Adam, Model, createAdam, createModel, modelFromJSON, modelToJSON } from '../model';
 import { mulberry32, normalizeCode, pick, randomCode } from '../rng';
@@ -8,7 +8,7 @@ import { Thoughts } from '../thoughts';
 import * as store from '../storage';
 import { LessonWalk, Teacher, TeacherChoice, costToHome, endsAtDen, teacherMoves, walkLesson } from '../teachers';
 import { MEMORY_PAIRS, MemorySize, ModelConfig } from '../tokens';
-import { FIXED, JUDGES, Judge, PRACTICE_STARTS, PracticeStarts, TrainStats, chooseTeacher, guessesRight, homeShare, learnFromLesson, learnFromRun, newStats, practiceSetup, practiceWalker, recordLessonBatch, recordPracticeBatch, practiceStartTiles, startTiles, teacherCosts } from '../train';
+import { EvalPoint, FIXED, JUDGES, Judge, PRACTICE_STARTS, PracticeStarts, TrainStats, chooseTeacher, guessesRight, homeShare, learnFromLesson, learnFromRun, newStats, practiceSetup, practiceWalker, recordLessonBatch, recordPracticeBatch, practiceStartTiles, startTiles, teacherCosts } from '../train';
 import { WorkerRequest, runTraining } from '../workerTypes';
 import {
   DEFAULT_SIZE, FLOWERS, Forest, HOME, MOVES, MOVE_ARROWS, MOVE_NAMES, PATH, SECTOR_WORDS, SWAMP, TREASURE, TREE, Tile, WOLF, copyForest,
@@ -82,7 +82,11 @@ function judgeIcon(j: Judge): SVGSVGElement {
 }
 
 /** What the last practice job did, for the summary under the chart. */
-interface PracticeSummary { judge: Judge; scoreBefore: number; scoreAfter: number; homeBefore: number; homeAfter: number; card: CardKey }
+interface PracticeSummary {
+  judge: Judge; scoreBefore: number; scoreAfter: number; homeBefore: number; homeAfter: number; card: CardKey;
+  /** Test trips before and after the round, for the flowers and treasure she brings. */
+  evalBefore?: EvalPoint; evalAfter?: EvalPoint;
+}
 
 const TRAIL_COLORS: Record<Outcome | Teacher, string> = { home: '#c99700', eaten: COLORS.danger, lost: COLORS.lost, mother: COLORS.mother, father: COLORS.father, wolf: COLORS.den };
 
@@ -189,7 +193,7 @@ export class App {
   /** The practice run being watched. */
   runWatch: Walker | null = null;
   /** The judge's score for the last watched practice run. */
-  lastRun: { outcome: Outcome; score: number; judge: Judge; noCake: boolean } | null = null;
+  lastRun: { outcome: Outcome; score: number; judge: Judge; noCake: boolean; flowers: number; treasure: number } | null = null;
   lastPractice: PracticeSummary | null = null;
   private auto: number | null = null;
   private saveTimer: number | null = null;
@@ -764,11 +768,12 @@ export class App {
   // ---------- practice ----------
 
   /** `from`: where a watched row that was fast-forwarded began, so the summary covers all of it. */
-  private startPractice(count = this.settings.practice, from?: { homeBefore: number; scoreFrom: number }) {
+  private startPractice(count = this.settings.practice, from?: { homeBefore: number; scoreFrom: number; evalBefore?: EvalPoint }) {
     if (!this.model) return;
     this.stopTrip();
     const judge = this.settings.judge;
     const homeBefore = from?.homeBefore ?? this.homeNow();
+    const evalBefore = from ? from.evalBefore : this.evalNow();
     const scoreFrom = from?.scoreFrom ?? this.stats.practiceScore.length;
     this.lastPractice = null;
     this.lastRun = null;
@@ -777,7 +782,7 @@ export class App {
       0.12,
       () => {
         this.walker = null;
-        this.summarizePractice(judge, homeBefore, scoreFrom);
+        this.summarizePractice(judge, homeBefore, scoreFrom, evalBefore);
       },
     );
     this.board.clearTrails();
@@ -785,7 +790,8 @@ export class App {
     this.render();
   }
 
-  private homeNow() { return (this.stats.practiceEval.at(-1) ?? this.stats.lessonEval.at(-1))?.home ?? 0; }
+  private evalNow(): EvalPoint | undefined { return this.stats.practiceEval.at(-1) ?? this.stats.lessonEval.at(-1); }
+  private homeNow() { return this.evalNow()?.home ?? 0; }
 
   /** Watch one slow practice run, or a row of them. Same `learnFromRun` as the worker. */
   private watchRuns(total: number, speed: WatchSpeed) {
@@ -795,6 +801,7 @@ export class App {
     this.walker = null;
     const judge = this.settings.judge;
     const homeBefore = this.homeNow();
+    const evalBefore = this.evalNow();
     const scoreFrom = this.stats.practiceScore.length;
     const setup = practiceSetup(this.forest, this.stats, this.settings.practiceStarts);
     this.lastPractice = null;
@@ -806,7 +813,7 @@ export class App {
     this.play<Walker>({
       kind: 'watchRuns', total,
       // The summary at the end counts the whole row, the watched runs too.
-      rest: (n) => this.startPractice(n, { homeBefore, scoreFrom }),
+      rest: (n) => this.startPractice(n, { homeBefore, scoreFrom, evalBefore }),
       begin: () => {
         const starts = practiceStartTiles(this.forest, this.stats, setup);
         if (!starts.length) return null;
@@ -822,7 +829,8 @@ export class App {
         const score = learnFromRun(model, this.forest, judge, w, this.stats, setup);
         scoreSum += score;
         scoreN++;
-        this.lastRun = { outcome: w.outcome ?? 'lost', score, judge, noCake: !w.basket.cake };
+        const p = w.pickups;
+        this.lastRun = { outcome: w.outcome ?? 'lost', score, judge, noCake: !w.basket.cake, flowers: p.flowers, treasure: p.treasure };
         this.board.addTrail(w.positions, TRAIL_COLORS[w.outcome ?? 'lost'], total > 1 ? 0.2 : 0.35);
       },
       checkpoint: () => {
@@ -834,14 +842,14 @@ export class App {
       clear: () => { this.runWatch = null; },
       finish: (done, forwarding) => {
         if (!done || forwarding) return;
-        if (total > 1) this.summarizePractice(judge, homeBefore, scoreFrom);
+        if (total > 1) this.summarizePractice(judge, homeBefore, scoreFrom, evalBefore);
         else this.showCard('runScore');
       },
     }, speed);
   }
 
   /** After practice: compare the judge's score with her real success, and pick the card that explains it. */
-  private summarizePractice(judge: Judge, homeBefore: number, scoreFrom: number) {
+  private summarizePractice(judge: Judge, homeBefore: number, scoreFrom: number, evalBefore?: EvalPoint) {
     // Average judge score over the first and last few batches of this round.
     const pts = this.stats.practiceScore.slice(scoreFrom).map((p) => p.y);
     const k = Math.max(1, Math.min(4, Math.floor(pts.length / 2)));
@@ -849,6 +857,7 @@ export class App {
     const sum: PracticeSummary = {
       judge, homeBefore, homeAfter: this.stats.practiceEval.at(-1)?.home ?? homeBefore,
       scoreBefore: mean(pts.slice(0, k)), scoreAfter: mean(pts.slice(-k)), card: 'judge',
+      evalBefore, evalAfter: this.stats.practiceEval.at(-1),
     };
     const tc = this.stats.teacherCounts;
     const onlyOther = (judge === 'mother' && tc.mother === 0) || (judge === 'father' && tc.father === 0);
@@ -1142,7 +1151,8 @@ export class App {
     const what = r.outcome === 'home' ? `she got home${r.noCake ? ' without the cake' : ''}` : r.outcome === 'eaten' ? 'she walked into a wolf den' : 'she ran out of energy';
     const who = r.judge === 'grandma' ? 'Grandma' : `The ${JUDGE_INFO[r.judge].name.toLowerCase()}`;
     const pts = `${r.score >= 0 ? '+' : '−'}${Math.abs(r.score).toFixed(2)}`;
-    return this.hq(`In the last run ${what}. ${who} gave it ${pts} points.`, 'runScore', 'scored');
+    const found = basketWords(r);
+    return this.hq(`In the last run ${what}${found ? ` (she picked ${found})` : ''}. ${who} gave it ${pts} points.`, 'runScore', 'scored');
   }
 
   private forestPanel(body: HTMLElement) {
@@ -1252,7 +1262,7 @@ export class App {
       : this.tripStopped && !w.done
         ? [this.hq(`Stopped after ${w.t} steps.`, 'stop', 'status')]
         : w.done
-        ? [{ home: `Home after ${w.t} steps${w.basket.cake ? '' : ', without the cake'}!`, eaten: `Eaten by a wolf at step ${w.t}.`, lost: `Lost: out of energy after ${w.t} steps.` }[w.outcome!]]
+        ? [{ home: `Home after ${w.t} steps${w.basket.cake ? '' : ', without the cake'}!`, eaten: `Eaten by a wolf at step ${w.t}.`, lost: `Lost: out of energy after ${w.t} steps.` }[w.outcome!], h('br'), pickupLine(w.pickups)]
         : [
           `Step ${w.t + 1} · energy ${w.energyLeft} / ${w.energy}`,
           !w.basket.cake ? h('span', { class: 'nowrap' }, this.hq(' · no cake: the next den is the end!', 'cakeShield', 'status')) : null,
@@ -1328,11 +1338,13 @@ export class App {
     const b = w.basket;
     const things = basketWords(b);
     const word = w.outcome === 'eaten' ? 'lost with her' : !b.cake ? (things ? `no cake, but ${things}` : 'no cake') : things ? `the cake and ${things}` : 'the cake';
+    // Always say how many she found, out of how many the forest has.
+    const picked = pickupLine(w.pickups).replace(/^Picked/, 'picked').replace(/\.$/, '');
     const detail = w.outcome === 'eaten'
-      ? 'the wolf has the whole basket'
+      ? `${picked}; the wolf has the whole basket`
       : w.cakeLostAt >= 0
-        ? `the wolf grabbed the cake at step ${w.cakeLostAt + 1}${w.outcome === 'home' ? '' : '; flowers only count at Grandma\'s'}`
-        : w.outcome === 'home' ? 'all delivered to Grandma' : 'flowers only count at Grandma\'s';
+        ? `${picked}; the wolf grabbed the cake at step ${w.cakeLostAt + 1}${w.outcome === 'home' ? '' : '; flowers only count at Grandma\'s'}`
+        : w.outcome === 'home' ? `${picked}; ${things ? 'all delivered' : 'the cake delivered'} to Grandma` : `${picked}; flowers only count at Grandma's`;
     return h('div', { class: 'report-row' }, icon(cake(0, 1, 10)),
       h('span', {}, h('strong', {}, this.hq(`Basket: ${word}`, 'processReward', 'basketReport')), h('br'), h('small', {}, detail)));
   }
@@ -1415,7 +1427,23 @@ export class App {
     return h('div', { class: `why ${(scoreUp && homeDown) || ((p.judge === 'wolf' || p.judge === 'magpie') && homeDown) ? 'alarm' : ''}` },
       h('h3', {}, this.hq(`What ${the} taught her`, p.card, 'summary')),
       h('p', {}, verdict),
-      h('p', { class: 'muted' }, `Score from ${the}: ${p.scoreBefore.toFixed(2)} → ${p.scoreAfter.toFixed(2)}. Home on the test trips: ${pct(p.homeBefore)} → ${pct(p.homeAfter)}.`));
+      h('p', { class: 'muted' }, `Score from ${the}: ${p.scoreBefore.toFixed(2)} → ${p.scoreAfter.toFixed(2)}. Home on the test trips: ${pct(p.homeBefore)} → ${pct(p.homeAfter)}.`),
+      this.basketChange(p));
+  }
+
+  /**
+   * What she brought on the test trips before and after the round, per 10 trips:
+   * flowers delivered to Grandma, treasure picked (and not lost to the wolf), home without the cake.
+   */
+  private basketChange(p: PracticeSummary): HTMLElement | null {
+    const a = p.evalBefore;
+    const b = p.evalAfter;
+    if (!a || !b || a.flowers === undefined || b.flowers === undefined) return null;
+    const per10 = (v = 0) => (Math.round(v * 100) / 10).toString();
+    const pct = (v = 0) => `${Math.round(v * 100)}%`;
+    return h('p', { class: 'muted' }, this.hq(
+      `Basket on 10 test trips: flowers brought home ${per10(a.flowers)} → ${per10(b.flowers)}, treasure picked ${per10(a.treasure)} → ${per10(b.treasure)}. Home without the cake: ${pct(a.noCake)} → ${pct(b.noCake)}.`,
+      'processReward', 'basketSummary'));
   }
 
   // ---------- export / import ----------

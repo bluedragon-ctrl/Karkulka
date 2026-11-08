@@ -205,6 +205,15 @@ export function basketWords(b: { flowers: number; treasure: number }): string {
   return parts.join(' and ');
 }
 
+/**
+ * "Picked 1 of 3 flowers and 0 of 2 treasures": always both counts, out of how many the
+ * forest has, so the end of a trip says plainly what she found.
+ */
+export function pickupLine(p: { flowers: number; treasure: number; flowersInForest: number; treasureInForest: number }): string {
+  const one = (n: number, of: number, word: string, words: string) => `${n} of ${of} ${of === 1 ? word : words}`;
+  return `Picked ${one(p.flowers, p.flowersInForest, 'flower patch', 'flower patches')} and ${one(p.treasure, p.treasureInForest, 'treasure', 'treasures')}.`;
+}
+
 /** After she got home: a note about her basket when there is something to tell (the cake, flowers, treasure). */
 function basketNote(w: Walker, stats: TrainStats | null): Explanation | null {
   const n = w.decisions.length;
