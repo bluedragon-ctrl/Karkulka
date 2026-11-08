@@ -36,7 +36,7 @@ export const FIXED = {
   magpieTreasure: 1,
   magpieHome: 0.2,
   /** Huntsman judge: points for every step of a walk that gets home (the longer, the better) and for each wolf den she sees, when it comes in sight. */
-  huntsmanStep: 0.02,
+  huntsmanStep: 0.03,
   huntsmanDen: 0.2,
   /** "Mother and the wolf": share of lessons the wolf in disguise slips in. */
   wolfLessonShare: 0.2,
