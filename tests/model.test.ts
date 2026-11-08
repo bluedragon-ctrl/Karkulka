@@ -278,10 +278,12 @@ describe('judges', () => {
     expect(judgeScore('magpie', field, maps, { ...run, outcome: 'lost' })).toBeCloseTo(FIXED.magpieTreasure);
   });
 
-  it('being eaten takes back every basket point', () => {
+  it('being eaten takes back every good basket point, but not the lost cake', () => {
     const eaten = withResults(walk(at(2, 3), [D, R, R, U, R], 'eaten'), ['treasure', 'grabbed', 'moved', 'moved', 'eaten'], { cake: false, flowers: 0, treasure: 0 });
     expect(judgeScore('magpie', field, maps, eaten)).toBeCloseTo(FIXED.rewardEaten);
-    expect(judgeScore('grandma', field, maps, eaten)).toBeCloseTo(FIXED.rewardEaten);
+    // Losing the cake and then being eaten is worse than being eaten with the cake.
+    expect(judgeScore('grandma', field, maps, eaten)).toBeCloseTo(FIXED.rewardEaten - FIXED.cakeLost);
+    expect(judgeScore('mother', field, maps, eaten)).toBeLessThan(judgeScore('mother', field, maps, { ...eaten, results: undefined, basket: undefined }));
     // The wolf pays for both den steps: the cake and her.
     expect(judgeScore('wolf', field, maps, eaten)).toBeCloseTo(2 * FIXED.wolfDen);
   });

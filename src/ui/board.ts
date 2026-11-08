@@ -13,6 +13,8 @@ export class Board {
   private readonly layers = {} as Record<Layer, SVGGElement>;
   private forest!: Forest;
   private tileEls: SVGGElement[] = [];
+  /** Flower and treasure tiles already picked on the trip shown: drawn faded. */
+  private picked = new Set<number>();
   private red: SVGGElement;
   private redInner: SVGGElement;
   private sweat: SVGElement;
@@ -98,6 +100,7 @@ export class Board {
       this.layers.tiles.append(el);
       return el;
     });
+    this.picked.clear();
   }
 
   updateTile(i: number, t: Tile) {
@@ -105,6 +108,21 @@ export class Board {
     const el = tileSymbol(t, x * T, y * T, T);
     this.tileEls[i].replaceWith(el);
     this.tileEls[i] = el;
+    this.picked.delete(i);
+  }
+
+  /**
+   * Fade the flower and treasure tiles she already picked on this trip: they stay on the
+   * board (she still sees them), but stepping there again adds nothing to her basket.
+   */
+  setPicked(tiles: readonly number[] | null) {
+    const next = new Set(tiles ?? []);
+    // The first child is the tile's ground; only the flowers or the gem on it fade.
+    const fade = (i: number, on: boolean) => Array.from(this.tileEls[i]?.children ?? []).slice(1)
+      .forEach((c) => (on ? c.setAttribute('opacity', '0.3') : c.removeAttribute('opacity')));
+    for (const i of this.picked) if (!next.has(i)) fade(i, false);
+    for (const i of next) if (!this.picked.has(i)) fade(i, true);
+    this.picked = next;
   }
 
   setHeat(values: number[] | null, label = 'lessons passed here') {

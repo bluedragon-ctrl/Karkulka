@@ -12,7 +12,7 @@ import { EvalPoint, FIXED, JUDGES, Judge, PRACTICE_STARTS, PracticeStarts, Train
 import { WorkerRequest, runTraining } from '../workerTypes';
 import {
   DEFAULT_SIZE, FLOWERS, Forest, HOME, MOVES, MOVE_ARROWS, MOVE_NAMES, PATH, SECTOR_WORDS, SWAMP, TREASURE, TREE, Tile, WOLF, copyForest,
-  forestFromTiles, homeSector, moveHome, unreachableTiles, walkingDistances,
+  forestFromTiles, homeSector, isItem, moveHome, unreachableTiles, walkingDistances,
 } from '../world';
 import { Board } from './board';
 import { changeChart, outcomeChart } from './charts';
@@ -865,7 +865,7 @@ export class App {
     else if (judge === 'magpie') sum.card = 'judgeMagpie';
     else if (judge === 'grandma' && ((tc.wolf ?? 0) > 0 || (this.stats.judgeRuns?.wolf ?? 0) > 0)) sum.card = 'fixBadData';
     else if (sum.scoreAfter > sum.scoreBefore && sum.homeAfter < sum.homeBefore - 0.05) sum.card = 'rewardHacking';
-    else if (judge === 'father' && (this.stats.practiceEval.at(-1)?.noCake ?? 0) > 0.05) sum.card = 'cakeShield';
+    else if (judge === 'father' && (sum.evalAfter?.noCake ?? 0) > Math.max(0.05, (evalBefore?.noCake ?? 0) + 0.05)) sum.card = 'cakeShield';
     else if (onlyOther) sum.card = 'teacherVsJudge';
     this.lastPractice = sum;
     this.showCard(sum.card);
@@ -969,6 +969,7 @@ export class App {
     b.setRadius(null);
     b.setParent(null);
     b.setRed(null);
+    b.setPicked(null);
     this.renderChanged();
     b.setHeat(this.tab === 'lessons' && this.settings.heat && this.stats.lessons > 0 ? this.stats.coverage : null);
 
@@ -979,6 +980,8 @@ export class App {
       b.setParent(walk.positions[Math.min(t + 1, n)], walk.teacher);
       b.setRed(walk.positions[t], { animate: t > 0 && this.stepMs() >= ANIMATE_MS });
       b.setTrace(walk.positions.slice(0, t + 1));
+      // The parent picks up an item on the way too, by the same rule as her trips.
+      b.setPicked(walk.positions.slice(1, t + 1).filter((p) => isItem(this.forest.tiles[p])));
       if (t < n) {
         // Her current guess, before this lesson teaches her anything.
         b.setArrows(walk.positions[t], predictAt(this.model, walk.history, t), MOVES.map((m) => (m === walk.history.moves[t] ? TRAIL_COLORS[walk.teacher] : null)));
@@ -989,6 +992,7 @@ export class App {
       w.temperature = this.settings.boldness;
       b.setStart(w.start);
       b.setTrace(w.positions);
+      b.setPicked(w.trip.picked);
       b.setRed(w.pos, { energy: w.energyLeft / w.energy, sitting: w.outcome === 'lost', animate: w.t > 0 });
       if (this.tripLive(w)) b.setArrows(w.pos, w.tempered(), this.tints(w.pos));
       if (this.settings.fog && this.tripLive(w)) b.setFog(w.pos);
@@ -1002,6 +1006,7 @@ export class App {
       if (w) {
         b.setStart(w.start);
         b.setTrace(w.positions);
+        b.setPicked(w.trip.picked);
         b.setRed(w.pos, { energy: w.energyLeft / w.energy, sitting: w.outcome === 'lost', animate: w.t > 0 && this.stepMs() >= ANIMATE_MS });
         if (!w.done) b.setArrows(w.pos, w.tempered(), this.tints(w.pos));
       }

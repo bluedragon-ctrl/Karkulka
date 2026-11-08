@@ -3,7 +3,7 @@ import { Model, forward, softmax } from './model';
 import type { Rng } from './rng';
 import type { History } from './teachers';
 import { encodeContext, snapBasket } from './tokens';
-import { Basket, FLOWERS, Forest, Move, StepResult, TREASURE, TripState, homeSector, newTrip, step, viewAt } from './world';
+import { Basket, FLOWERS, Forest, Move, StepResult, TREASURE, BasketState, homeSector, newBasketState, step, viewAt } from './world';
 
 export type Outcome = 'home' | 'eaten' | 'lost';
 
@@ -41,10 +41,12 @@ export class Walker {
   readonly results: StepResult[] = [];
   /** Her basket after each position, starting with the start (the full basket). */
   readonly baskets: Basket[];
-  readonly trip: TripState = newTrip();
+  readonly trip: BasketState = newBasketState();
   energyLeft: number;
   outcome: Outcome | null = null;
   private pending: Decision | null = null;
+  /** How many flowers and treasures the forest holds; the forest never changes during a trip. */
+  private readonly inForest: { flowersInForest: number; treasureInForest: number };
 
   constructor(
     readonly forest: Forest,
@@ -59,6 +61,8 @@ export class Walker {
     this.history = { views: [viewAt(forest, start)], moves: [], sectors: [homeSector(forest, start)], baskets: [snapBasket(this.trip.basket)] };
     this.baskets = [snapBasket(this.trip.basket)];
     this.energyLeft = energy;
+    const all = (t: number) => forest.tiles.filter((x) => x === t).length;
+    this.inForest = { flowersInForest: all(FLOWERS), treasureInForest: all(TREASURE) };
   }
 
   get basket(): Basket { return this.trip.basket; }
@@ -69,8 +73,7 @@ export class Walker {
    */
   get pickups(): { flowers: number; treasure: number; flowersInForest: number; treasureInForest: number } {
     const kind = (t: number) => this.trip.picked.filter((i) => this.forest.tiles[i] === t).length;
-    const all = (t: number) => this.forest.tiles.filter((x) => x === t).length;
-    return { flowers: kind(FLOWERS), treasure: kind(TREASURE), flowersInForest: all(FLOWERS), treasureInForest: all(TREASURE) };
+    return { flowers: kind(FLOWERS), treasure: kind(TREASURE), ...this.inForest };
   }
 
   /** The step at which the wolf grabbed the cake (0-based move index), or -1. */

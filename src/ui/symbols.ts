@@ -215,7 +215,7 @@ export function magpieFigure(S: number): SVGGElement {
  * Her basket as three pinned tokens for the memory strip: the cake (crossed out once the
  * wolf took it), flowers 0 / 1 / 2+ and treasure 0 / 1 / 2+, each with a picture and a number.
  */
-export function basketTokens(b: Basket, size = 27): SVGSVGElement[] {
+export function basketSymbols(b: Basket, size = 27): SVGSVGElement[] {
   const box = (title: string, ...kids: SVGElement[]) => {
     const svg = s('svg', { width: size, height: size, viewBox: '0 0 27 27', class: 'token basket-token' });
     svg.append(s('rect', { x: 0.5, y: 0.5, width: 26, height: 26, rx: 4, fill: '#fffaf0', stroke: '#555' }), ...kids, s('title', {}, title));
