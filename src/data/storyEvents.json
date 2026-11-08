@@ -126,6 +126,186 @@
       "versions": ["A magpie dropped something shiny into her basket: a treasure!", "A magpie gave her a glittering stone, then flew away laughing."],
       "thoughts": ["Ooh, shiny!", "A present from a magpie!"],
       "popup": "Shiny!"
+    },
+    {
+      "id": 22, "name": "Rabbit", "fits": "open", "trigger": "step",
+      "versions": ["A rabbit popped out of a burrow and wiggled its nose at her.", "A rabbit thumped its foot and hopped away."],
+      "thoughts": ["A bunny! Hello!", "Thump, thump, off it goes."],
+      "popup": "A rabbit!"
+    },
+    {
+      "id": 23, "name": "Cuckoo", "fits": "anywhere", "trigger": "hear",
+      "versions": ["Somewhere a cuckoo called, again and again.", "A cuckoo counted out loud, and she lost count with it."],
+      "thoughts": ["Cuckoo! Cuckoo!", "How many cuckoos was that?"],
+      "popup": "Cuckoo!"
+    },
+    {
+      "id": 24, "name": "Snail", "fits": "corridor", "trigger": "step",
+      "versions": ["A snail was crossing the path, and she waited for it.", "She tiptoed around a snail with a stripy shell."],
+      "thoughts": ["A snail! No rush.", "Slow and steady, little snail."],
+      "popup": "A snail!"
+    },
+    {
+      "id": 25, "name": "Fireflies", "fits": "anywhere", "trigger": "step",
+      "versions": ["Tiny lights blinked around her like fireflies.", "A few fireflies lit up the path for a moment."],
+      "thoughts": ["Fireflies! Like tiny lamps.", "Blink, blink, how pretty."],
+      "popup": "Fireflies!"
+    },
+    {
+      "id": 26, "name": "Wild strawberries", "fits": "open", "trigger": "step",
+      "versions": ["She found wild strawberries and ate just one.", "Wild strawberries grew by the path, red and sweet."],
+      "thoughts": ["Yum, strawberries!", "Just one. The rest are for the birds."],
+      "popup": "Strawberries!"
+    },
+    {
+      "id": 27, "name": "Stream", "fits": "crossing", "trigger": "step",
+      "versions": ["She hopped over a little stream on three flat stones.", "A little stream bubbled across the path, and she splashed her hands in it."],
+      "thoughts": ["Splash! Cold water.", "Hop, hop, across the stones."],
+      "popup": "A stream!"
+    },
+    {
+      "id": 28, "name": "Rainbow", "fits": "open", "trigger": "step",
+      "versions": ["A small rainbow hung over the trees for a moment.", "She saw a rainbow, and it ended right behind a bush."],
+      "thoughts": ["A rainbow! Wow.", "Where does it end?"],
+      "popup": "A rainbow!"
+    },
+    {
+      "id": 29, "name": "Bee", "fits": "anywhere", "trigger": "step",
+      "versions": ["A bee buzzed around her hood and flew off.", "A fat bee bumped her basket and said sorry, in bee."],
+      "thoughts": ["Bzzz! Hello, bee.", "Easy, bee, I'm not a flower."],
+      "popup": "Bzzz!"
+    },
+    {
+      "id": 30, "name": "Toadstool", "fits": "swamp", "trigger": "step",
+      "versions": ["A fat red toadstool stood in the mud, and she did not touch it.", "She saw a toadstool with white spots and walked around it."],
+      "thoughts": ["Pretty, but not for eating.", "A toadstool! Look, don't touch."],
+      "popup": "A toadstool!"
+    },
+    {
+      "id": 31, "name": "Dragonfly", "fits": "swamp", "trigger": "step",
+      "versions": ["A dragonfly zipped over the water, shiny blue.", "A dragonfly sat on her basket handle, then zoomed away."],
+      "thoughts": ["A dragonfly! So quick.", "Zoom! Gone already."],
+      "popup": "A dragonfly!"
+    },
+    {
+      "id": 32, "name": "Beaver", "fits": "swamp", "trigger": "step",
+      "versions": ["A beaver slapped its tail on the water, splash!", "She saw a beaver building a little dam."],
+      "thoughts": ["A busy beaver!", "Splash! That was loud."],
+      "popup": "A beaver!"
+    },
+    {
+      "id": 33, "name": "Cobweb", "fits": "corridor", "trigger": "step",
+      "versions": ["She walked into a cobweb and wiped it off her nose.", "A cobweb sparkled with dew, and she ducked under it."],
+      "thoughts": ["Ugh, cobweb!", "Pretty web. Sorry, spider."],
+      "popup": "A cobweb!"
+    },
+    {
+      "id": 34, "name": "Acorns", "fits": "anywhere", "trigger": "step",
+      "versions": ["She stepped on a pile of acorns, crunch, crunch.", "An acorn bonked her on the head, and a squirrel giggled."],
+      "thoughts": ["Crunch, crunch, acorns.", "Ow! Who threw that?"],
+      "popup": "Acorns!"
+    },
+    {
+      "id": 35, "name": "Fairy door", "fits": "deadEnd", "trigger": "step",
+      "versions": ["She found a tiny door at the foot of a tree, no bigger than a thimble.", "A tiny door in a tree stump had a tiny welcome mat."],
+      "thoughts": ["A door! For someone very small.", "Knock, knock. Nobody home."],
+      "popup": "A tiny door!"
+    },
+    {
+      "id": 36, "name": "Old well", "fits": "deadEnd", "trigger": "step",
+      "versions": ["She found an old stone well, and the echo said hello from deep down.", "An old well stood in the grass, with a bucket and no rope."],
+      "thoughts": ["A well! Hello-o-o down there.", "No water today, only echoes."],
+      "popup": "An old well!"
+    },
+    {
+      "id": 37, "name": "Bird's nest", "fits": "anywhere", "trigger": "step",
+      "versions": ["She saw a nest with three blue eggs and tiptoed by.", "A bird's nest in a low branch held three sleepy chicks."],
+      "thoughts": ["A nest! Shh, quietly.", "Little chicks, sleep well."],
+      "popup": "A nest!"
+    },
+    {
+      "id": 38, "name": "Stork", "fits": "open", "trigger": "step",
+      "versions": ["A tall stork stood on one leg and stared at her.", "A stork clacked its beak, and she clacked back."],
+      "thoughts": ["A stork! So tall.", "Clack, clack, hello!"],
+      "popup": "A stork!"
+    },
+    {
+      "id": 39, "name": "Wind", "fits": "anywhere", "trigger": "hear",
+      "versions": ["The wind rustled all the leaves at once, like applause.", "The wind whistled through the trees, and she whistled back."],
+      "thoughts": ["Whoo-oosh, the wind.", "The trees are whispering."],
+      "popup": "Whoosh!"
+    },
+    {
+      "id": 40, "name": "Bells", "fits": "home", "trigger": "hear",
+      "versions": ["Far away, a bell rang from the village.", "She heard Grandma's goat bell, clink, clink."],
+      "thoughts": ["Bells! Home is near.", "Clink, clink. I know that bell."],
+      "popup": "Ding-dong!"
+    },
+    {
+      "id": 41, "name": "Washing line", "fits": "home", "trigger": "step",
+      "versions": ["Grandma's washing was drying on a line, and a sock waved at her.", "She ducked under Grandma's washing line, full of striped socks."],
+      "thoughts": ["Grandma's socks!", "Almost there. I see the washing."],
+      "popup": "Washing!"
+    },
+    {
+      "id": 42, "name": "Stray ducklings", "fits": "corridor", "trigger": "step",
+      "versions": ["Five little ducklings waddled across the path in a row.", "A duckling lost its mum, and she showed it the way to the pond."],
+      "thoughts": ["Quack! A line of ducklings.", "Follow your mum, little one."],
+      "popup": "Ducklings!"
+    },
+    {
+      "id": 43, "name": "Badger", "fits": "den", "trigger": "step",
+      "versions": ["A sleepy badger looked up, yawned and went back to sleep.", "A badger was digging a hole and covered her boots with soil."],
+      "thoughts": ["Just a badger. Phew.", "Shh, don't wake the badger."],
+      "popup": "A badger!"
+    },
+    {
+      "id": 44, "name": "Bat", "fits": "den", "trigger": "hear",
+      "versions": ["A bat fluttered past, squeaking, and was gone.", "Something squeaked overhead: only a bat out early."],
+      "thoughts": ["Eek! A bat.", "Squeak! Just a bat."],
+      "popup": "Squeak!"
+    },
+    {
+      "id": 45, "name": "Rope swing", "fits": "open", "trigger": "step",
+      "versions": ["She found a rope swing and had one quick swing.", "A rope swing hung from a big oak, and she gave it a push."],
+      "thoughts": ["A swing! Just one go.", "Wheee!"],
+      "popup": "A swing!"
+    },
+    {
+      "id": 46, "name": "Cave", "fits": "deadEnd", "trigger": "step",
+      "versions": ["She peeked into a tiny cave, and her own voice came back.", "A little cave was full of glittering stones, and she took none."],
+      "thoughts": ["A cave! Hello-o-o.", "Sparkly stones. Look, don't take."],
+      "popup": "A cave!"
+    },
+    {
+      "id": 47, "name": "Stepping stones", "fits": "crossing", "trigger": "step",
+      "versions": ["She counted seven mossy stones on the way across.", "She hopped from stone to stone and did not wobble once."],
+      "thoughts": ["One, two, three… seven!", "Hop, hop, hop. Don't slip."],
+      "popup": "Hop, hop!"
+    },
+    {
+      "id": 48, "name": "Falling leaf", "fits": "anywhere", "trigger": "step",
+      "versions": ["A red leaf floated down and landed in her basket.", "A golden leaf landed on her nose, and she blew it off."],
+      "thoughts": ["A leaf! Like a gift.", "Ha-choo! Leaf on my nose."],
+      "popup": "A leaf!"
+    },
+    {
+      "id": 49, "name": "Signpost", "fits": "crossing", "trigger": "step",
+      "versions": ["A crooked signpost pointed three ways, and all the arrows said \"Forest\".", "She read an old signpost, but the words had faded."],
+      "thoughts": ["A signpost! Not much help.", "Which way? It says nothing."],
+      "popup": "A signpost!"
+    },
+    {
+      "id": 50, "name": "Moss", "fits": "corridor", "trigger": "step",
+      "versions": ["The moss was so soft that she walked on it on tiptoe.", "She sat on a mossy stone for a moment, and it was warm."],
+      "thoughts": ["Soft moss, like a pillow.", "Just a short rest. Not too long."],
+      "popup": "Soft moss!"
+    },
+    {
+      "id": 51, "name": "Hunting horn", "fits": "anywhere", "trigger": "hear",
+      "versions": ["A hunting horn sounded far away, and then there was quiet.", "Somewhere a horn blew two notes."],
+      "thoughts": ["A horn! Who is that?", "Hmm, somebody is far away."],
+      "popup": "Toot-toot!"
     }
   ],
   "fantasy": [
