@@ -332,7 +332,7 @@ Where the "?" buttons are, and what makes them pulse:
 After a trip, the "Why did she do that?" text is a small note at the bottom of "How was the trip for her?", with its "?" for the card that fits. When she walks into a den after wolf lessons or wolf practice, it says the wolf taught her.
 
 
-**Layout.** Designed for a wide screen first: the forest large in the centre, a narrow side panel with the current tab's controls, and the memory strip at the bottom. A phone layout can come later.
+**Layout.** Designed for a wide screen first: the forest square as large as the window height allows, with the memory strip under it, and a side panel with the current tab's controls. The forest column is only as wide as the square; the panel takes the rest of the width (at least 432px, at most 720px, so its text stays readable), and the pair is centred on very wide screens. A phone layout can come later.
 
 ## Technical tab: Inside the model
 
