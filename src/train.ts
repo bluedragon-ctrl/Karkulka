@@ -84,7 +84,7 @@ export const newStats = (f: Forest): TrainStats => ({
   lessons: 0,
   practiceRuns: 0,
   coverage: new Array(f.tiles.length).fill(0),
-  teacherCounts: { mother: 0, father: 0, wolf: 0, crow: 0 },
+  teacherCounts: { mother: 0, father: 0, wolf: 0, crow: 0, grandma: 0, magpie: 0 },
   lessonLoss: [],
   lessonEval: [],
   practiceScore: [],
@@ -97,11 +97,14 @@ export const newStats = (f: Forest): TrainStats => ({
   baseline: 0,
 });
 
-export interface Teachers { mother: Float64Array; father: Float64Array; wolf: Float64Array; crow: Float64Array; den: Float64Array }
+/** Each teacher's cost to walk home from every tile, and the cost to the nearest den (for the wolf). */
+export type Teachers = Record<Teacher, Float64Array> & { den: Float64Array };
 export const teacherCosts = (f: Forest): Teachers => {
   const father = costToHome(f, 'father');
+  const mother = costToHome(f, 'mother');
   // The crow needs no route costs (it flies straight towards home); it gets the father's so every teacher has one.
-  return { mother: costToHome(f, 'mother'), father, wolf: father, crow: father, den: costToDen(f) };
+  // Grandma walks home the mother's way, the magpie the father's (after their errands).
+  return { mother, father, wolf: father, crow: father, grandma: mother, magpie: father, den: costToDen(f) };
 };
 
 /** Starting tiles: path tiles that can reach home. */

@@ -6,7 +6,7 @@ import { mulberry32, normalizeCode, pick, randomCode } from '../rng';
 import { Outcome, Walker, predictAt } from '../sim';
 import { Thoughts } from '../thoughts';
 import * as store from '../storage';
-import { LessonWalk, Teacher, TeacherChoice, costToHome, endsAtDen, endsStuck, teacherMoves, walkLesson } from '../teachers';
+import { LessonWalk, TEACHER_KINDS, Teacher, TeacherChoice, costToHome, endsAtDen, endsStuck, teacherMoves, walkLesson } from '../teachers';
 import { MEMORY_PAIRS, MemorySize, ModelConfig } from '../tokens';
 import { EvalPoint, FIXED, JUDGES, Judge, PRACTICE_STARTS, PracticeStarts, TrainStats, chooseTeacher, guessesRight, homeShare, learnFromLesson, learnFromRun, newStats, practiceSetup, practiceWalker, recordLessonBatch, recordPracticeBatch, practiceStartTiles, startTiles, teacherCosts } from '../train';
 import { WorkerRequest, runTraining } from '../workerTypes';
@@ -61,10 +61,13 @@ const TEACHERS: { id: TeacherChoice; name: string; text: string }[] = [
   { id: 'wolf', name: 'The wolf in disguise', text: 'Walks like the father, but when he sees a wolf den he leads her into it.' },
   { id: 'motherWolf', name: 'Mother, and sometimes the wolf', text: 'The careful mother, but now and then the wolf secretly takes her place.' },
   { id: 'crow', name: 'Crow', text: 'Flies straight towards home. When a tree is in the way, it flies on over it and leaves her behind.' },
+  { id: 'grandma', name: 'Grandma', text: 'First a bunch of flowers, then home the safe way, like the mother.' },
+  { id: 'magpie', name: 'Magpie', text: 'Hops from treasure to treasure, and only then heads home.' },
 ];
 
 /** The LM corner card for a teacher choice. */
-const teacherCard = (t: TeacherChoice): CardKey => (t === 'wolf' ? 'wolfTeacher' : t === 'motherWolf' ? 'poisonedData' : t === 'crow' ? 'crowTeacher' : 'teacher');
+const TEACHER_CARDS: Partial<Record<TeacherChoice, CardKey>> = { wolf: 'wolfTeacher', motherWolf: 'poisonedData', crow: 'crowTeacher', grandma: 'grandmaTeacher', magpie: 'magpieTeacher' };
+const teacherCard = (t: TeacherChoice): CardKey => TEACHER_CARDS[t] ?? 'teacher';
 
 /** The judges in the panel: a plain line for children. The exact points are in each judge's LM corner card. */
 const JUDGE_INFO: Record<Judge, { name: string; text: string; card: CardKey }> = {
@@ -89,7 +92,7 @@ interface PracticeSummary {
   evalBefore?: EvalPoint; evalAfter?: EvalPoint;
 }
 
-const TRAIL_COLORS: Record<Outcome | Teacher, string> = { home: '#c99700', eaten: COLORS.danger, lost: COLORS.lost, mother: COLORS.mother, father: COLORS.father, wolf: COLORS.den, crow: COLORS.crow };
+const TRAIL_COLORS: Record<Outcome | Teacher, string> = { home: '#c99700', eaten: COLORS.danger, lost: COLORS.lost, mother: COLORS.mother, father: COLORS.father, wolf: COLORS.den, crow: COLORS.crow, grandma: COLORS.grandma, magpie: COLORS.magpie };
 
 /** One point of the "since the forest changed" chart: home on test trips after a change or catch-up. */
 export interface ChangePoint { label: string; home: number }
@@ -513,7 +516,7 @@ export class App {
         if (this.changeLog.length) this.logCheck(`+${count} new lesson${count === 1 ? '' : 's'}`);
         const t = this.settings.teacher;
         if (catchUp) this.showCard('catchUp');
-        else this.showCard(t === 'both' || t === 'wolf' || t === 'motherWolf' || t === 'crow' ? teacherCard(t) : 'coverage');
+        else this.showCard(t === 'mother' || t === 'father' ? 'coverage' : teacherCard(t));
       },
     );
     this.render();
@@ -606,6 +609,7 @@ export class App {
     let lossSum = 0;
     let lossN = 0;
     let lastEnd: 'den' | 'stuck' | null = null;
+    let lastTeacher: Teacher | null = null;
     this.showCard('guess');
     this.play<{ walk: LessonWalk; k: number }>({
       kind: 'watch', total,
@@ -623,6 +627,7 @@ export class App {
         lossSum += learnFromLesson(model, this.opt, walk, this.stats);
         lossN++;
         lastEnd = endsAtDen(this.forest, walk) ? 'den' : endsStuck(walk) ? 'stuck' : null;
+        lastTeacher = walk.teacher;
         this.board.addTrail(walk.positions, TRAIL_COLORS[walk.teacher], total > 1 ? 0.2 : 0.35);
         this.markTrained();
       },
@@ -637,7 +642,8 @@ export class App {
         if (!done) return;
         if (this.changeLog.length) this.logCheck(`+${done} new lesson${done === 1 ? '' : 's'}`);
         this.watchedEnd = total === 1 ? lastEnd : null;
-        this.showCard(this.watchedEnd === 'den' ? 'wolfTeacher' : this.watchedEnd === 'stuck' ? 'crowTeacher' : total > 1 ? 'watchMany' : 'exposure');
+        const errand = total === 1 && (lastTeacher === 'grandma' || lastTeacher === 'magpie');
+        this.showCard(this.watchedEnd === 'den' ? 'wolfTeacher' : this.watchedEnd === 'stuck' ? 'crowTeacher' : errand ? teacherCard(lastTeacher!) : total > 1 ? 'watchMany' : 'exposure');
       },
     }, speed);
   }
@@ -1233,7 +1239,7 @@ export class App {
         }, icon, this.hq(t.text, teacherCard(t.id), 'chosen'));
       })(),
       h('h3', {}, 'Give her more lessons'),
-      h('p', {}, st.lessons ? `So far: ${st.lessons} lesson${st.lessons === 1 ? '' : 's'} (${(['mother', 'father', 'wolf', 'crow'] as Teacher[]).filter((t) => st.teacherCounts[t]).map((t) => `${t} ${st.teacherCounts[t]}`).join(', ')})` : 'So far: no lessons yet'),
+      h('p', {}, st.lessons ? `So far: ${st.lessons} lesson${st.lessons === 1 ? '' : 's'} (${TEACHER_KINDS.filter((t) => st.teacherCounts[t]).map((t) => `${t} ${st.teacherCounts[t]}`).join(', ')})` : 'So far: no lessons yet'),
       this.addSlider('Lessons to add', this.settings.lessons, 10, 2000, 10, (v) => { this.settings.lessons = v; }, 'moreData'),
       this.runControls({
         what: 'lesson', total: this.settings.lessons, sofar: st.lessons, watch: (n, sp) => this.watchLessons(n, sp), watchCard: 'watchMany',

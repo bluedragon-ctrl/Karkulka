@@ -40,6 +40,8 @@ Every feature should map to a language-model idea. This table is the map:
 | Choice of teacher (fewest steps vs. safe and dry) | Training data and the values of whoever made it |
 | The wolf in disguise as a teacher (looks like the father until a den is in sight) | Bad examples in the training data are learned just like good ones |
 | "Mother, and sometimes the wolf" (1 lesson in 5) | Data poisoning: a little bad data does a lot of harm |
+| Grandma as a teacher (flowers first, then home; only the flowers in her pinned basket tell her which half of the errand she is on) | Example answers that show a whole task, step by step (supervised fine-tuning), and the state kept in the context deciding what comes next |
+| The magpie as a teacher (from treasure to treasure, then home) | Training data carries the aims of whoever made it: a model learns what the examples want, not only how they go |
 | The crow as a teacher (flies on over a tree, where she can only bump into it) | Learning from examples made by someone who can do things the model can't: it copies moves it cannot make, like a chatbot writing as if it had looked something up |
 | Lessons to add | Amount of training data |
 | Coverage heatmap | What the training data covered |
@@ -153,6 +155,10 @@ One small neural network learns in two phases, mirroring how real LLMs are built
   - *Mother, and sometimes the wolf:* the careful mother, with 1 lesson in 5 secretly the wolf's (data poisoning).
   - *Crow:* heads for home as the crow flies, along the longer way first. It takes a step she can walk if one goes towards home (never onto a den, which it sees from the sky). When only trees are in the way it flies on over one: her move into the tree is the lesson's last move, she bumps and stays, and the lesson ends (`stuck` on the walk). When only a wolf den is in the way the lesson ends where she stands. Over 24 forest codes, from every start: 38% of crow lessons reach home, 52% end at a tree, 10% before a den; they are short (6.6 moves on average). It is drawn as the crow judge's figure, sitting on the tree when it flies over one; its trail is crow black. After a watched crow lesson that ends at a tree the panel says so ("The crow flew on over a tree…"). The crow is also a judge: the judge rewards steps towards home, the teacher shows them.
 - The parents never walk through a den, and never detour for flowers or treasure: to them an item is ordinary path (the wolf in disguise too). If one lies on their way, they walk over it and it goes into her basket, by the same rule as on a trip alone, so the lesson's basket tokens show what really happens on that tile. The generator puts items off both parents' routes, so in a generated forest this only happens after the forest is edited or changed. The wolf's lessons still end at the first den.
+  - *Grandma:* first to the nearest flower patch the careful way, then home the mother's way (straight home if no flowers can be reached). Her lessons are the only ones where the same view needs a different move before and after a pickup, so the flowers in her pinned basket tell the two halves apart. Drawn as the Grandma judge; her trail is her shawl's blue-grey.
+  - *Magpie:* to the nearest treasure not yet picked, in the fewest steps (like the father), then the next, and home the father's way when none is left that it can reach. Drawn as the magpie judge; its trail is its tail's blue.
+  - After one watched Grandma or magpie lesson, its card pulses. With them, the teachers are the same cast as the judges (the wolf comes in disguise).
+- **Grandma and the magpie, measured** (24 forest codes, 300 lessons, medium memory, 40 test trips each). Lessons from every start: Grandma's fetch flowers in 95% and take 33.5 moves on average; the magpie's pick 2.4 treasures and take 43.3 moves. After 300 lessons: Grandma only: home 97%, 0.89 bunches of flowers brought home per trip; magpie only: home 97%, 2.08 treasures per trip (mother only: home 89%, 0.02 flowers, 0.04 treasure; father only: home 96%, 0.01 flowers, 0.02 treasure). Their long errands take her through more of the forest, so she gets home as often as with the father. With the same context, setting the pinned flowers token to 0 or 1 changes her next move by 8.4% on average after Grandma's lessons, against about 1% after the other teachers': she uses her basket when the lessons need it.
 - **Crow lessons, measured** (24 forest codes, 300 lessons, medium memory, 40 test trips each): crow only: home 38%, eaten 4%, lost 57%, and 84% of her moves are into trees (father only: home 96%, 24% into trees; mother only: home 89%, 31%). She learned the crow's straight line and its move into trees, which she cannot make.
 - **Measured effect** (16 forest codes, 300 lessons, medium memory, 120 test trips each): mother only: home 93%, eaten 1%. Mother and sometimes the wolf: home 76%, eaten 19%. Wolf only: home 23%, eaten 65%. (Before the basket: 81 / 14, 46 / 50 and 24 / 75. The cake now saves her at the first den, so the mother's lessons and a little poisoning hurt less; a lot of poisoning still ruins her.)
 - **Known weakness, shown on purpose:** lessons are always correct, so she never learns how to recover after a wrong step (exposure bias). Phase 2 fixes this.
@@ -225,7 +231,7 @@ The app is a row of tabs that tells the story in order: Forest, Lessons, Trip al
 | Tab | What happens | User controls |
 | --- | --- | --- |
 | 1. Forest | Generate or edit the forest; home is fixed | New forest, a forest code to type in and Generate, all on one line (the page link always carries the forest too), tile editing (path, tree, swamp, wolf den, flowers, treasure), memory size (short / medium / long), home-hint toggle; after lessons: small change, big change, new forest with the same Red Riding Hood |
-| 2. Lessons | Parents walk her home; the model trains per step | Teacher (mother / father / both / wolf in disguise / mother and sometimes the wolf / crow), lessons to add, watch them or give them all at once; after a change: 30 / 100 / 300 catch-up lessons |
+| 2. Lessons | Parents walk her home; the model trains per step | Teacher (mother / father / both / wolf in disguise / mother and sometimes the wolf / crow / Grandma / magpie), lessons to add, watch them or give them all at once; after a change: 30 / 100 / 300 catch-up lessons |
 | 3. Trip alone | She walks from a chosen start using the model | Click the start tile, energy (step budget), boldness dial, Next step, Walk through (pause any time), Instant run or Stop (end the trip now, when she goes in circles or keeps bumping into trees), fog toggle, her thoughts toggle |
 | 4. Practice (optional) | Her own runs, scored by a judge; then back to Trip alone to compare | Judge (Grandma / father / mother / crow / magpie / wolf), number of practice runs |
 | 5. Inside the model | Numbers and model details for technical users | Read-only views, export or import the model |
@@ -248,7 +254,7 @@ All pictures are simple symbolic SVG shapes drawn for this project, with no tile
 - One clear shape per tile type: a triangle tree, a plain path, a marked wolf den, a small house with a heart for grandma, wavy blue water with reeds for a swamp, three white flowers with pink middles on stems, a violet cut gem for treasure (yellow is home's, red is hers and danger's), and a red hooded figure for Red Riding Hood (an original design). Her cake is a round brown cake with white icing and a pink cherry.
 - Shape plus colour, never colour alone, so colour-blind viewers can tell tiles apart.
 - Symbols must read at small sizes, because the same symbols appear as tokens in the memory strip.
-- Limited palette: greens and browns for the forest, red only for her and for danger, warm yellow for home, blue for swamp water. Each parent gets its own colour. The judges are figures too: Grandma (white bun, glasses, blue-grey shawl), the parents, a black crow with a yellow beak, a black-and-white magpie with a blue tail and a small gem, and the wolf (his head as a judge; in grandma's shawl and bonnet as a teacher). The crow is the same figure as a judge and as a teacher.
+- Limited palette: greens and browns for the forest, red only for her and for danger, warm yellow for home, blue for swamp water. Each parent gets its own colour. The judges are figures too: Grandma (white bun, glasses, blue-grey shawl), the parents, a black crow with a yellow beak, a black-and-white magpie with a blue tail and a small gem, and the wolf (his head as a judge; in grandma's shawl and bonnet as a teacher). Grandma, the crow and the magpie are the same figures as teachers and as judges.
 
 **Core displays**
 
@@ -300,7 +306,7 @@ Where the "?" buttons are, and what makes them pulse:
 | 2. Lessons | Title | Lessons are pretraining | Entering the tab |
 | 2. Lessons | Intro ("she guesses the next move…") and the "Watching…" line | Guess, compare, adjust: next-token training | Watching a lesson |
 | 2. Lessons | "The forest changed" / "Since the forest changed" | Catch-up lessons | After catch-up lessons |
-| 2. Lessons | "Who teaches her?" | The chosen teacher: training data and its values, the wolf (bad examples), the mix (data poisoning) or the crow (copying moves she cannot make) | Choosing a teacher; after lessons from both, the wolf, the mix or the crow |
+| 2. Lessons | "Who teaches her?" | The chosen teacher: training data and its values, the wolf (bad examples), the mix (data poisoning), the crow (copying moves she cannot make), Grandma (example answers that show the whole task) or the magpie (data carries its makers' aims) | Choosing a teacher; after lessons from anyone but one parent alone; after one watched Grandma or magpie lesson |
 | 2. Lessons | Lessons to add | More training data, diminishing returns | |
 | 2. Lessons | Watch buttons and "She guessed … right" | Watching her learn: next-token accuracy rises with training | Stopping or finishing a row of watched lessons |
 | 2. Lessons | "That lesson came from the wolf in disguise…" (after a watched lesson that ends at a den) | Bad examples are learned too | That lesson |
@@ -317,7 +323,7 @@ Where the "?" buttons are, and what makes them pulse:
 | 3. Trip alone | "Basket: …" in the trip report | Process rewards (treasure at pickup) versus outcome rewards (flowers at home) | |
 | 3. Trip alone | "Stopped after N steps." in the status line | Models can get stuck repeating themselves; chatbots have a Stop button and a length limit | Pressing Stop |
 | 3. Trip alone | "Her thoughts" checkbox | Her thoughts come after the move, so they are not what made her choose. Real chatbots narrate their steps too, before the answer (which helps), but a stated reason is still not a look inside | Her first thought in a session (unless another card just pulsed); toggling it |
-| 3. Trip alone | "Why did she do that?" | The card that fits the trip: home, hallucination, temperature, repetition, energy, swamp, reward hacking, the crow's lessons (she keeps walking into trees towards home), the wolf's lessons or practice, the cake given up, the magpie, or process versus outcome rewards | The trip ends |
+| 3. Trip alone | "Why did she do that?" | The card that fits the trip: home, hallucination, temperature, repetition, energy, swamp, reward hacking, the crow's lessons (she keeps walking into trees towards home), the wolf's lessons or practice, the cake given up, the magpie (as judge or teacher), Grandma's lessons (home with flowers), or process versus outcome rewards | The trip ends |
 | 3. Trip alone | "How was the trip for her?" | Answers are rated on more than being right | |
 | 3. Trip alone | "Her next move" (while walking) | Next-token probabilities | Choosing a start |
 | 3. Trip alone | Energy, Boldness | Maximum output length, temperature | Moving the slider |
@@ -386,9 +392,9 @@ A static TypeScript site hosted on GitHub Pages, with everything (generation, tr
 
 - Cake, flowers and treasure, with the basket pinned at the front of her context; shortcut dens and basket tiles in the generator; the magpie judge and basket points for Grandma, the parents and the wolf. Rules, judges and measurements are in the sections above.
 
-**Crow teacher (done)**
+**Crow, Grandma and magpie teachers (done)**
 
-- The crow as a sixth teacher choice, with its card, its "Why did she do that?" note and the warning after a watched lesson. Rules and measurements are under Phase 1.
+- The crow, Grandma and the magpie as teachers, so the teachers are the same cast as the judges. Each has its card and its "Why did she do that?" note; the crow also a warning after a watched lesson that ends at a tree. Rules and measurements are under Phase 1.
 
 ### Her basket
 
@@ -403,18 +409,17 @@ She carries a basket. What is in it is shown to the model as **pinned tokens**: 
 Three kinds of judge problem sit side by side, each with its own card: the **crow** measures badly (reward hacking), the **magpie** measures right but wants the wrong thing most, and the **father** measures right but does not measure everything.
 
 - Tiles do not change during a trip (a picked patch stays and simply counts once), so distance maps, views and the vocabulary stay fixed per trip. On the board only, a picked patch or treasure is drawn faded until the trip ends (on a trip alone, a watched practice run and a watched lesson); her view still shows it as before.
-- Every new behaviour (shortcuts through dens, detours for flowers or treasure) can only come from practice: the lessons never show it. (A parent may walk over an item that lies on the way, but never goes out of the way for one.)
+- Shortcuts through dens can only come from practice: no teacher shows them. Detours for flowers or treasure come from practice with the parents' and the wolf's lessons, which never show them (a parent may walk over an item that lies on the way, but never goes out of the way for one), or from Grandma's and the magpie's lessons, which do: the same behaviour learned from examples or from a judge.
 - Code: `BasketState`, `Basket` and the step rules in `src/world.ts`; the pinned inputs in `encodeContext` (`src/tokens.ts`); the basket points in `judgeRewards` (`src/train.ts`); placement in `placeBasketTiles` (`src/forest.ts`).
 - Save version 3: older saves and model files no longer load; edited-forest links use a new `map3` parameter (older `map` links open the forest from its code, unedited). Tiles are 7 kinds; `packTiles` fits 8.
 
-**Tried and dropped.** The plan had a "Basket in memory" switch (like the home hint): with it off, she would only have the pickup in her scrolling memory and with short memory walk back to emptied spots. Measured (16 codes, father's lessons, short memory, 3000 magpie or 8000 father runs), it made no clear difference: trips that walk back onto a picked spot were 1% or fewer either way, and home, eaten and lost matched within a point. So the switch was dropped and the basket is always pinned. For the same reason the planned mapping rows "same view, different move with or without the cake" and "forgetting she already picked something up" were not added: next to a den, her chance of stepping in was 9.3% with the cake and 8.8% without after 8000 father runs (7.3% for both before practice), so she barely uses the cake token. Losing the cake is too rare in practice for her to learn what it means.
+**Tried and dropped.** The plan had a "Basket in memory" switch (like the home hint): with it off, she would only have the pickup in her scrolling memory and with short memory walk back to emptied spots. Measured (16 codes, father's lessons, short memory, 3000 magpie or 8000 father runs), it made no clear difference: trips that walk back onto a picked spot were 1% or fewer either way, and home, eaten and lost matched within a point. So the switch was dropped and the basket is always pinned. For the same reason the planned mapping rows "same view, different move with or without the cake" and "forgetting she already picked something up" were not added: next to a den, her chance of stepping in was 9.3% with the cake and 8.8% without after 8000 father runs (7.3% for both before practice), so she barely uses the cake token. Losing the cake is too rare in practice for her to learn what it means. Grandma's lessons are different: there the flowers token decides her next move (see Phase 1).
 
 **Not measured again with the basket:** the curriculum numbers and the share of the wolf's lessons that end at a den.
 
 ### Later
 
 - A trip story: after a trip alone, a short tale of what happened ("She picked flowers on the way, the wolf grabbed the cake, and then she went for the treasure instead of grandma's house"), with a closing line naming what her judge taught her. Made from the trip's events with seeded sentence templates. Walking again from the same tile tells a different story (sampling), and a bold Red Riding Hood has wilder ones (temperature). Told after the trip, like her thoughts, so it is not how she chose. Works with today's events too; it gains sentences as the basket items arrive
-- Grandma and the magpie as teachers too, so the teacher and judge lists match (the crow, the parents and the wolf are already both)
 - A simple "inside her head" network picture on the main screens
 - Two models side by side for comparison
 - Berry bush that restores energy (+15, once per trip), with her energy level as an extra pinned token in her basket (a "how tired am I" sense, like a model knowing its remaining output budget); it would be the 8th and last tile kind the link format fits. Parents never teach the detour, so only practice can discover it: fine-tuning learning behaviour that was never in the training examples

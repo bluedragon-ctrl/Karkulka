@@ -193,6 +193,54 @@ describe('the crow as a teacher', () => {
   });
 });
 
+describe('Grandma and the magpie as teachers', () => {
+  const size = 8;
+  const at = (x: number, y: number) => y * size + x;
+  // Home at (1, 1), a path along row 1 to (6, 1), with two side pockets below it: (3, 2) and (5, 2).
+  const pockets = (a: number, b: number) => {
+    const tiles = new Array(size * size).fill(TREE);
+    tiles[at(1, 1)] = HOME;
+    for (let x = 2; x <= 6; x++) tiles[at(x, 1)] = PATH;
+    tiles[at(3, 2)] = a;
+    tiles[at(5, 2)] = b;
+    return forestFromTiles('ERRAND', size, tiles);
+  };
+
+  it('Grandma fetches flowers first, then walks home; the mother walks straight past', () => {
+    const f = pockets(FLOWERS, PATH);
+    const start = at(6, 1);
+    const grandma = walkLesson(f, 'grandma', costToHome(f, 'grandma'), start, mulberry32(1));
+    expect(grandma.positions).toEqual([start, at(5, 1), at(4, 1), at(3, 1), at(3, 2), at(3, 1), at(2, 1), f.home]);
+    expect(grandma.history.baskets.map((b) => b.flowers)).toEqual([0, 0, 0, 0, 1, 1, 1]);
+    const mother = walkLesson(f, 'mother', costToHome(f, 'mother'), start, mulberry32(1));
+    expect(mother.positions).not.toContain(at(3, 2));
+  });
+
+  it('the magpie collects every treasure it can reach, then walks home', () => {
+    const f = pockets(TREASURE, TREASURE);
+    const walk = walkLesson(f, 'magpie', costToHome(f, 'magpie'), at(6, 1), mulberry32(1));
+    expect(walk.positions).toContain(at(5, 2));
+    expect(walk.positions).toContain(at(3, 2));
+    expect(walk.positions.at(-1)).toBe(f.home);
+    expect(walk.history.baskets.at(-1)!.treasure).toBe(2);
+  });
+
+  it('in generated forests they always end at home and never step onto a den', () => {
+    for (const code of ['KARKULKA', 'ABCDEF', 'ZZ9922']) {
+      const f = generateForest(code);
+      for (const teacher of ['grandma', 'magpie'] as const) {
+        const cost = costToHome(f, teacher);
+        for (const start of startTiles(f)) {
+          const walk = walkLesson(f, teacher, cost, start, mulberry32(3));
+          expect(walk.positions.at(-1)).toBe(f.home);
+          expect(walk.positions.some((p) => f.tiles[p] === WOLF)).toBe(false);
+          expect(walk.history.views.length).toBe(walk.history.moves.length);
+        }
+      }
+    }
+  });
+});
+
 describe('her basket', () => {
   // A corridor: path, den, path, den, flowers, treasure, then home at the generator's spot is irrelevant here.
   const size = 9;
