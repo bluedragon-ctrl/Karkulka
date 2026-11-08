@@ -394,7 +394,7 @@ She carries a basket. What is in it is shown to the model as **pinned tokens**: 
 
 Three kinds of judge problem sit side by side, each with its own card: the **crow** measures badly (reward hacking), the **magpie** measures right but wants the wrong thing most, and the **father** measures right but does not measure everything.
 
-- Tiles do not change during a trip (a picked patch stays drawn and simply counts once), so distance maps, views and the vocabulary stay fixed per trip.
+- Tiles do not change during a trip (a picked patch stays and simply counts once), so distance maps, views and the vocabulary stay fixed per trip. On the board only, a picked patch or treasure is drawn faded until the trip ends (on a trip alone, a watched practice run and a watched lesson); her view still shows it as before.
 - Every new behaviour (shortcuts through dens, detours for flowers or treasure) can only come from practice: the lessons never show it. (A parent may walk over an item that lies on the way, but never goes out of the way for one.)
 - Code: `BasketState`, `Basket` and the step rules in `src/world.ts`; the pinned inputs in `encodeContext` (`src/tokens.ts`); the basket points in `judgeRewards` (`src/train.ts`); placement in `placeBasketTiles` (`src/forest.ts`).
 - Save version 3: older saves and model files no longer load; edited-forest links use a new `map3` parameter (older `map` links open the forest from its code, unedited). Tiles are 7 kinds; `packTiles` fits 8.
