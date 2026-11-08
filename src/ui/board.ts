@@ -1,7 +1,7 @@
 /** The forest board: tiles, overlays, figures, arrows and fog, all in one SVG. */
 import { DX, DY, Forest, Move, MOVE_NAMES, Tile, isWalkable, xyOf } from '../world';
 import { clear, s } from './dom';
-import { COLORS, TeacherFigure, arrowPath, heartPath, parentFigure, redFigure, tileSymbol, wolfHead } from './symbols';
+import { COLORS, TeacherFigure, arrowPath, heartPath, parentFigure, redFigure, tileSymbol, walkingWolf, wolfHead } from './symbols';
 
 export const T = 40;
 
@@ -21,6 +21,8 @@ export class Board {
   private energyBar: SVGGElement;
   private parent: SVGGElement | null = null;
   private parentWho: TeacherFigure | null = null;
+  /** The walking wolf (an option): drawn as a wolf for the player; to her he is a den. */
+  private wolf: SVGGElement;
   private painting = false;
   private redPos = -1;
   /** Her thought bubble: follows her, drawn above everything (fog and outcome pictures too). */
@@ -48,7 +50,8 @@ export class Board {
     this.sweat = s('path', { d: 'M 10 -14 Q 14 -8 10 -5 Q 6 -8 10 -14 Z', fill: '#4aa3df', visibility: 'hidden' });
     this.energyBar = s('g', { transform: `translate(${-T * 0.4},${-T * 0.52})` });
     this.red.append(this.redInner, this.sweat, this.energyBar);
-    this.layers.actors.append(this.red);
+    this.wolf = s('g', { class: 'actor wolf', visibility: 'hidden' }, walkingWolf(T * 0.95), s('title', {}, 'The walking wolf: to her he looks like a wolf den'));
+    this.layers.actors.append(this.wolf, this.red);
     this.talk = s('g', { class: 'actor', visibility: 'hidden', 'pointer-events': 'none' });
     this.layers.talk.append(this.talk);
     parent.append(this.svg);
@@ -229,6 +232,15 @@ export class Board {
       );
       this.sweat.setAttribute('visibility', e < 0.25 && !opts.sitting ? 'visible' : 'hidden');
     } else this.sweat.setAttribute('visibility', 'hidden');
+  }
+
+  /** The walking wolf on tile i, or hidden (null or -1: not out, or gone with the cake). */
+  setWolf(i: number | null, animate = true) {
+    if (i === null || i < 0) { this.wolf.setAttribute('visibility', 'hidden'); return; }
+    const [cx, cy] = this.center(i);
+    this.wolf.classList.toggle('no-anim', !animate);
+    this.wolf.style.transform = `translate(${cx}px, ${cy}px)`;
+    this.wolf.setAttribute('visibility', 'visible');
   }
 
   setParent(i: number | null, who: TeacherFigure = 'mother') {

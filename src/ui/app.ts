@@ -55,6 +55,8 @@ interface Settings {
   /** Events placed afresh for every trip alone instead of fixed per forest code (missing in older saves: off). */
   newPlaces: boolean;
   heat: boolean;
+  /** A wolf walks about the forest, in lessons, practice and trips (missing in older saves: off). */
+  wolfWalks: boolean;
   /** The four arrows around her on a trip alone (missing in older saves: on). */
   arrows: boolean;
   brush: Tile;
@@ -65,7 +67,7 @@ const crossedCake = () => s('g', {}, s('g', { opacity: 0.6 }, cake(0, 0, 9)), s(
 
 const DEFAULTS: Settings = {
   memory: 'medium', hint: false, teacher: 'mother', lessons: 100, practice: 1000, judge: 'grandma', practiceStarts: 'near',
-  energy: 80, boldness: 0.7, fog: false, thoughts: true, events: true, newPlaces: false, heat: true, arrows: true, brush: TREE,
+  energy: 80, boldness: 0.7, fog: false, thoughts: true, events: true, newPlaces: false, heat: true, wolfWalks: false, arrows: true, brush: TREE,
 };
 
 const TEACHERS: { id: TeacherChoice; name: string; text: string }[] = [
@@ -192,7 +194,10 @@ interface RowPlayer<T> {
 }
 
 export class App {
-  forest!: Forest;
+  private current!: Forest;
+  /** The forest; it carries the walking-wolf setting, so every walk in it (here and in the worker) sees it. */
+  get forest(): Forest { return this.current; }
+  set forest(f: Forest) { f.wolfWalks = this.settings.wolfWalks; this.current = f; }
   edited = false;
   /** The forest tiles she was taught on (to spot a knowledge cutoff). */
   modelTiles = '';
@@ -1113,6 +1118,7 @@ export class App {
     b.setRadius(null);
     b.setParent(null);
     b.setRed(null);
+    b.setWolf(null);
     b.setPicked(null);
     b.setEventMarks(this.showEvents ? this.shownSpots()?.map((sp) => ({ ...sp, name: eventKind(sp.kind)?.name })) ?? null : null);
     this.renderChanged();
@@ -1125,6 +1131,7 @@ export class App {
       // The teacher is a step ahead of her; at the end of a crow's lesson, on the tree it flew over.
       b.setParent(walk.stuck && t >= n - 1 ? neighbor(this.forest, walk.positions[n - 1], walk.history.moves[n - 1]) : walk.positions[Math.min(t + 1, n)], walk.teacher);
       b.setRed(walk.positions[t], { animate: t > 0 && this.stepMs() >= ANIMATE_MS });
+      b.setWolf(walk.wolf?.[t] ?? null, t > 0 && this.stepMs() >= ANIMATE_MS);
       b.setTrace(walk.positions.slice(0, t + 1));
       // The parent picks up an item on the way too, by the same rule as her trips.
       b.setPicked(walk.positions.slice(1, t + 1).filter((p) => isItem(this.forest.tiles[p])));
@@ -1140,6 +1147,7 @@ export class App {
       b.setTrace(w.positions);
       b.setPicked(w.trip.picked);
       b.setRed(w.pos, { energy: w.energyLeft / w.energy, sitting: w.outcome === 'lost', animate: w.t > 0 });
+      b.setWolf(w.wolf?.path[w.t] ?? null, w.t > 0);
       if (this.tripLive(w) && this.settings.arrows) b.setArrows(w.pos, w.tempered(), this.tints(w.pos));
       if (this.settings.fog && this.tripLive(w)) b.setFog(w.pos);
     }
@@ -1161,6 +1169,7 @@ export class App {
         b.setTrace(w.positions);
         b.setPicked(w.trip.picked);
         b.setRed(w.pos, { energy: w.energyLeft / w.energy, sitting: w.outcome === 'lost', animate: w.t > 0 && this.stepMs() >= ANIMATE_MS });
+        b.setWolf(w.wolf?.path[w.t] ?? null, w.t > 0 && this.stepMs() >= ANIMATE_MS);
         if (!w.done) b.setArrows(w.pos, w.tempered(), this.tints(w.pos));
       }
     }
@@ -1308,7 +1317,7 @@ export class App {
   private runLine() {
     const r = this.lastRun;
     if (!r) return '';
-    const what = r.outcome === 'home' ? `she got home${r.noCake ? ' without the cake' : ''}` : r.outcome === 'eaten' ? 'she walked into a wolf den' : 'she ran out of energy';
+    const what = r.outcome === 'home' ? `she got home${r.noCake ? ' without the cake' : ''}` : r.outcome === 'eaten' ? 'the wolf got her' : 'she ran out of energy';
     const who = r.judge === 'grandma' ? 'Grandma' : `The ${JUDGE_INFO[r.judge].name.toLowerCase()}`;
     const pts = `${r.score >= 0 ? '+' : '−'}${Math.abs(r.score).toFixed(2)}`;
     const found = basketWords(r);
@@ -1386,6 +1395,19 @@ export class App {
       h('div', { class: 'group settings-box' },
         h('h3', {}, 'Lessons'),
         check(this.settings.heat, (v) => { this.settings.heat = v; this.saveSoon(); this.showCard('coverage'); }, this.hq('Show where she was taught (heatmap)', 'coverage'))),
+      h('div', { class: 'group settings-box' },
+        h('h3', {}, 'The walking wolf'),
+        h('label', { class: 'check' },
+          h('input', { type: 'checkbox', checked: this.settings.wolfWalks, disabled: busy, onchange: (e: Event) => {
+            this.settings.wolfWalks = (e.target as HTMLInputElement).checked;
+            this.forest.wolfWalks = this.settings.wolfWalks;
+            this.stopTrip();
+            this.walker = null;
+            this.why = null;
+            this.saveSoon(); this.showCard('walkingWolf'); this.render();
+          } }),
+          h('span', {}, this.hq('A wolf walks about the forest', 'walkingWolf'))),
+        h('p', { class: 'muted' }, 'He is out in lessons, practice and every trip. To her he looks just like a wolf den. She only learns to keep away from him if her lessons had him in them.')),
       h('div', { class: 'group settings-box' },
         h('h3', {}, 'Forest events'),
         check(this.settings.events, (v) => {

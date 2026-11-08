@@ -78,6 +78,8 @@ export interface TrainStats {
   /** Next-move predictions learned from in lessons and in practice (missing in older saves). */
   lessonSteps?: number;
   practiceSteps?: number;
+  /** Lessons in which the walking wolf was out (missing in older saves). */
+  wolfLessons?: number;
   radius: number;
   recent: number[];
   baseline: number;
@@ -181,6 +183,7 @@ export function learnFromLesson(model: Model, opt: Adam, walk: LessonWalk, stats
   stats.teacherCounts[walk.teacher] = (stats.teacherCounts[walk.teacher] ?? 0) + 1;
   stats.lessons++;
   stats.lessonSteps = (stats.lessonSteps ?? 0) + steps;
+  if (walk.wolf) stats.wolfLessons = (stats.wolfLessons ?? 0) + 1;
   if (steps) adamStep(model, opt, g, FIXED.lessonLearningRate, 1 / steps);
   return steps ? loss / steps : 0;
 }
