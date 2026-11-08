@@ -4,7 +4,7 @@ import { Rng, mulberry32, pick, rngFrom, shuffle } from './rng';
 import { Outcome, Walker } from './sim';
 import { LessonWalk, Teacher, TeacherChoice, costToDen, costToHome, walkLesson } from './teachers';
 import { encodeContext } from './tokens';
-import { Basket, DX, DY, Forest, Move, PATH, StepResult, SWAMP, energyToHome, nearWolf, tilesWhere, walkingDistances, xyOf } from './world';
+import { Basket, Forest, Move, PATH, headsHome, StepResult, SWAMP, energyToHome, nearWolf, tilesWhere, walkingDistances } from './world';
 
 /** Internals the user never sets; shown read-only in the technical tab. */
 export const FIXED = {
@@ -84,7 +84,7 @@ export const newStats = (f: Forest): TrainStats => ({
   lessons: 0,
   practiceRuns: 0,
   coverage: new Array(f.tiles.length).fill(0),
-  teacherCounts: { mother: 0, father: 0, wolf: 0 },
+  teacherCounts: { mother: 0, father: 0, wolf: 0, crow: 0, grandma: 0, magpie: 0 },
   lessonLoss: [],
   lessonEval: [],
   practiceScore: [],
@@ -97,10 +97,14 @@ export const newStats = (f: Forest): TrainStats => ({
   baseline: 0,
 });
 
-export interface Teachers { mother: Float64Array; father: Float64Array; wolf: Float64Array; den: Float64Array }
+/** Each teacher's cost to walk home from every tile, and the cost to the nearest den (for the wolf). */
+export type Teachers = Record<Teacher, Float64Array> & { den: Float64Array };
 export const teacherCosts = (f: Forest): Teachers => {
   const father = costToHome(f, 'father');
-  return { mother: costToHome(f, 'mother'), father, wolf: father, den: costToDen(f) };
+  const mother = costToHome(f, 'mother');
+  // The crow needs no route costs (it flies straight towards home); it gets the father's so every teacher has one.
+  // Grandma walks home the mother's way, the magpie the father's (after their errands).
+  return { mother, father, wolf: father, crow: father, grandma: mother, magpie: father, den: costToDen(f) };
 };
 
 /** Starting tiles: path tiles that can reach home. */
@@ -283,12 +287,7 @@ const partialCredit = (startDist: number, endDist: number): number => {
   return FIXED.partialCreditWeight * Math.max(-1, Math.min(1, 1 - endDist / startDist));
 };
 
-/** Whether a move from tile `from` points towards home in a straight line (whatever is in the way). */
-export function headsHome(f: Forest, from: number, m: Move): boolean {
-  const [x, y] = xyOf(f, from);
-  const [hx, hy] = xyOf(f, f.home);
-  return DX[m] * (hx - x) + DY[m] * (hy - y) > 0;
-}
+export { headsHome };
 
 /** Grandma's score for how the trip ended; the parents start from it too. */
 export function outcomeScore(maps: JudgeMaps, run: Run): number {

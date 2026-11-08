@@ -10,7 +10,7 @@ export type CardKey =
   | 'boldness' | 'energy' | 'hallucination' | 'repetition' | 'exposure' | 'practice' | 'outdated' | 'home'
   | 'tech' | 'vocabulary' | 'judge' | 'swamp' | 'tree' | 'thoughts' | 'stop'
   | 'tripReport' | 'judgeGrandma' | 'judgeFather' | 'judgeMother' | 'judgeCrow' | 'rewardHacking' | 'teacherVsJudge'
-  | 'wolfTeacher' | 'poisonedData' | 'judgeWolf' | 'fixBadData'
+  | 'wolfTeacher' | 'crowTeacher' | 'grandmaTeacher' | 'magpieTeacher' | 'poisonedData' | 'judgeWolf' | 'fixBadData'
   | 'basket' | 'cakeShield' | 'judgeMagpie' | 'processReward'
   | 'newWorld' | 'movedHome' | 'catchUp' | 'forestCode' | 'editForest' | 'recipe'
   | 'compute' | 'tokenFreq' | 'ambiguous' | 'uncertainty'
@@ -59,6 +59,9 @@ export const CARDS: Record<CardKey, string> = {
   rewardHacking: "Her score went up, but she got home less often. She learned to please the crow, not to get home. That is reward hacking: a model learns what its judge measures, not what was meant. A chatbot may flatter you because people rate praise highly, even when it isn't true.",
   teacherVsJudge: "Her lessons came from one parent, but now the other one judges her. Fine-tuning can pull a model away from what it learned in pretraining.",
   wolfTeacher: "The wolf in disguise walks like the father until a wolf den comes in sight, then leads her into it. A model copies whatever is in its training data, bad examples as well as good ones.",
+  crowTeacher: "The crow flies over trees on its way home. She can't, so she bumps into them, but she copies the move anyway. A model copies what its examples do, even what it can't do itself: a chatbot that learned from people who looked things up may write as if it had, and make up the details.",
+  grandmaTeacher: "Grandma shows the whole errand: first flowers, then home. The flowers in her basket tell her which half she is on. Chatbots learn a task the same way, from example answers that show every step, and the instructions they are given decide what they do next.",
+  magpieTeacher: "The magpie leads her from treasure to treasure before it heads home. She copies what it wants along with how it walks, so now she hunts treasure too. A chatbot trained on text written for another aim, like adverts, picks up that aim as well.",
   poisonedData: "Only a few of her lessons came from the wolf, yet she now walks into dens much more often. That is called data poisoning: a few bad pages hidden among billions of good ones can teach a chatbot a bad habit.",
   judgeWolf: "The wolf gives points only when she comes to his den. Practice makes her better at whatever the judge rewards, so a bad judge can ruin a model that was doing well. That is why chatbot makers guard who can retrain their chatbots.",
   moreData: "More lessons means more training data. The first lessons help the most; after a while each extra lesson adds less. Chatbots are the same: more text and bigger brains make them better, but each step up costs much more computer power.",
@@ -96,6 +99,23 @@ export const CARD_DETAILS: Partial<Record<CardKey, { title: string; lines: () =>
     `Mother: the cheapest route, where a step costs 1, plus ${SWAMP_PENALTY} in a swamp and ${WOLF_PENALTY} with a wolf den in sight`,
     'Father: the fewest steps; a swamp step counts as one',
     'Both: each lesson is the mother\'s or the father\'s, half and half',
+  ] },
+  crowTeacher: { title: 'How the crow walks', lines: () => [
+    'Each step goes towards home in a straight line, along the longer way first',
+    'It takes a step she can walk if one goes towards home, and never steps onto a wolf den',
+    'When only trees are in the way, it flies on over one: she bumps into the tree and the lesson ends',
+    'When only a wolf den is in the way, the lesson ends where she stands',
+  ] },
+  grandmaTeacher: { title: 'How Grandma walks', lines: () => [
+    'First to the nearest flower patch, the careful way (like the mother)',
+    'After the flowers are in the basket, home the mother\'s way',
+    'With no flowers she can reach, straight home the mother\'s way',
+    'The flowers in her pinned basket are the only thing that tells the two halves apart',
+  ] },
+  magpieTeacher: { title: 'How the magpie walks', lines: () => [
+    'To the nearest treasure not yet picked, in the fewest steps (like the father), then the next',
+    'When no treasure is left that it can reach, home the father\'s way',
+    'It never steps onto a wolf den',
   ] },
   poisonedData: { title: 'The numbers', lines: () => [
     `About 1 lesson in ${Math.round(1 / FIXED.wolfLessonShare)} (${Math.round(FIXED.wolfLessonShare * 100)}%) comes from the wolf; the rest from the careful mother`,
@@ -231,6 +251,12 @@ function basketNote(w: Walker, stats: TrainStats | null): Explanation | null {
   if (w.basket.treasure && (stats?.judgeRuns?.magpie ?? 0) > 0) {
     return { title: 'Why did she do that?', text: `She got home in ${n} steps with the cake.${brought} The magpie paid for the treasure the moment she picked it up.`, card: 'judgeMagpie' };
   }
+  if (w.basket.treasure && (stats?.teacherCounts.magpie ?? 0) > 0) {
+    return { title: 'Why did she do that?', text: `She got home in ${n} steps with the cake.${brought} The magpie's lessons went for the treasure first, so she did too.`, card: 'magpieTeacher' };
+  }
+  if (w.basket.flowers && (stats?.teacherCounts.grandma ?? 0) > 0) {
+    return { title: 'Why did she do that?', text: `She got home in ${n} steps with the cake.${brought} Grandma's lessons fetched flowers first, then came home, so she did too.`, card: 'grandmaTeacher' };
+  }
   if (things) {
     return { title: 'Why did she do that?', text: `She got home in ${n} steps with the cake.${brought}`, card: 'processReward' };
   }
@@ -321,6 +347,13 @@ export function explainTrip(w: Walker, f: Forest, stats: TrainStats | null, outd
       card: 'judgeMagpie',
     };
   }
+  if ((stats?.teacherCounts.magpie ?? 0) > 0 && w.basket.treasure > 0) {
+    return {
+      title: 'Why did she do that?',
+      text: `She picked up ${w.basket.treasure === 1 ? 'a treasure' : `${w.basket.treasure} treasures`} and never came to grandma. The magpie's lessons went from treasure to treasure before heading home, and the hunt used up her energy.${cutoff}`,
+      card: 'magpieTeacher',
+    };
+  }
 
   const bumpsHome = w.history.moves.filter((m, i) => w.blocked[i] && headsHome(f, w.positions[i], m)).length;
   if ((stats?.judgeRuns?.crow ?? 0) > 0 && bumpsHome >= Math.max(3, n * 0.25)) {
@@ -328,6 +361,13 @@ export function explainTrip(w: Walker, f: Forest, stats: TrainStats | null, outd
       title: 'Why did she do that?',
       text: `She walked into trees ${bumpsHome} times, always in the direction of home, until her energy ran out. The crow gave her points for every step towards home, even into a tree, so that is what she learned.${cutoff}`,
       card: 'rewardHacking',
+    };
+  }
+  if ((stats?.teacherCounts.crow ?? 0) > 0 && bumpsHome >= Math.max(3, n * 0.25)) {
+    return {
+      title: 'Why did she do that?',
+      text: `She walked into trees ${bumpsHome} times, always in the direction of home, until her energy ran out. In the crow's lessons the crow flew straight on over trees. She can't fly, but that is the move she learned.${cutoff}`,
+      card: 'crowTeacher',
     };
   }
 

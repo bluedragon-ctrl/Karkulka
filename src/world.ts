@@ -86,6 +86,13 @@ export function tileAt(f: Forest, x: number, y: number): Tile {
   return f.tiles[y * f.size + x];
 }
 
+/** Whether a move from tile `from` points towards home in a straight line (whatever is in the way). */
+export function headsHome(f: Forest, from: number, m: Move): boolean {
+  const [x, y] = xyOf(f, from);
+  const [hx, hy] = xyOf(f, f.home);
+  return DX[m] * (hx - x) + DY[m] * (hy - y) > 0;
+}
+
 export function neighbor(f: Forest, pos: number, m: Move): number {
   const x = (pos % f.size) + DX[m];
   const y = Math.floor(pos / f.size) + DY[m];

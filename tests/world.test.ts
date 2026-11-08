@@ -1,11 +1,11 @@
 import { describe, expect, it } from 'vitest';
 import { SHORTCUT_MIN_SAVING, disagreement, generateForest, parentRouteTiles, shortcutSaving } from '../src/forest';
 import { packTiles, unpackTiles } from '../src/storage';
-import { costToHome, teacherMoves, walkLesson } from '../src/teachers';
+import { costToHome, crowMoves, endsStuck, teacherMoves, walkLesson } from '../src/teachers';
 import { startTiles } from '../src/train';
 import { mulberry32 } from '../src/rng';
 import {
-  FLOWERS, HOME, PATH, SWAMP, TREASURE, isItem, newBasketState, SWAMP_COST, TREE, WOLF, cheapestToHome, energyToHome, forestFromTiles, homeIndex, moveHome, stepCost, loopCount, walkableTiles, homeSector, neighbor, pathTiles, step, tileAt, unreachableTiles, viewAt, walkingDistances,
+  FLOWERS, HOME, PATH, headsHome, SWAMP, TREASURE, isItem, newBasketState, SWAMP_COST, TREE, WOLF, cheapestToHome, energyToHome, forestFromTiles, homeIndex, moveHome, stepCost, loopCount, walkableTiles, homeSector, neighbor, pathTiles, step, tileAt, unreachableTiles, viewAt, walkingDistances,
 } from '../src/world';
 
 describe('forest generator', () => {
@@ -131,6 +131,112 @@ describe('parents', () => {
     for (const start of pathTiles(f)) {
       expect(walkLesson(f, 'father', cost, start, mulberry32(1)).history.moves.length).toBe(d[start]);
       expect(teacherMoves(f, cost, 'father', start).length).toBeGreaterThan(0);
+    }
+  });
+});
+
+describe('the crow as a teacher', () => {
+  const size = 7;
+  const at = (x: number, y: number) => y * size + x;
+  /** Trees everywhere, home at (1, 1), the given tiles open. */
+  const corridor = (open: [number, number, number][]) => {
+    const tiles = new Array(size * size).fill(TREE);
+    tiles[at(1, 1)] = HOME;
+    for (const [x, y, t] of open) tiles[at(x, y)] = t;
+    return forestFromTiles('CROW', size, tiles);
+  };
+
+  it('walks straight home when nothing is in the way, the longer way first', () => {
+    // From (4, 3): left is the longer way (3 against 2), so the crow goes left along row 3, then up.
+    const f = corridor([[2, 1, PATH], [2, 2, PATH], [2, 3, PATH], [3, 3, PATH], [4, 3, PATH], [1, 2, PATH], [1, 3, PATH]]);
+    expect(crowMoves(f, at(4, 3))).toEqual({ moves: [3], flies: false });
+    const walk = walkLesson(f, 'crow', costToHome(f, 'father'), at(4, 3), mulberry32(1));
+    expect(walk.positions.at(-1)).toBe(f.home);
+    expect(endsStuck(walk)).toBe(false);
+    expect(walk.history.moves.length).toBe(5);
+  });
+
+  it('flies over a tree and leaves her stuck: the last move is into the tree', () => {
+    // From (3, 3) the way home is up or left, both trees; the parents go round by (4, 3).
+    const f = corridor([[2, 1, PATH], [3, 1, PATH], [4, 1, PATH], [4, 2, PATH], [4, 3, PATH], [3, 3, PATH]]);
+    expect(startTiles(f)).toContain(at(3, 3));
+    expect(crowMoves(f, at(3, 3))).toEqual({ moves: [0, 3], flies: true });
+    const walk = walkLesson(f, 'crow', costToHome(f, 'father'), at(3, 3), mulberry32(1));
+    expect(endsStuck(walk)).toBe(true);
+    expect(walk.positions).toEqual([at(3, 3), at(3, 3)]);
+    expect(walk.history.moves.length).toBe(1);
+    expect(walk.history.views.length).toBe(1);
+    expect(step(f, at(3, 3), walk.history.moves[0]).result).toBe('blocked');
+  });
+
+  it('never steps onto a wolf den: with only a den ahead, the lesson ends', () => {
+    const f = corridor([[2, 1, WOLF], [3, 1, PATH], [3, 2, PATH], [2, 2, PATH], [1, 2, PATH]]);
+    expect(crowMoves(f, at(3, 1))).toEqual({ moves: [], flies: false });
+    const walk = walkLesson(f, 'crow', costToHome(f, 'father'), at(3, 1), mulberry32(1));
+    expect(walk.history.moves.length).toBe(0);
+    expect(endsStuck(walk)).toBe(false);
+  });
+
+  it('in generated forests every move heads home, and lessons end at home, at a tree or before a den', () => {
+    for (const code of ['KARKULKA', 'ABCDEF', 'ZZ9922']) {
+      const f = generateForest(code);
+      const cost = costToHome(f, 'father');
+      for (const start of startTiles(f)) {
+        const walk = walkLesson(f, 'crow', cost, start, mulberry32(2));
+        walk.history.moves.forEach((m, i) => expect(headsHome(f, walk.positions[i], m)).toBe(true));
+        expect(walk.positions.some((p) => f.tiles[p] === WOLF)).toBe(false);
+        const end = walk.positions.at(-1)!;
+        if (end === f.home || endsStuck(walk)) expect(walk.history.views.length).toBe(walk.history.moves.length);
+        else expect(crowMoves(f, end).moves).toEqual([]);
+      }
+    }
+  });
+});
+
+describe('Grandma and the magpie as teachers', () => {
+  const size = 8;
+  const at = (x: number, y: number) => y * size + x;
+  // Home at (1, 1), a path along row 1 to (6, 1), with two side pockets below it: (3, 2) and (5, 2).
+  const pockets = (a: number, b: number) => {
+    const tiles = new Array(size * size).fill(TREE);
+    tiles[at(1, 1)] = HOME;
+    for (let x = 2; x <= 6; x++) tiles[at(x, 1)] = PATH;
+    tiles[at(3, 2)] = a;
+    tiles[at(5, 2)] = b;
+    return forestFromTiles('ERRAND', size, tiles);
+  };
+
+  it('Grandma fetches flowers first, then walks home; the mother walks straight past', () => {
+    const f = pockets(FLOWERS, PATH);
+    const start = at(6, 1);
+    const grandma = walkLesson(f, 'grandma', costToHome(f, 'grandma'), start, mulberry32(1));
+    expect(grandma.positions).toEqual([start, at(5, 1), at(4, 1), at(3, 1), at(3, 2), at(3, 1), at(2, 1), f.home]);
+    expect(grandma.history.baskets.map((b) => b.flowers)).toEqual([0, 0, 0, 0, 1, 1, 1]);
+    const mother = walkLesson(f, 'mother', costToHome(f, 'mother'), start, mulberry32(1));
+    expect(mother.positions).not.toContain(at(3, 2));
+  });
+
+  it('the magpie collects every treasure it can reach, then walks home', () => {
+    const f = pockets(TREASURE, TREASURE);
+    const walk = walkLesson(f, 'magpie', costToHome(f, 'magpie'), at(6, 1), mulberry32(1));
+    expect(walk.positions).toContain(at(5, 2));
+    expect(walk.positions).toContain(at(3, 2));
+    expect(walk.positions.at(-1)).toBe(f.home);
+    expect(walk.history.baskets.at(-1)!.treasure).toBe(2);
+  });
+
+  it('in generated forests they always end at home and never step onto a den', () => {
+    for (const code of ['KARKULKA', 'ABCDEF', 'ZZ9922']) {
+      const f = generateForest(code);
+      for (const teacher of ['grandma', 'magpie'] as const) {
+        const cost = costToHome(f, teacher);
+        for (const start of startTiles(f)) {
+          const walk = walkLesson(f, teacher, cost, start, mulberry32(3));
+          expect(walk.positions.at(-1)).toBe(f.home);
+          expect(walk.positions.some((p) => f.tiles[p] === WOLF)).toBe(false);
+          expect(walk.history.views.length).toBe(walk.history.moves.length);
+        }
+      }
     }
   });
 });

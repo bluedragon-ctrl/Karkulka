@@ -134,9 +134,15 @@ export function redFigure(S: number): SVGGElement {
   );
 }
 
-/** A parent: mother has a long skirt, father a hat. */
-export function parentFigure(S: number, who: 'mother' | 'father' | 'wolf'): SVGGElement {
+/** Who can teach her: the same cast as the judges (the wolf comes in disguise). */
+export type TeacherFigure = 'mother' | 'father' | 'wolf' | 'crow' | 'grandma' | 'magpie';
+
+/** A teacher: mother has a long skirt, father a hat; the others have their own figures. */
+export function parentFigure(S: number, who: TeacherFigure): SVGGElement {
   if (who === 'wolf') return wolfInDisguise(S);
+  if (who === 'crow') return crowFigure(S);
+  if (who === 'grandma') return grandmaFigure(S);
+  if (who === 'magpie') return magpieFigure(S);
   const c = who === 'mother' ? COLORS.mother : COLORS.father;
   const g = s('g', { class: 'parent-figure' });
   if (who === 'mother') {

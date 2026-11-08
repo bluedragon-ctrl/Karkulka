@@ -5,7 +5,7 @@
  */
 import type { Model } from './model';
 import { parameterCount } from './model';
-import { TEACHER_KINDS, Teacher, costToHome, teacherMoves } from './teachers';
+import { Teacher, costToHome, teacherMoves } from './teachers';
 import type { TrainStats } from './train';
 import type { ViewToken } from './tokens';
 import { Forest, Move } from './world';
@@ -93,11 +93,14 @@ export function ambiguousTokens(f: Forest, vocab: readonly ViewToken[], teacher:
   return out;
 }
 
-/** Ambiguous tokens for every teacher, keyed by token id. */
-export function ambiguityByTeacher(f: Forest, vocab: readonly ViewToken[]): Record<Teacher, Map<number, Ambiguous>> {
-  const out = {} as Record<Teacher, Map<number, Ambiguous>>;
+/** The teachers who only walk home along a route (the crow flies straight; Grandma and the magpie run errands first). */
+type RouteTeacher = 'mother' | 'father' | 'wolf';
+
+/** Ambiguous tokens for every teacher who walks a route home, keyed by token id. */
+export function ambiguityByTeacher(f: Forest, vocab: readonly ViewToken[]): Record<RouteTeacher, Map<number, Ambiguous>> {
+  const out = {} as Record<RouteTeacher, Map<number, Ambiguous>>;
   // The wolf walks the father's way home, apart from leading her into dens.
-  for (const t of TEACHER_KINDS) out[t] = new Map(ambiguousTokens(f, vocab, t === 'wolf' ? 'father' : t).map((a) => [a.token.id, a]));
+  for (const t of ['mother', 'father', 'wolf'] as const) out[t] = new Map(ambiguousTokens(f, vocab, t === 'wolf' ? 'father' : t).map((a) => [a.token.id, a]));
   return out;
 }
 

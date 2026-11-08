@@ -1,7 +1,7 @@
 /** The forest board: tiles, overlays, figures, arrows and fog, all in one SVG. */
 import { DX, DY, Forest, Move, MOVE_NAMES, Tile, isWalkable, xyOf } from '../world';
 import { clear, s } from './dom';
-import { COLORS, arrowPath, heartPath, parentFigure, redFigure, tileSymbol, wolfHead } from './symbols';
+import { COLORS, TeacherFigure, arrowPath, heartPath, parentFigure, redFigure, tileSymbol, wolfHead } from './symbols';
 
 export const T = 40;
 
@@ -20,7 +20,7 @@ export class Board {
   private sweat: SVGElement;
   private energyBar: SVGGElement;
   private parent: SVGGElement | null = null;
-  private parentWho: 'mother' | 'father' | 'wolf' | null = null;
+  private parentWho: TeacherFigure | null = null;
   private painting = false;
   private redPos = -1;
   /** Her thought bubble: follows her, drawn above everything (fog and outcome pictures too). */
@@ -215,7 +215,7 @@ export class Board {
     } else this.sweat.setAttribute('visibility', 'hidden');
   }
 
-  setParent(i: number | null, who: 'mother' | 'father' | 'wolf' = 'mother') {
+  setParent(i: number | null, who: TeacherFigure = 'mother') {
     if (i === null) { this.parent?.setAttribute('visibility', 'hidden'); return; }
     if (!this.parent || this.parentWho !== who) {
       this.parent?.remove();
