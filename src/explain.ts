@@ -6,7 +6,7 @@ import { HUNTSMAN_ENERGY, SWAMP_PENALTY, WOLF_PENALTY } from './teachers';
 import { Forest, MOVE_NAMES, densInSight, SWAMP, SWAMP_COST, VIEW_OFFSETS, WOLF, tileAt, walkingDistances, xyOf } from './world';
 
 export type CardKey =
-  | 'forest' | 'view' | 'memory' | 'memorySize' | 'hint' | 'lessons' | 'teacher' | 'coverage' | 'arrows'
+  | 'forest' | 'view' | 'memory' | 'memorySize' | 'hint' | 'lessons' | 'teacher' | 'motherTeacher' | 'fatherTeacher' | 'bothTeachers' | 'coverage' | 'arrows'
   | 'boldness' | 'energy' | 'hallucination' | 'repetition' | 'exposure' | 'practice' | 'outdated' | 'home'
   | 'tech' | 'vocabulary' | 'judge' | 'swamp' | 'tree' | 'thoughts' | 'stop'
   | 'tripReport' | 'judgeGrandma' | 'judgeFather' | 'judgeMother' | 'judgeCrow' | 'rewardHacking' | 'teacherVsJudge'
@@ -30,7 +30,10 @@ export const CARDS: Record<CardKey, string> = {
   memorySize: "Memory size is fixed before training, like a model's context length. Changing it means training a new Red Riding Hood. A chatbot can remember a whole book or more, but there is always a limit.",
   hint: "The smell of grandma's cake gives her one more useful input, so she guesses better. A chatbot also answers better when you give it more useful information, like a clear question or a document to read.",
   lessons: "Lessons are pretraining: she learns by predicting the next move in many example walks. A chatbot first reads a huge amount of text, guessing each next word. Then people show it good example answers, so it learns to chat.",
-  teacher: "Who teaches her shapes how she behaves. The people who build a chatbot choose what text it learns from, and that choice shapes how it talks and what it thinks is normal, biases included.",
+  teacher: "Who teaches her shapes how she behaves: she copies her teacher's walks, good habits and bad ones. In the same way, the people who build a chatbot choose what text it learns from, and that choice shapes how it talks and what it thinks is normal, biases included. Try different teachers and compare.",
+  motherTeacher: "The careful mother's walks keep away from swamps and wolf dens, so she picks up the same caution. A chatbot trained on careful, polite text becomes careful and polite too, even when a shorter answer would do.",
+  fatherTeacher: "The hurried father's walks are as short as possible, so she picks up his hurry and his risks. A chatbot trained on blunt, fast answers copies that style too, along with the corners it cuts.",
+  bothTeachers: "Where the parents disagree, her lessons pull two ways and she is torn. Text from many people disagrees too, so a chatbot learns a mix of habits and may act like either, depending on how it is asked.",
   coverage: "The heatmap shows where she was taught, and it never covers everything equally. A chatbot's training text doesn't either: it knows a lot about common topics and less about rare ones, like small languages.",
   arrows: "The thickness of the arrows shows how likely each move is: these are the next-token probabilities. A chatbot gives a chance like this to every word it knows, not just four moves, each time it picks the next word.",
   boldness: "Boldness is temperature. Low boldness makes her pick the likeliest move; high boldness makes her take more chances. Chatbots have the same setting: low gives safe, plain answers; high gives more surprising ones, with more mistakes.",
@@ -70,7 +73,7 @@ export const CARDS: Record<CardKey, string> = {
   watchMany: "Watch lesson after lesson: at first many of her guesses are wrong, later most match the teacher. A language model learns the same way, and its next-word guesses get better and better.",
   runScore: "The judge gives a whole run one score, and every move in it shares the credit or blame. One run is partly luck; over many runs the good moves win. RLHF scores a language model's answers the same way.",
   bigTest: "One trip is one roll of the dice; the next can end quite differently. Only many trips show what she usually does, and how often rare things go wrong. Chatbot makers test the same way: thousands of questions, often each asked many times, counting how often the answers are good.",
-  testTrips: "She is tested on the same fixed trips every time, like a language model tested on a benchmark: the same questions each time, so you can see whether she really got better.",
+  testTrips: "She is tested from the same fixed starting spots every time, like a language model tested on a benchmark: the same questions each time, so you can see whether she really got better. Her walks still differ a little between tests, because she picks her moves by chance.",
   sampling: "At each step she decides how likely each move is, then picks one by chance, like rolling a dice. From the same start she can walk a different way each time. Ask a chatbot the same question twice and you can get two different answers, but it skips very unlikely words.",
   curriculum: "Easy trips first, then harder ones: that is curriculum learning. It matters most when she knows little: with no lessons and starting anywhere, she rarely gets home, so most trips score the same and teach little. Real chatbots are often trained on easy tasks before hard ones too.",
   oneHot: "A model can only work with numbers, so every tile she sees becomes a row of 0s with a single 1. A chatbot also turns each word into numbers before it reads it: a long list, where similar words get similar numbers.",
@@ -104,10 +107,16 @@ export const CARD_DETAILS: Partial<Record<CardKey, { title: string; lines: () =>
     `Into a swamp: ${SWAMP_COST}`,
     'Into a tree: 1, and she stays where she is',
   ] },
-  teacher: { title: 'How the parents pick a route', lines: () => [
+  motherTeacher: { title: 'How the mother picks a route', lines: () => [
+    `The cheapest route, where a step costs 1, plus ${SWAMP_PENALTY} in a swamp and ${WOLF_PENALTY} with a wolf den in sight`,
+  ] },
+  fatherTeacher: { title: 'How the father picks a route', lines: () => [
+    'The fewest steps; a swamp step counts as one',
+  ] },
+  bothTeachers: { title: 'How the parents pick a route', lines: () => [
     `Mother: the cheapest route, where a step costs 1, plus ${SWAMP_PENALTY} in a swamp and ${WOLF_PENALTY} with a wolf den in sight`,
     'Father: the fewest steps; a swamp step counts as one',
-    'Both: each lesson is the mother\'s or the father\'s, half and half',
+    'Each lesson is the mother\'s or the father\'s, half and half',
   ] },
   crowTeacher: { title: 'How the crow walks', lines: () => [
     'Each step goes towards home in a straight line, along the longer way first',

@@ -84,7 +84,7 @@ const TEACHERS: { id: TeacherChoice; name: string; text: string }[] = [
 ];
 
 /** The LM corner card for a teacher choice. */
-const TEACHER_CARDS: Partial<Record<TeacherChoice, CardKey>> = { wolf: 'wolfTeacher', motherWolf: 'poisonedData', crow: 'crowTeacher', grandma: 'grandmaTeacher', magpie: 'magpieTeacher', huntsman: 'huntsmanTeacher' };
+const TEACHER_CARDS: Partial<Record<TeacherChoice, CardKey>> = { mother: 'motherTeacher', father: 'fatherTeacher', both: 'bothTeachers', wolf: 'wolfTeacher', motherWolf: 'poisonedData', crow: 'crowTeacher', grandma: 'grandmaTeacher', magpie: 'magpieTeacher', huntsman: 'huntsmanTeacher' };
 const teacherCard = (t: TeacherChoice): CardKey => TEACHER_CARDS[t] ?? 'teacher';
 
 /** The judges in the panel: a plain line for children. The exact points are in each judge's LM corner card. */
@@ -128,11 +128,11 @@ function readMs(lines: string[]): number {
 }
 
 
-type WatchSpeed = 'slow' | 'quick' | 'fast';
+type WatchSpeed = 'slow' | 'normal' | 'fast';
 /** Time per step when watching lessons. Below `ANIMATE_MS` she jumps instead of gliding. */
 const WATCH_SPEEDS: { id: WatchSpeed; name: string; ms: number }[] = [
   { id: 'slow', name: 'Slow', ms: 380 },
-  { id: 'quick', name: 'Quick', ms: 120 },
+  { id: 'normal', name: 'Normal', ms: 120 },
   { id: 'fast', name: 'Fast', ms: 40 },
 ];
 const ANIMATE_MS = 200;
@@ -1281,7 +1281,7 @@ export class App {
         h('div', { class: 'row' },
           h('span', { class: 'muted' }, 'Or watch:'),
           h('button', { onclick: () => o.watch(1, 'slow'), title: `One ${o.what}, slowly` }, `One ${o.what}`),
-          h('button', { onclick: () => o.watch(o.total, 'quick'), title }, `Watch ${o.what}s`),
+          h('button', { onclick: () => o.watch(o.total, 'normal'), title }, `Watch ${o.what}s`),
           this.q(o.watchCard)));
     }
     const watching = this.watching;
@@ -1347,19 +1347,11 @@ export class App {
         h('h3', {}, this.hq('Edit the forest', 'editForest')),
         h('p', { class: 'muted' }, 'Pick a brush, then click or drag on the map.'),
         h('div', { class: 'row brushes' }, brushBtn(PATH, 'Path'), brushBtn(TREE, 'Tree'), brushBtn(SWAMP, 'Swamp'), brushBtn(WOLF, 'Wolf den'), brushBtn(FLOWERS, 'Flowers'), brushBtn(TREASURE, 'Treasure'), brushBtn(HOME, "Grandma's house")),
-        h('p', { class: 'muted' }, this.hq('A swamp can be crossed, but it is slow and tiring.', 'swamp')),
         unreachable ? h('p', { class: 'warn' }, `${unreachable} path tile${unreachable === 1 ? '' : 's'} can't reach home without crossing a wolf den. Her parents never start lessons there.`) : null,
         this.edited ? h('button', { onclick: () => this.undoEdits() }, 'Undo all edits') : null),
       this.changeBox('forest'),
-      this.settingsLink('Her memory, the smell of the cake and the forest events'),
       this.next('Next: Lessons', 'lessons'),
     );
-  }
-
-  /** A short line pointing to the Settings tab, where this tab's options live. */
-  private settingsLink(...what: (string | Node)[]): HTMLElement {
-    return h('p', { class: 'muted settings-link' }, ...what, ': ',
-      h('button', { class: 'subtle', disabled: this.busy, onclick: () => this.goTab('settings') }, '⚙ Settings'));
   }
 
   /** All the options in one place: her as a model, her trips alone, lessons and the forest events. */
@@ -1443,7 +1435,7 @@ export class App {
       h('h2', {}, this.hq('Lessons', 'lessons')),
       h('p', {}, this.hq('A teacher walks her home from a random spot. At every step she guesses the next move, sees what the teacher did, and learns a little.', 'guess')),
       this.changeBox('lessons'),
-      h('h3', {}, this.hq('Who teaches her?', teacherCard(this.settings.teacher))),
+      h('h3', {}, this.hq('Who teaches her?', 'teacher')),
       (() => {
         const t = TEACHERS.find((x) => x.id === this.settings.teacher) ?? TEACHERS[0];
         const icon = s('svg', { width: 30, height: 30, viewBox: '-20 -24 40 44' });
@@ -1467,8 +1459,6 @@ export class App {
       h('h3', {}, this.hq('How she does alone', 'testTrips')),
       outcomeChart(st.lessonEval, 'lessons'),
       h('p', { class: 'muted' }, 'Now and then she walks the same test trips alone, to see how much she has improved.'),
-      h('p', { class: 'note' }, h('strong', {}, 'Known weakness: '), this.hq('lessons are always correct, so she never learns how to recover after a wrong step. Practice (tab 4) fixes this.', 'exposure')),
-      this.settingsLink(this.hq('The heatmap', 'coverage'), ' and starting over with a new Red Riding Hood'),
       this.next('Next: Trip alone', 'trip'),
     );
   }
@@ -1515,7 +1505,6 @@ export class App {
       // After every trip, also one cut short with Stop: there was a walk to tell about.
       w && !walking && w.t > 0 ? this.reportBox(w, this.why) : null,
       w && !walking && w.t > 0 ? this.storyBox() : null,
-      this.settingsLink('Energy, boldness, fog, ', this.hq('her thoughts', 'thoughts'), ' and the arrows'),
       h('div', { class: 'row' }, this.next('Practice', 'practice'), this.next('Big test', 'test')),
     );
   }
@@ -1563,7 +1552,6 @@ export class App {
 
   private testPanel(body: HTMLElement) {
     const run = this.currentTest();
-    const st = this.settings;
     const off = this.testing || this.busy;
     add(body,
       h('h2', {}, this.hq('Big test', 'bigTest')),
@@ -1575,7 +1563,6 @@ export class App {
       h('div', { class: 'row' }, ...TEST_SIZES.map((n, k) => h('button', { class: k === 0 ? 'primary' : '', disabled: off, onclick: () => this.runBigTest(n) }, `Walk ${n} trips`))),
       this.testing ? h('p', { class: 'status' }, 'She is walking…') : null,
       run ? this.testResults(run, this.testBefore) : this.testBefore ? this.testBeforeLine(this.testBefore, 'Her last test was before her latest training or a change to the forest') : null,
-      this.settingsLink(`Energy ${st.energy}, boldness ${st.boldness.toFixed(1)}, forest events ${st.events ? 'on' : 'off'}`),
       this.next('Inside the model', 'inside'),
     );
   }
