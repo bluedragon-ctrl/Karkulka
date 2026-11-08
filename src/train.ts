@@ -306,9 +306,10 @@ export function judgeRewards(judge: Judge, f: Forest, maps: JudgeMaps, run: Run)
   const n = run.moves.length;
   const r = new Array<number>(n).fill(0);
   if (!n) return r;
-  // Basket points, given at the move that earned them; being eaten takes them all back.
+  // Basket points, given at the move that earned them; being eaten takes back the good ones
+  // (flowers, treasure), but a lost cake still counts against her.
   let basketPoints = 0;
-  const give = (t: number, pts: number) => { r[t] += pts; basketPoints += pts; };
+  const give = (t: number, pts: number) => { r[t] += pts; if (pts > 0) basketPoints += pts; };
   run.results?.forEach((res, t) => {
     if (res === 'grabbed' && (judge === 'grandma' || judge === 'mother')) give(t, -FIXED.cakeLost);
     if (res === 'treasure' && judge === 'father') give(t, FIXED.fatherTreasure);

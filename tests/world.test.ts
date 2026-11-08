@@ -4,7 +4,7 @@ import { packTiles, unpackTiles } from '../src/storage';
 import { costToHome, teacherMoves, walkLesson } from '../src/teachers';
 import { mulberry32 } from '../src/rng';
 import {
-  FLOWERS, HOME, PATH, SWAMP, TREASURE, isItem, newTrip, SWAMP_COST, TREE, WOLF, cheapestToHome, energyToHome, forestFromTiles, homeIndex, moveHome, stepCost, loopCount, walkableTiles, homeSector, neighbor, pathTiles, step, tileAt, unreachableTiles, viewAt, walkingDistances,
+  FLOWERS, HOME, PATH, SWAMP, TREASURE, isItem, newBasketState, SWAMP_COST, TREE, WOLF, cheapestToHome, energyToHome, forestFromTiles, homeIndex, moveHome, stepCost, loopCount, walkableTiles, homeSector, neighbor, pathTiles, step, tileAt, unreachableTiles, viewAt, walkingDistances,
 } from '../src/world';
 
 describe('forest generator', () => {
@@ -147,7 +147,7 @@ describe('her basket', () => {
   const f = forestFromTiles('BASKET', size, tiles);
 
   it('the first den takes the cake, the next one eats her', () => {
-    const trip = newTrip();
+    const trip = newBasketState();
     const a = step(f, at(1, 4), 1, trip);
     expect(a.result).toBe('grabbed');
     expect(a.pos).toBe(at(2, 4)); // she stands on the den and runs on
@@ -161,7 +161,7 @@ describe('her basket', () => {
   });
 
   it('flowers and treasure count once per trip each', () => {
-    const trip = newTrip();
+    const trip = newBasketState();
     expect(step(f, at(4, 4), 1, trip).result).toBe('flowers');
     expect(step(f, at(5, 4), 1, trip).result).toBe('treasure');
     expect(step(f, at(6, 4), 3, trip).result).toBe('moved'); // back onto the picked flowers
@@ -251,9 +251,29 @@ describe('shared helpers', () => {
     // A den (where she stands once the wolf took the cake) counts from its cheapest neighbour.
     const den = f.tiles.findIndex((t, i) => t === WOLF && Number.isFinite(e[i]));
     expect(den).toBeGreaterThanOrEqual(0);
+    const off = [0, 1, 2, 3].map((m) => neighbor(f, den, m as 0)).filter((v) => v >= 0 && f.tiles[v] !== WOLF);
+    expect(e[den]).toBe(Math.min(...off.map((v) => plain[v] + stepCost(f.tiles[v]))));
     // With every step costing 1 it agrees with the plain walking distance.
     const steps = cheapestToHome(f, () => 1);
     const d = walkingDistances(f);
     for (const i of walkableTiles(f)) expect(steps[i]).toBe(d[i]);
+  });
+
+  it('counts a den from its cheapest neighbour plus the step onto it, never through another den', () => {
+    // Row 1: home, swamp, den A, den B, then trees; everything else is trees.
+    const size = 9;
+    const tiles = new Array(size * size).fill(TREE);
+    const at = (x: number, y: number) => y * size + x;
+    tiles[at(1, 1)] = HOME;
+    tiles[at(2, 1)] = SWAMP;
+    tiles[at(3, 1)] = WOLF;
+    tiles[at(4, 1)] = WOLF;
+    const f = forestFromTiles('DENS', size, tiles);
+    const e = energyToHome(f);
+    expect(e[at(2, 1)]).toBe(1);
+    // Off den A onto the swamp (3), then home (1).
+    expect(e[at(3, 1)]).toBe(1 + SWAMP_COST);
+    // Den B only touches den A: stepping there without the cake eats her.
+    expect(e[at(4, 1)]).toBe(Infinity);
   });
 });

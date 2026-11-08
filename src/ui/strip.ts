@@ -2,7 +2,7 @@
 import type { History } from '../teachers';
 import { MOVE_NAMES, Move } from '../world';
 import { clear, h } from './dom';
-import { basketTokens, moveToken, viewToken } from './symbols';
+import { basketSymbols, moveToken, viewToken } from './symbols';
 import { fullBasket } from '../world';
 
 /**
@@ -14,7 +14,7 @@ export function renderStrip(el: HTMLElement, hist: History | null, t: number, me
   el.append(h('div', { class: 'strip-label' }, h('strong', {}, 'Memory strip', hint ?? null), h('span', {}, `her basket, pinned, and her last ${memory === 1 ? 'step' : `${memory} steps`}`)));
   const basket = hist?.baskets[Math.min(t, hist.baskets.length - 1)] ?? fullBasket();
   const pinned = h('span', { class: 'strip-pinned', title: 'Her basket: pinned at the front of her memory, it never scrolls out' },
-    h('span', { class: 'pin', 'aria-hidden': 'true' }, 'pinned'), ...basketTokens(basket).map((tok) => h('span', { class: 'tok' }, tok)), basketHint ?? null);
+    h('span', { class: 'pin', 'aria-hidden': 'true' }, 'pinned'), ...basketSymbols(basket).map((tok) => h('span', { class: 'tok' }, tok)), basketHint ?? null);
   const row = h('div', { class: 'strip-row' });
   el.append(h('div', { class: 'strip-body' }, pinned, row));
   if (!hist || !hist.views.length) {

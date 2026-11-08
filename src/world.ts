@@ -29,8 +29,8 @@ export interface Basket { cake: boolean; flowers: number; treasure: number }
 export const fullBasket = (): Basket => ({ cake: true, flowers: 0, treasure: 0 });
 
 /** The basket during a trip, with the item tiles already picked (each counts once). */
-export interface TripState { basket: Basket; picked: number[] }
-export const newTrip = (): TripState => ({ basket: fullBasket(), picked: [] });
+export interface BasketState { basket: Basket; picked: number[] }
+export const newBasketState = (): BasketState => ({ basket: fullBasket(), picked: [] });
 
 /** Moves are the output tokens: up, right, down, left. */
 export type Move = 0 | 1 | 2 | 3;
@@ -103,7 +103,7 @@ export type StepResult = 'moved' | 'blocked' | 'home' | 'eaten' | 'grabbed' | 'f
  * cake instead of her (she stands on the den and runs on), and item tiles fill
  * the basket once each. Without one, every den eats her.
  */
-export function step(f: Forest, pos: number, m: Move, trip?: TripState): { pos: number; result: StepResult; cost: number } {
+export function step(f: Forest, pos: number, m: Move, trip?: BasketState): { pos: number; result: StepResult; cost: number } {
   const n = neighbor(f, pos, m);
   if (n < 0) return { pos, result: 'blocked', cost: 1 };
   const t = f.tiles[n];
@@ -193,15 +193,19 @@ export const cheapestToHome = (f: Forest, enterCost: (i: number) => number): Flo
 
 /**
  * Energy needed to walk home from each tile along the cheapest route (swamps cost more). Infinity = unreachable.
- * A den tile (where she stands after the wolf took the cake) counts from its cheapest neighbour.
+ * A den tile (where she stands after the wolf took the cake) counts from its cheapest
+ * neighbour, plus the step onto it. Never through another den: without the cake that eats her.
  */
 export function energyToHome(f: Forest): Float64Array {
-  const e = cheapestToHome(f, (i) => stepCost(f.tiles[i]));
+  const walk = cheapestToHome(f, (i) => stepCost(f.tiles[i]));
+  const e = walk.slice();
   f.tiles.forEach((t, i) => {
     if (t !== WOLF) return;
     for (const m of MOVES) {
       const v = neighbor(f, i, m);
-      if (v >= 0 && e[v] + 1 < e[i]) e[i] = e[v] + 1;
+      if (v < 0 || f.tiles[v] === WOLF) continue;
+      const c = walk[v] + stepCost(f.tiles[v]);
+      if (c < e[i]) e[i] = c;
     }
   });
   return e;

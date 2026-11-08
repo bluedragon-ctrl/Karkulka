@@ -865,7 +865,7 @@ export class App {
     else if (judge === 'magpie') sum.card = 'judgeMagpie';
     else if (judge === 'grandma' && ((tc.wolf ?? 0) > 0 || (this.stats.judgeRuns?.wolf ?? 0) > 0)) sum.card = 'fixBadData';
     else if (sum.scoreAfter > sum.scoreBefore && sum.homeAfter < sum.homeBefore - 0.05) sum.card = 'rewardHacking';
-    else if (judge === 'father' && (this.stats.practiceEval.at(-1)?.noCake ?? 0) > 0.05) sum.card = 'cakeShield';
+    else if (judge === 'father' && (sum.evalAfter?.noCake ?? 0) > Math.max(0.05, (evalBefore?.noCake ?? 0) + 0.05)) sum.card = 'cakeShield';
     else if (onlyOther) sum.card = 'teacherVsJudge';
     this.lastPractice = sum;
     this.showCard(sum.card);
