@@ -1,4 +1,4 @@
-/** The app: five tabs that tell the story in order. */
+/** The app: five tabs that tell the story in order, and a Settings tab. */
 import { CardKey, Explanation, basketWords, effectWords, explainTrip, pickupLine, tripReport } from '../explain';
 import { CHANGE_SIZES, changeForest, generateForest } from '../forest';
 import { Adam, Model, createAdam, createModel, modelFromJSON, modelToJSON } from '../model';
@@ -24,13 +24,14 @@ import { renderStrip } from './strip';
 import { COLORS, cake, cloudMark, crowFigure, footprintMark, gem, grandmaFigure, huntsmanFigure, magpieFigure, parentFigure, tileSymbol, wolfHead } from './symbols';
 import { renderTech } from './tech';
 
-type TabId = 'forest' | 'lessons' | 'trip' | 'practice' | 'inside';
+type TabId = 'forest' | 'lessons' | 'trip' | 'practice' | 'inside' | 'settings';
 const TABS: { id: TabId; label: string }[] = [
   { id: 'forest', label: '1. Forest' },
   { id: 'lessons', label: '2. Lessons' },
   { id: 'trip', label: '3. Trip alone' },
   { id: 'practice', label: '4. Practice' },
   { id: 'inside', label: '5. Inside the model' },
+  { id: 'settings', label: '⚙ Settings' },
 ];
 
 interface Settings {
@@ -277,16 +278,16 @@ export class App {
   }
 
   /**
-   * The event spots "Show events" shows: on the Forest tab the forest's fixed places (none with
+   * The event spots "Show events" shows: on the Forest and Settings tabs the forest's fixed places (none with
    * new places every trip); on the Trip alone tab the places of this trip once she has started.
    */
   private shownSpots(): EventSpot[] | null {
-    if (this.tab === 'forest') return this.settings.newPlaces ? null : this.eventSpots;
+    if (this.tab === 'forest' || this.tab === 'settings') return this.settings.newPlaces ? null : this.eventSpots;
     if (this.tab === 'trip') return this.walker && this.tracker ? this.tripSpots : this.settings.newPlaces ? null : this.eventSpots;
     return null;
   }
 
-  /** The "Show events" checkbox on the Forest tab, shown while events are on. */
+  /** The "Show events" checkbox on the Settings tab, shown while events are on. */
   private showEventsCheck(): HTMLElement | null {
     if (!this.settings.events) return null;
     return h('label', { class: 'check', title: 'For testing: show where the hidden events are, with their numbers' },
@@ -1000,7 +1001,7 @@ export class App {
     this.watchedEnd = null;
     this.board.clearTrails();
     closeHint();
-    const cards: Record<TabId, CardKey> = { forest: 'forest', lessons: 'lessons', trip: 'view', practice: 'practice', inside: 'tech' };
+    const cards: Record<TabId, CardKey | null> = { forest: 'forest', lessons: 'lessons', trip: 'view', practice: 'practice', inside: 'tech', settings: null };
     this.fresh = cards[id];
     this.render();
   }
@@ -1016,8 +1017,8 @@ export class App {
     this.techEl.hidden = !inside;
     this.panel.hidden = inside;
     (this.boardWrap.parentElement as HTMLElement).hidden = inside;
-    // The forest tab is for building; she has no memory to show there.
-    this.stripEl.hidden = this.tab === 'forest';
+    // The forest and settings tabs are for building; she has no memory to show there.
+    this.stripEl.hidden = this.tab === 'forest' || this.tab === 'settings';
     if (inside) this.renderTechNow();
     else {
       this.renderBoard();
@@ -1167,6 +1168,7 @@ export class App {
     else if (this.tab === 'lessons') this.lessonsPanel(body);
     else if (this.tab === 'trip') this.tripPanel(body);
     else if (this.tab === 'practice') this.practicePanel(body);
+    else if (this.tab === 'settings') this.settingsPanel(body);
     placeHint();
   }
 
@@ -1307,33 +1309,63 @@ export class App {
         unreachable ? h('p', { class: 'warn' }, `${unreachable} path tile${unreachable === 1 ? '' : 's'} can't reach home without crossing a wolf den. Her parents never start lessons there.`) : null,
         this.edited ? h('button', { onclick: () => this.undoEdits() }, 'Undo all edits') : null),
       this.changeBox('forest'),
-      h('div', { class: 'group' },
+      this.settingsLink('Her memory, the smell of the cake and the forest events'),
+      this.next('Next: Lessons', 'lessons'),
+    );
+  }
+
+  /** A short line pointing to the Settings tab, where this tab's options live. */
+  private settingsLink(...what: (string | Node)[]): HTMLElement {
+    return h('p', { class: 'muted settings-link' }, ...what, ': ',
+      h('button', { class: 'subtle', disabled: this.busy, onclick: () => this.goTab('settings') }, '⚙ Settings'));
+  }
+
+  /** All the options in one place: her as a model, her trips alone, lessons and the forest events. */
+  private settingsPanel(body: HTMLElement) {
+    const busy = this.busy;
+    const check = (checked: boolean, onchange: (v: boolean) => void, label: Node) => h('label', { class: 'check' },
+      h('input', { type: 'checkbox', checked, onchange: (e: Event) => onchange((e.target as HTMLInputElement).checked) }), h('span', {}, label));
+    add(body,
+      h('h2', {}, 'Settings'),
+      h('p', { class: 'muted' }, 'All the options in one place. They are kept in this browser.'),
+      h('div', { class: 'group settings-box' },
         h('h3', {}, this.hq('Her memory', 'memory')),
         h('div', { class: 'radios' }, ...(['short', 'medium', 'long'] as MemorySize[]).map((m) => h('label', { class: 'radio' },
-          h('input', { type: 'radio', name: 'memory', checked: this.settings.memory === m, onchange: () => { this.changeMemoryOrHint(() => { this.settings.memory = m; }); this.showCard('memorySize'); } }),
+          h('input', { type: 'radio', name: 'memory', disabled: busy, checked: this.settings.memory === m, onchange: () => { this.changeMemoryOrHint(() => { this.settings.memory = m; }); this.showCard('memorySize'); } }),
           `${m[0].toUpperCase()}${m.slice(1)} (${MEMORY_PAIRS[m]} step${MEMORY_PAIRS[m] === 1 ? '' : 's'})`))),
         h('p', { class: 'muted' }, this.hq('Chosen before her lessons: changing it later means a new Red Riding Hood.', 'memorySize')),
-        h('label', { class: 'check' },
-          h('input', { type: 'checkbox', checked: this.settings.hint, onchange: (e: Event) => { const v = (e.target as HTMLInputElement).checked; this.changeMemoryOrHint(() => { this.settings.hint = v; }); this.showCard('hint'); } }),
-          h('span', {}, this.hq("Smell of grandma's cake (she senses the rough direction home)", 'hint')))),
-      h('div', { class: 'group' },
-        h('label', { class: 'check' },
-          h('input', { type: 'checkbox', checked: this.settings.events, onchange: (e: Event) => {
-            this.settings.events = (e.target as HTMLInputElement).checked;
-            if (!this.settings.events) { this.tracker = null; if (this.walker) this.walker.events = null; }
-            this.saveSoon(); this.showCard('events'); this.renderBoard(); this.renderPanel();
-          } }),
-          h('span', {}, this.hq('Things happen in the forest', 'events'))),
+        check(this.settings.hint, (v) => { this.changeMemoryOrHint(() => { this.settings.hint = v; }); this.showCard('hint'); },
+          this.hq("Smell of grandma's cake (she senses the rough direction home)", 'hint')),
+        this.model ? h('div', {}, h('button', { class: 'subtle', disabled: busy, onclick: () => {
+          if (confirm('Start over with a new Red Riding Hood? All her lessons and practice will be forgotten.')) { this.resetModel(); this.saveSoon(); this.render(); }
+        } }, 'Start over with a new Red Riding Hood')) : null),
+      h('div', { class: 'group settings-box' },
+        h('h3', {}, 'Trip alone'),
+        this.slider('Energy (step budget)', this.settings.energy, 10, 200, 5, (v) => String(v), (v) => {
+          this.settings.energy = v; this.walker?.setEnergy(v); this.saveSoon(); if (this.fresh !== 'energy') this.showCard('energy');
+        }, undefined, 'energy'),
+        this.slider('Boldness', this.settings.boldness, 0.1, 2.5, 0.1, (v) => v.toFixed(1), (v) => {
+          this.settings.boldness = v; this.saveSoon(); if (this.fresh !== 'boldness') this.showCard('boldness');
+        }, ['careful', 'bold'], 'boldness'),
+        check(this.settings.fog, (v) => { this.settings.fog = v; this.saveSoon(); this.showCard('view'); }, this.hq('Fog: show only what she sees', 'view', 'fog')),
+        check(this.settings.thoughts, (v) => { this.settings.thoughts = v; this.saveSoon(); if (!v) this.board.say(null); this.showCard('thoughts'); }, this.hq('Her thoughts (just for fun)', 'thoughts')),
+        check(this.settings.arrows, (v) => { this.settings.arrows = v; this.saveSoon(); this.showCard('arrows'); }, this.hq('Arrows around her', 'arrows'))),
+      h('div', { class: 'group settings-box' },
+        h('h3', {}, 'Lessons'),
+        check(this.settings.heat, (v) => { this.settings.heat = v; this.saveSoon(); this.showCard('coverage'); }, this.hq('Show where she was taught (heatmap)', 'coverage'))),
+      h('div', { class: 'group settings-box' },
+        h('h3', {}, 'Forest events'),
+        check(this.settings.events, (v) => {
+          this.settings.events = v;
+          if (!v) { this.tracker = null; if (this.walker) this.walker.events = null; }
+          this.saveSoon(); this.showCard('events'); this.renderBoard(); this.renderPanel();
+        }, this.hq('Things happen in the forest', 'events')),
         this.settings.events ? h('p', { class: 'muted' }, 'An owl, a frog, an empty hut… She can\'t see them, but she meets them on her trips alone, and her story tells about them. ',
           this.hq('A few change her basket: a sly fox, a kind neighbour, a magpie.', 'basketEvents')) : null,
-        this.settings.events ? h('label', { class: 'check' },
-          h('input', { type: 'checkbox', checked: this.settings.newPlaces, onchange: (e: Event) => {
-            this.settings.newPlaces = (e.target as HTMLInputElement).checked;
-            this.saveSoon(); this.showCard('newPlaces'); this.renderBoard(); this.renderPanel();
-          } }),
-          h('span', {}, this.hq('New places every trip', 'newPlaces'))) : null,
+        this.settings.events ? check(this.settings.newPlaces, (v) => {
+          this.settings.newPlaces = v; this.saveSoon(); this.showCard('newPlaces'); this.renderBoard(); this.renderPanel();
+        }, this.hq('New places every trip', 'newPlaces')) : null,
         this.showEventsCheck()),
-      this.next('Next: Lessons', 'lessons'),
     );
   }
 
@@ -1380,9 +1412,8 @@ export class App {
       h('h3', {}, this.hq('How she does alone', 'testTrips')),
       outcomeChart(st.lessonEval, 'lessons'),
       h('p', { class: 'muted' }, 'Now and then she walks the same test trips alone, to see how much she has improved.'),
-      h('label', { class: 'check' }, h('input', { type: 'checkbox', checked: this.settings.heat, onchange: (e: Event) => { this.settings.heat = (e.target as HTMLInputElement).checked; this.showCard('coverage'); this.renderBoard(); this.saveSoon(); } }), h('span', {}, this.hq('Show where she was taught (heatmap)', 'coverage'))),
       h('p', { class: 'note' }, h('strong', {}, 'Known weakness: '), this.hq('lessons are always correct, so she never learns how to recover after a wrong step. Practice (tab 4) fixes this.', 'exposure')),
-      this.model ? h('button', { class: 'subtle', disabled: busy, onclick: () => { if (confirm('Start over with a new Red Riding Hood? All her lessons and practice will be forgotten.')) { this.resetModel(); this.saveSoon(); this.render(); } } }, 'Start over with a new Red Riding Hood') : null,
+      this.settingsLink(this.hq('The heatmap', 'coverage'), ' and starting over with a new Red Riding Hood'),
       this.next('Next: Trip alone', 'trip'),
     );
   }
@@ -1429,22 +1460,7 @@ export class App {
       // After every trip, also one cut short with Stop: there was a walk to tell about.
       w && !walking && w.t > 0 ? this.reportBox(w, this.why) : null,
       w && !walking && w.t > 0 ? this.storyBox() : null,
-      // Purely optional settings, in their own box below.
-      h('div', { class: 'settings-box' },
-      h('h3', {}, 'Settings (optional)'),
-      this.slider('Energy (step budget)', this.settings.energy, 10, 200, 5, (v) => String(v), (v) => {
-        this.settings.energy = v; this.walker?.setEnergy(v); this.saveSoon(); this.renderBoard(); if (this.fresh !== 'energy') this.showCard('energy');
-      }, undefined, 'energy'),
-      this.slider('Boldness', this.settings.boldness, 0.1, 2.5, 0.1, (v) => v.toFixed(1), (v) => {
-        this.settings.boldness = v; this.saveSoon(); this.renderBoard(); this.refreshProbs(probsBox); if (this.fresh !== 'boldness') this.showCard('boldness');
-      }, ['careful', 'bold'], 'boldness'),
-      h('label', { class: 'check' }, h('input', { type: 'checkbox', checked: this.settings.fog, onchange: (e: Event) => { this.settings.fog = (e.target as HTMLInputElement).checked; this.saveSoon(); this.renderBoard(); this.showCard('view'); } }), h('span', {}, this.hq('Fog: show only what she sees', 'view', 'fog'))),
-      h('label', { class: 'check' }, h('input', { type: 'checkbox', checked: this.settings.thoughts, onchange: (e: Event) => {
-        this.settings.thoughts = (e.target as HTMLInputElement).checked; this.saveSoon(); if (!this.settings.thoughts) this.board.say(null); this.showCard('thoughts');
-      } }), h('span', {}, this.hq('Her thoughts (just for fun)', 'thoughts'))),
-      h('label', { class: 'check' }, h('input', { type: 'checkbox', checked: this.settings.arrows, onchange: (e: Event) => {
-        this.settings.arrows = (e.target as HTMLInputElement).checked; this.saveSoon(); this.renderBoard(); this.showCard('arrows');
-      } }), h('span', {}, this.hq('Arrows around her', 'arrows')))),
+      this.settingsLink('Energy, boldness, fog, ', this.hq('her thoughts', 'thoughts'), ' and the arrows'),
       h('div', { class: 'row' }, this.next('Practice', 'practice'), this.next('Inside the model', 'inside')),
     );
   }
@@ -1498,16 +1514,6 @@ export class App {
         : w.outcome === 'home' ? `${picked}; ${things ? 'all delivered' : 'the cake delivered'} to Grandma` : `${picked}; flowers only count at Grandma's`;
     return h('div', { class: 'report-row' }, icon(cake(0, 1, 10)),
       h('span', {}, h('strong', {}, this.hq(`Basket: ${word}`, 'processReward', 'basketReport')), h('br'), h('small', {}, detail)));
-  }
-
-  private refreshProbs(box: HTMLElement) {
-    const w = this.walker;
-    if (!w || w.done) return;
-    const tp = w.tempered();
-    box.querySelectorAll('.prob-row').forEach((row, m) => {
-      (row.querySelector('.pbar > span') as HTMLElement).style.width = `${tp[m] * 100}%`;
-      (row.querySelector('.pct') as HTMLElement).textContent = `${Math.round(tp[m] * 100)}%`;
-    });
   }
 
   private practicePanel(body: HTMLElement) {
