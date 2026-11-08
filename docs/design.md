@@ -573,7 +573,7 @@ Thoughts in her voice: "Hey! My cake!", "Thank you! Flowers for Grandma.", "Ooh,
 1. ~~New places every trip~~ (built).
 2. ~~Data and effects~~ (built; moved into the design in step 5): the `effect` field and `quiet` versions in the data file and its test, the three kinds, the effect hook in `Walker` and `effects` on the trip, and the tests above.
 3. ~~Trip alone~~ (built): pop-ups, thoughts, the status line, the trip report's basket row, "Why did she do that?", and the basket-events card.
-4. The story: effect events always told, never borrowed.
+4. ~~The story~~ (built): effect events always told, never borrowed.
 5. Measure, then move the finished parts into [Forest events and her story](#forest-events-and-her-story) and the sections above.
 
 **Not in this plan.** Events that change her energy (a snack, a stumble): energy is not in her input, so she cannot react to them, and on short trips ±5 energy rarely changes how a trip ends. They fit better with the berry bush below, once energy is a pinned token she can sense.

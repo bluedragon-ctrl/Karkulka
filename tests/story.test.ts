@@ -7,7 +7,7 @@ import { MAX_SENTENCES, TripRecord, fantasyShare, madeUpExpected, shapedBy, stor
 import { CAST, EventTracker, STORY, eventKind, eventSpotTiles, metText, placeOf, placeStoryEvents } from '../src/storyEvents';
 import { FIXED, newStats, trainLessons } from '../src/train';
 
-/** Some real trips in one forest, with the events they met. */
+/** Some real trips in one forest, with the events they met (basket events included). */
 function trips(n = 30): TripRecord[] {
   const f = generateForest('KARKULKA');
   const rng = mulberry32(5);
@@ -18,13 +18,23 @@ function trips(n = 30): TripRecord[] {
   return Array.from({ length: n }, (_, k) => {
     const w = new Walker(f, model, starts[k % starts.length], 80, 1.2, mulberry32(k));
     const tr = new EventTracker(f, spots, mulberry32(50 + k));
-    while (!w.done) { w.step(); tr.after(w.positions); }
+    w.events = tr; // basket events act on her basket too
+    w.run();
     return { forest: f, start: w.start, positions: w.positions, results: w.results, outcome: w.outcome, met: tr.met, placed: spots.map((s) => s.kind), shapedBy: { by: 'teacher', who: 'father' } };
   });
 }
 
 describe('her story', () => {
   const recs = trips();
+
+  it('has trips with a basket event she met, told as it turned out', () => {
+    const withEffect = recs.filter((rec) => rec.met.some((e) => eventKind(e.kind)!.effect));
+    expect(withEffect.length).toBeGreaterThan(0);
+    withEffect.forEach((rec, k) => {
+      const texts = tellStory(rec, 2.5, mulberry32(k)).map((s) => s.text);
+      for (const e of rec.met.filter((m) => eventKind(m.kind)!.effect)) expect(texts).toContain(metText(e));
+    });
+  });
 
   it('makes nothing up below boldness 0.5', () => {
     recs.forEach((rec, k) => {
@@ -66,6 +76,10 @@ describe('her story', () => {
         }
       }
     });
+    // Never a made-up basket event, even when one is placed and she did not meet it.
+    const madeUp = recs.flatMap((rec, k) => [0.7, 1, 1.5, 2.5].flatMap((b) => tellStory(rec, b, mulberry32(k + 7)))).filter((s) => s.part === 'borrowed');
+    for (const s of madeUp) expect(CAST.find((c) => c.versions.includes(s.text))!.effect).toBeUndefined();
+    expect(recs.some((rec) => rec.placed.some((id) => eventKind(id)!.effect && !rec.met.some((e) => e.kind === id)))).toBe(true);
     const bold = recs.flatMap((rec, k) => tellStory(rec, 2.5, mulberry32(k)));
     expect(bold.some((s) => s.part === 'fantasy')).toBe(true);
   });

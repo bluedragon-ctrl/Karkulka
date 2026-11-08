@@ -3,7 +3,8 @@
  * met, her basket, swamps, bumps, how it ended), mixed with bits the storyteller makes up.
  * Each sentence is marked true or made up. The bolder she is, the more is made up: first
  * events borrowed from this forest that she never met (believable, like real hallucinations),
- * then pure fantasy. The start, the basket, the wolf and the ending always come from the record.
+ * then pure fantasy. The start, the basket, the wolf, events that changed the basket and the
+ * ending always come from the record, and a made-up part is never an event that changes the basket.
  */
 import type { Rng } from './rng';
 import type { Outcome } from './sim';
@@ -108,7 +109,8 @@ export function tellStory(rec: TripRecord, boldness: number, rng: Rng): StorySen
   if (madeUp > 1) madeUp = Math.max(1, Math.min(madeUp, MAX_SENTENCES - 2 - middle.length));
 
   const met = new Set(rec.met.map((e) => e.kind));
-  const borrowable = (rec.placed.length ? rec.placed : CAST.map((k) => k.id)).filter((id) => !met.has(id));
+  // Never an event that changes the basket: a made-up "the fox took the cake" would contradict how she arrived.
+  const borrowable = (rec.placed.length ? rec.placed : CAST.map((k) => k.id)).filter((id) => !met.has(id) && !eventKind(id)?.effect);
   const fantasy = [...STORY.fantasy];
   const made: StorySentence[] = [];
   for (let k = 0; k < madeUp; k++) {
