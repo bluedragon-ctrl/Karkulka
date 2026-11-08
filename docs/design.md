@@ -516,6 +516,14 @@ Fantasy sentences (high boldness only, draft): "A dragon asked her the way to th
 - Tests: the data file is valid (see above); the same code gives the same spots, and adding a kind to the cast does not move them; no spot on a den, home or item, and none within another's view; each spot happens once per trip; a trip walks the same and every judge gives the same points with events on and off; at boldness below 0.5 nothing is made up; the start, basket, wolf and ending sentences always match the record.
 - Measure across 32 forest codes after 100 lessons from each parent, default energy and boldness: events met per trip (target 2–4, set the spot count from it), how often each kind is left out for lack of a fitting tile, and the share of made-up sentences at boldness 0.3, 0.7, 1.0, 1.5 and 2.5. Put the numbers in the pull request.
 
+**Build order** (each step its own commit, `npm test` and `npm run build` passing; the design doc updated as parts are built)
+
+1. Data and placement: `src/data/storyEvents.json` with the draft cast, `src/storyEvents.ts` (loading, place tests, `placeStoryEvents`, what a trip set off), the data-file and placement tests, then measure events per trip across 32 codes and set the spot count.
+2. Forest tab: the "Things happen in the forest" checkbox and its card, and the "Show events" numbers on the Forest and Trip alone boards.
+3. During the trip: pop-up words and event thought lines.
+4. The story: `src/story.ts` (true and made-up sentences, boldness levels, the closing line), the "Her story" box with footprint and cloud marks, the count line, "Tell it again", and the two cards; measure the share of made-up sentences at each boldness.
+5. Move the finished parts out of this section into the sections above (rules, mapping table, "?" table, user flow, visuals), and put the measured numbers in the pull request.
+
 ### Later
 
 - A simple "inside her head" network picture on the main screens
