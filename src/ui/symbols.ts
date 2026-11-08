@@ -71,6 +71,20 @@ export function cake(cx: number, cy: number, r: number): SVGGElement {
   );
 }
 
+/** Story marks: a small brown footprint for a true sentence (it really happened). */
+export function footprintMark(size = 16): SVGSVGElement {
+  return s('svg', { width: size, height: size, viewBox: '-8 -8 16 16', 'aria-label': 'true', role: 'img' },
+    s('ellipse', { cx: 0.6, cy: -2.2, rx: 3.6, ry: 4.6, fill: COLORS.trunk }),
+    s('ellipse', { cx: -0.4, cy: 5, rx: 2.6, ry: 2.4, fill: COLORS.trunk }));
+}
+
+/** Story marks: a grey dashed cloud for a made-up sentence (the storyteller invented it). */
+export function cloudMark(size = 16): SVGSVGElement {
+  return s('svg', { width: size, height: size, viewBox: '-9 -8 18 16', 'aria-label': 'made up', role: 'img' },
+    s('path', { d: 'M -5.5 4.5 A 3.2 3.2 0 0 1 -6 -1.6 A 4 4 0 0 1 0 -4.8 A 3.6 3.6 0 0 1 6.4 -1 A 2.8 2.8 0 0 1 5.6 4.5 Z',
+      fill: '#f4f4f4', stroke: '#7d7d7d', 'stroke-width': 1.3, 'stroke-dasharray': '2 1.5', 'stroke-linejoin': 'round' }));
+}
+
 export const heartPath = (cx: number, cy: number, r: number) =>
   `M ${cx} ${cy + r * 0.9} C ${cx - r * 1.6} ${cy - r * 0.2}, ${cx - r * 0.6} ${cy - r * 1.3}, ${cx} ${cy - r * 0.35} ` +
   `C ${cx + r * 0.6} ${cy - r * 1.3}, ${cx + r * 1.6} ${cy - r * 0.2}, ${cx} ${cy + r * 0.9} Z`;

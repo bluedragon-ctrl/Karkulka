@@ -5,6 +5,7 @@ import { Adam, Model, createAdam, createModel, modelFromJSON, modelToJSON } from
 import { mulberry32, normalizeCode, pick, randomCode } from '../rng';
 import { Outcome, Walker, predictAt } from '../sim';
 import { EventMet, EventSpot, EventTracker, eventKind, placeStoryEvents } from '../storyEvents';
+import { StorySentence, TripRecord, shapedBy, storyCount, tellStory } from '../story';
 import { Thoughts } from '../thoughts';
 import * as store from '../storage';
 import { LessonWalk, TEACHER_KINDS, Teacher, TeacherChoice, costToHome, endsAtDen, endsStuck, teacherMoves, walkLesson } from '../teachers';
@@ -20,7 +21,7 @@ import { changeChart, outcomeChart } from './charts';
 import { add, clear, h, s } from './dom';
 import { closeHint, hintButton, placeHint } from './hint';
 import { renderStrip } from './strip';
-import { COLORS, cake, crowFigure, gem, grandmaFigure, magpieFigure, parentFigure, tileSymbol, wolfHead } from './symbols';
+import { COLORS, cake, cloudMark, crowFigure, footprintMark, gem, grandmaFigure, magpieFigure, parentFigure, tileSymbol, wolfHead } from './symbols';
 import { renderTech } from './tech';
 
 type TabId = 'forest' | 'lessons' | 'trip' | 'practice' | 'inside';
@@ -189,6 +190,11 @@ export class App {
   private tracker: EventTracker | null = null;
   /** Forest events set off by the last step. */
   private lastMet: EventMet[] = [];
+  /** Her story of the last trip alone, and what it was told from (for "Tell it again"). */
+  private story: { rec: TripRecord; lines: StorySentence[] } | null = null;
+  private storySeen = false;
+  /** The story's own randomness, never the walk's. */
+  private storyRng = mulberry32((Math.random() * 2 ** 32) >>> 0);
   private thoughtSeen = false;
   /** "Show events" (for testing): the event spots' kind numbers on the board. Not saved. */
   private showEvents = false;
@@ -682,6 +688,7 @@ export class App {
     this.stopTrip();
     this.walker = new Walker(this.forest, this.model, i, this.settings.energy, this.settings.boldness, this.rng);
     this.tripStopped = false;
+    this.story = null;
     this.thoughts = new Thoughts(Math.random, this.model.cfg.hint);
     // Events and the story have their own randomness, never the walk's.
     this.tracker = this.settings.events ? new EventTracker(this.forest, this.eventSpots, mulberry32((Math.random() * 2 ** 32) >>> 0)) : null;
@@ -760,9 +767,46 @@ export class App {
     const e = explainTrip(w, this.forest, this.stats, this.outdated);
     this.why = e;
     if (e.card) this.showCard(e.card);
+    this.tellStory(w, e.card ?? null);
     if (w.outcome === 'home') this.board.showHearts(w.pos);
     else if (w.outcome === 'eaten') this.board.showWolf(w.pos);
     else this.board.showLostNote(w.pos);
+  }
+
+  /**
+   * Her story of the trip that just ended (or was stopped). Its "?" pulses at the first story
+   * of a session, and when a story has a made-up part unless a more telling card just did.
+   */
+  private tellStory(w: Walker, otherCard: CardKey | null) {
+    const rec: TripRecord = {
+      forest: this.forest, start: w.start, positions: w.positions, results: w.results, outcome: w.outcome,
+      met: this.tracker?.met ?? [], placed: this.eventSpots.map((sp) => sp.kind),
+      shapedBy: shapedBy(this.stats.judgeRuns, this.stats.teacherCounts),
+    };
+    const lines = tellStory(rec, this.settings.boldness, this.storyRng);
+    this.story = { rec, lines };
+    if (!this.storySeen || (lines.some((l) => l.madeUp) && (!otherCard || otherCard === 'home'))) {
+      this.storySeen = true;
+      this.showCard('story');
+    }
+  }
+
+  /** Tell it again: the same trip, new wording and new made-up parts (at the boldness set now). */
+  private tellAgain() {
+    if (!this.story) return;
+    this.story.lines = tellStory(this.story.rec, this.settings.boldness, this.storyRng);
+    this.renderPanel();
+  }
+
+  /** The "Her story" box: each sentence with a footprint (true) or a dashed cloud (made up). */
+  private storyBox(): HTMLElement | null {
+    const st = this.story;
+    if (!st) return null;
+    return h('div', { class: 'story' },
+      h('h4', {}, this.hq('Her story', 'story')),
+      h('ol', {}, ...st.lines.map((l) => h('li', { class: l.madeUp ? 'made-up' : '' }, l.madeUp ? cloudMark() : footprintMark(), h('span', {}, l.text)))),
+      h('p', { class: 'story-count' }, storyCount(st.lines)),
+      h('div', { class: 'row spaced' }, h('button', { onclick: () => this.tellAgain(), title: 'The same trip, told again' }, 'Tell it again'), this.q('retell')));
   }
 
   private toggleAuto() {
@@ -791,6 +835,7 @@ export class App {
     this.tripStopped = true;
     this.board.say(null);
     this.showCard('stop');
+    if (w.t > 0) this.tellStory(w, 'stop');
     this.render();
   }
 
@@ -1343,6 +1388,7 @@ export class App {
       probsBox,
       // After every trip, also one cut short with Stop: there was a walk to tell about.
       w && !walking && w.t > 0 ? this.reportBox(w, this.why) : null,
+      w && !walking && w.t > 0 ? this.storyBox() : null,
       // Purely optional settings, in their own box below.
       h('div', { class: 'settings-box' },
       h('h3', {}, 'Settings (optional)'),
