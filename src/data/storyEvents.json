@@ -107,6 +107,25 @@
       "versions": ["A woodpecker drummed: knock, knock, knock.", "A woodpecker was busy making a new door in a tree."],
       "thoughts": ["Knock, knock! Who's there?", "A woodpecker is drumming."],
       "popup": "Knock knock!"
+    },
+    {
+      "id": 19, "name": "Sly fox", "fits": "den", "trigger": "step", "effect": "takeCake",
+      "versions": ["A sly fox pretended to be lost, and while she showed it the way, it ran off with the cake.", "A fox snatched the cake from her basket and vanished into the bushes."],
+      "quiet": ["The fox sniffed her empty basket and trotted off.", "A fox peeked into her basket, found no cake and slunk away."],
+      "thoughts": ["Hey! My cake!", "That sly fox took my cake!"],
+      "popup": "A fox!"
+    },
+    {
+      "id": 20, "name": "Grandma's neighbour", "fits": "home", "trigger": "step", "effect": "giveFlowers",
+      "versions": ["Grandma's neighbour waved from her garden and gave her a bunch of flowers.", "A kind old neighbour picked some flowers for Grandma and put them in her basket."],
+      "thoughts": ["Thank you! Flowers for Grandma.", "Flowers from the neighbour!"],
+      "popup": "Flowers!"
+    },
+    {
+      "id": 21, "name": "Magpie's gift", "fits": "open", "trigger": "step", "effect": "giveTreasure",
+      "versions": ["A magpie dropped something shiny into her basket: a treasure!", "A magpie gave her a glittering stone, then flew away laughing."],
+      "thoughts": ["Ooh, shiny!", "A present from a magpie!"],
+      "popup": "Shiny!"
     }
   ],
   "fantasy": [

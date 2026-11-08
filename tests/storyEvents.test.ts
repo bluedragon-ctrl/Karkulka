@@ -5,10 +5,10 @@ import { mulberry32 } from '../src/rng';
 import { Walker } from '../src/sim';
 import {
   CAST, EventKind, EventTracker, MAX_POPUP, STORY, SPOT_COUNT, StoryData, checkStoryData, eventKind, eventSpotTiles, eventsSetOff,
-  fixedSeed, placeStoryEvents, placeTests, tripSeed,
+  fixedSeed, metText, placeStoryEvents, placeTests, tripSeed,
 } from '../src/storyEvents';
 import { FIXED, JUDGES, judgeMaps, judgeRewards, newStats, runOf, trainLessons } from '../src/train';
-import { HOME, PATH, SWAMP, Tile, TREE, forestFromTiles, homeIndex, xyOf } from '../src/world';
+import { HOME, PATH, SWAMP, Tile, TREE, applyEffect, forestFromTiles, homeIndex, xyOf } from '../src/world';
 
 const CODES = ['KARKULKA', 'A1', 'B2', 'C3', 'D4', 'E5'];
 
@@ -167,5 +167,99 @@ describe('what a trip sets off', () => {
       expect(withEvents.positions).toEqual(plain.positions);
       for (const j of JUDGES) expect(judgeRewards(j, f, maps, runOf(withEvents))).toEqual(judgeRewards(j, f, maps, runOf(plain)));
     }
+  });
+});
+
+const FOX = CAST.find((k) => k.effect === 'takeCake')!.id;
+const NEIGHBOUR = CAST.find((k) => k.effect === 'giveFlowers')!.id;
+
+describe('events that change her basket', () => {
+  it('the data has the three effects, each on a step event', () => {
+    expect(new Set(CAST.filter((k) => k.effect).map((k) => k.effect))).toEqual(new Set(['takeCake', 'giveFlowers', 'giveTreasure']));
+    const bad: StoryData = JSON.parse(JSON.stringify(STORY));
+    bad.events.push({ ...bad.events[0], id: 98, effect: 'takeCake' as never });
+    bad.events.push({ ...bad.events[1], id: 99, effect: 'giveGold' as never, quiet: ['x'] });
+    const errors = checkStoryData(bad);
+    expect(errors.some((e) => /step trigger/.test(e))).toBe(true);
+    expect(errors.some((e) => /quiet version/.test(e))).toBe(true);
+    expect(errors.some((e) => /unknown effect/.test(e))).toBe(true);
+    expect(errors.some((e) => /quiet versions only/.test(e))).toBe(true);
+  });
+
+  it('applies an effect like the same change by a tile, and takes no cake that is not there', () => {
+    const b = { cake: true, flowers: 0, treasure: 0 };
+    expect(applyEffect(b, 'giveFlowers')).toBe(true);
+    expect(applyEffect(b, 'giveTreasure')).toBe(true);
+    expect(applyEffect(b, 'takeCake')).toBe(true);
+    expect(b).toEqual({ cake: false, flowers: 1, treasure: 1 });
+    expect(applyEffect(b, 'takeCake')).toBe(false);
+    expect(b).toEqual({ cake: false, flowers: 1, treasure: 1 });
+  });
+
+  it('the tracker changes the basket once, and the fox finds an empty basket quietly', () => {
+    const f = openForest();
+    const spots = [{ i: at(2, 6), kind: FOX }, { i: at(4, 6), kind: NEIGHBOUR }];
+    const pos = [at(1, 6), at(2, 6), at(3, 6), at(2, 6), at(3, 6), at(4, 6)];
+    const basket = { cake: true, flowers: 0, treasure: 0 };
+    const tr = new EventTracker(f, spots, mulberry32(1));
+    for (let t = 1; t <= pos.length; t++) tr.after(pos.slice(0, t), basket);
+    expect(basket).toEqual({ cake: false, flowers: 1, treasure: 0 });
+    expect(tr.met.map((e) => [e.kind, e.t, e.effect])).toEqual([[FOX, 1, 'takeCake'], [NEIGHBOUR, 5, 'giveFlowers']]);
+    const empty = { cake: false, flowers: 0, treasure: 0 };
+    const quiet = new EventTracker(f, spots, mulberry32(1));
+    quiet.after(pos.slice(0, 2), empty);
+    expect(empty.cake).toBe(false);
+    expect(quiet.met[0]).toMatchObject({ kind: FOX, quiet: true });
+    expect(quiet.met[0].effect).toBeUndefined();
+    expect(eventKind(FOX)!.quiet).toContain(metText(quiet.met[0]));
+    // Without a basket (as in the older tests) nothing is applied.
+    const none = new EventTracker(f, spots, mulberry32(1));
+    none.after(pos);
+    expect(none.met.every((e) => !e.effect && !e.quiet)).toBe(true);
+  });
+
+  it('on a trip alone the change shows in the basket she reads at the next step; trips stay reproducible', () => {
+    let effects = 0;
+    const kinds = new Set<string>();
+    for (const code of CODES) {
+      const f = generateForest(code);
+      const rng = mulberry32(11);
+      const model = createModel({ memory: 3, hint: false, hidden: FIXED.hidden }, rng);
+      trainLessons(model, createAdam(model), f, 'grandma', 60, newStats(f), rng);
+      for (let k = 0; k < 30; k++) {
+        const spots = placeStoryEvents(f, CAST, SPOT_COUNT, tripSeed(k));
+        const start = eventSpotTiles(f, 60)[k];
+        const walk = () => {
+          const w = new Walker(f, model, start, 80, 1, mulberry32(k));
+          w.events = new EventTracker(f, spots, mulberry32(500 + k));
+          w.run();
+          return w;
+        };
+        const w = walk();
+        expect(walk().positions).toEqual(w.positions);
+        const tr = w.events as EventTracker;
+        expect(w.effects).toEqual(tr.met.filter((e) => e.effect).map((e) => ({ t: e.t, kind: e.kind, effect: e.effect })));
+        for (const e of w.effects) {
+          effects++; kinds.add(e.effect);
+          const before = w.baskets[e.t - 1], after = w.baskets[e.t];
+          if (e.effect === 'takeCake') expect([before.cake, after.cake]).toEqual([true, false]);
+          if (e.effect === 'giveFlowers') expect(after.flowers).toBeGreaterThan(before.flowers);
+          if (e.effect === 'giveTreasure') expect(after.treasure).toBeGreaterThan(before.treasure);
+          if (e.t < w.history.baskets.length) expect(w.history.baskets[e.t]).toEqual(after);
+        }
+      }
+    }
+    expect(effects).toBeGreaterThan(5);
+    expect(kinds.size).toBe(3);
+  });
+
+  it('lessons, practice and test trips never apply effects: a walker without events walks as before', () => {
+    const f = generateForest('A1');
+    const rng = mulberry32(2);
+    const model = createModel({ memory: 3, hint: false, hidden: FIXED.hidden }, rng);
+    const w = new Walker(f, model, eventSpotTiles(f, 5)[0], 60, 1, mulberry32(3));
+    w.run();
+    expect(w.events).toBeNull();
+    expect(w.effects).toEqual([]);
   });
 });

@@ -709,6 +709,7 @@ export class App {
     this.tripSpots = !this.settings.events ? []
       : this.settings.newPlaces ? placeStoryEvents(this.forest, CAST, SPOT_COUNT, tripSeed(this.storyRng() * 2 ** 32)) : this.eventSpots;
     this.tracker = this.settings.events ? new EventTracker(this.forest, this.tripSpots, mulberry32((Math.random() * 2 ** 32) >>> 0)) : null;
+    this.walker.events = this.tracker;
     this.why = null;
     this.techStep = 0;
     this.board.clearFx();
@@ -724,7 +725,7 @@ export class App {
     if (bumped && this.fresh !== 'tree' && w.blocked.filter(Boolean).length === 1) this.showCard('tree');
     if (w.results[w.t - 1] === 'grabbed' && this.fresh !== 'cakeShield') this.showCard('cakeShield');
     if (this.forest.tiles[w.pos] === SWAMP && !bumped && this.fresh !== 'swamp' && !w.positions.slice(0, -1).some((p) => this.forest.tiles[p] === SWAMP)) this.showCard('swamp');
-    this.lastMet = this.tracker?.after(w.positions) ?? [];
+    this.lastMet = this.tracker?.met.filter((e) => e.t === w.t) ?? [];
     // Made up after the move is picked, so she can comment on the move she just took.
     return this.thoughts?.after(w, this.lastMet.map((e) => eventKind(e.kind)?.thoughts ?? [])) ?? null;
   }
@@ -1303,7 +1304,7 @@ export class App {
         h('label', { class: 'check' },
           h('input', { type: 'checkbox', checked: this.settings.events, onchange: (e: Event) => {
             this.settings.events = (e.target as HTMLInputElement).checked;
-            if (!this.settings.events) this.tracker = null;
+            if (!this.settings.events) { this.tracker = null; if (this.walker) this.walker.events = null; }
             this.saveSoon(); this.showCard('events'); this.renderBoard(); this.renderPanel();
           } }),
           h('span', {}, this.hq('Things happen in the forest', 'events'))),

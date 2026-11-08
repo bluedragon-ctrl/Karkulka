@@ -7,7 +7,7 @@
  */
 import type { Rng } from './rng';
 import type { Outcome } from './sim';
-import { CAST, EventMet, STORY, eventKind, placeOf } from './storyEvents';
+import { CAST, EventMet, STORY, eventKind, metText, placeOf } from './storyEvents';
 import { Forest, StepResult, SWAMP } from './world';
 
 /** What really happened on a trip (a `Walker` plus the events it met). */
@@ -88,7 +88,7 @@ export function tellStory(rec: TripRecord, boldness: number, rng: Rng): StorySen
   for (const e of rec.met) {
     const kind = eventKind(e.kind);
     if (!kind) continue;
-    middle.push({ t: e.t, s: truth(kind.versions[e.version] ?? kind.versions[0], 'event'), keep: kind.trigger === 'step' });
+    middle.push({ t: e.t, s: truth(metText(e), 'event'), keep: kind.trigger === 'step' });
   }
   const swampAt = rec.positions.findIndex((p, k) => k > 0 && f.tiles[p] === SWAMP && rec.positions[k - 1] !== p);
   if (swampAt > 0) middle.push({ t: swampAt, s: truth(pickFrom(rng, STORY.swamp), 'swamp'), keep: false });

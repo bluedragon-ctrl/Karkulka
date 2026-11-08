@@ -570,7 +570,7 @@ Thoughts in her voice: "Hey! My cake!", "Thank you! Flowers for Grandma.", "Ooh,
 **Build order** (each step its own commit; the design doc updated as parts are built)
 
 1. ~~New places every trip~~ (built).
-2. Data and effects: the `effect` field and `quiet` versions in the data file and its test, the three kinds, the effect hook in `Walker` and `effects` on the trip, and the tests above.
+2. ~~Data and effects~~ (built; moved into the design in step 5): the `effect` field and `quiet` versions in the data file and its test, the three kinds, the effect hook in `Walker` and `effects` on the trip, and the tests above.
 3. Trip alone: pop-ups, thoughts, the status line, the trip report's basket row, "Why did she do that?", and the basket-events card.
 4. The story: effect events always told, never borrowed.
 5. Measure, then move the finished parts into [Forest events and her story](#forest-events-and-her-story) and the sections above.

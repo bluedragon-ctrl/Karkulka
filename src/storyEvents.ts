@@ -8,7 +8,7 @@
 import data from './data/storyEvents.json';
 import { parentRouteTiles } from './forest';
 import { Rng, rngFrom, shuffle } from './rng';
-import { Forest, HOME, MOVES, PATH, SWAMP, TREE, WOLF, neighbor, tileAt, walkingDistances, xyOf } from './world';
+import { Basket, EFFECTS, Effect, Forest, HOME, MOVES, PATH, SWAMP, TREE, WOLF, applyEffect, neighbor, tileAt, walkingDistances, xyOf } from './world';
 
 /** Places the code knows; a kind's `fits` must be one of them. */
 export const PLACES = ['anywhere', 'swamp', 'den', 'home', 'deadEnd', 'corridor', 'crossing', 'open'] as const;
@@ -29,6 +29,10 @@ export interface EventKind {
   thoughts: string[];
   /** The short pop-up word over her. */
   popup: string;
+  /** What it does to her basket on a trip alone (only `step` events); none for most kinds. */
+  effect?: Effect;
+  /** Story sentences for when its effect finds nothing to change (the fox and an empty basket). */
+  quiet?: string[];
 }
 
 export interface StoryData {
@@ -68,6 +72,16 @@ export function checkStoryData(d: StoryData): string[] {
     [...(k.versions ?? []), ...(k.thoughts ?? [])].forEach((s) => text(s, w));
     text(k.popup, w);
     if (typeof k.popup === 'string' && k.popup.length > MAX_POPUP) errors.push(`${w}: pop-up longer than ${MAX_POPUP} characters`);
+    if (k.effect !== undefined) {
+      if (!EFFECTS.includes(k.effect)) errors.push(`${w}: unknown effect "${k.effect}"`);
+      if (k.trigger !== 'step') errors.push(`${w}: an effect needs the step trigger`);
+      if (k.effect === 'takeCake' && !k.quiet?.length) errors.push(`${w}: takeCake needs at least 1 quiet version`);
+    }
+    if (k.quiet !== undefined) {
+      if (k.effect !== 'takeCake') errors.push(`${w}: quiet versions only for takeCake`);
+      if (!Array.isArray(k.quiet)) errors.push(`${w}: quiet must be a list`);
+      else k.quiet.forEach((s) => text(s, w));
+    }
   }
   const lists: [string, unknown][] = [
     ['fantasy', d.fantasy], ['swamp', d.swamp], ['bumps', d.bumps],
@@ -202,7 +216,19 @@ export function placeStoryEvents(f: Forest, cast: readonly EventKind[] = CAST, c
 // ---------- on a trip ----------
 
 /** One event she set off: which spot and kind, at which step (1 = after her first move), and how it turned out. */
-export interface EventMet { spot: number; kind: number; t: number; version: number }
+/**
+ * An event she met. `version` indexes the kind's `versions`, or its `quiet` versions when its
+ * effect found nothing to change; `effect` is set when it changed her basket.
+ */
+export interface EventMet { spot: number; kind: number; t: number; version: number; quiet?: boolean; effect?: Effect }
+
+/** The story sentence of an event she met, as it turned out. */
+export function metText(e: EventMet): string {
+  const k = eventKind(e.kind);
+  if (!k) return '';
+  const list = e.quiet && k.quiet?.length ? k.quiet : k.versions;
+  return list[e.version] ?? list[0];
+}
 
 /**
  * Whether the spot sets off at step t of her positions: a `step` event when she steps onto
@@ -245,15 +271,24 @@ export class EventTracker {
 
   constructor(readonly forest: Forest, readonly spots: readonly EventSpot[], private readonly rng: Rng) {}
 
-  /** Call after each step (or after several): the events set off since the last call. */
-  after(positions: readonly number[]): EventMet[] {
+  /**
+   * Call after each step (or after several): the events set off since the last call. With her
+   * basket (a trip alone), an event with an effect changes it, and one whose effect finds
+   * nothing to change turns out one of its quiet ways.
+   */
+  after(positions: readonly number[], basket?: Basket): EventMet[] {
     const fresh: EventMet[] = [];
     for (let t = Math.max(1, this.checked + 1); t < positions.length; t++) {
       for (const s of this.spots) {
         if (this.done.has(s.i) || !setsOffAt(this.forest, s, positions, t)) continue;
         this.done.add(s.i);
         const k = eventKind(s.kind)!;
-        const e = { spot: s.i, kind: s.kind, t, version: Math.floor(this.rng() * k.versions.length) };
+        const r = this.rng();
+        const e: EventMet = { spot: s.i, kind: s.kind, t, version: Math.floor(r * k.versions.length) };
+        if (k.effect && basket) {
+          if (applyEffect(basket, k.effect)) e.effect = k.effect;
+          else if (k.quiet?.length) { e.quiet = true; e.version = Math.floor(r * k.quiet.length); }
+        }
         this.met.push(e);
         fresh.push(e);
       }

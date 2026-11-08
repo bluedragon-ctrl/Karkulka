@@ -4,7 +4,7 @@ import { createAdam, createModel } from '../src/model';
 import { mulberry32 } from '../src/rng';
 import { Walker } from '../src/sim';
 import { MAX_SENTENCES, TripRecord, fantasyShare, madeUpExpected, shapedBy, storyCount, tellStory } from '../src/story';
-import { CAST, EventTracker, STORY, eventKind, eventSpotTiles, placeOf, placeStoryEvents } from '../src/storyEvents';
+import { CAST, EventTracker, STORY, eventKind, eventSpotTiles, metText, placeOf, placeStoryEvents } from '../src/storyEvents';
 import { FIXED, newStats, trainLessons } from '../src/train';
 
 /** Some real trips in one forest, with the events they met. */
@@ -46,7 +46,7 @@ describe('her story', () => {
         // Every event she stepped on is told, as it turned out.
         for (const e of rec.met) {
           const kind = eventKind(e.kind)!;
-          if (kind.trigger === 'step') expect(story.map((s) => s.text)).toContain(kind.versions[e.version]);
+          if (kind.trigger === 'step') expect(story.map((s) => s.text)).toContain(metText(e));
         }
         expect(story.at(-1)!.part).toBe('closing');
         expect(story.filter((s) => s.madeUp).every((s) => s.part === 'borrowed' || s.part === 'fantasy')).toBe(true);
