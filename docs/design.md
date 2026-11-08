@@ -311,6 +311,7 @@ Where the "?" buttons are, and what makes them pulse:
 | 1. Forest | "Chosen before her lessons…" | Context length is fixed before training | Changing the memory size |
 | 1. Forest | Smell of grandma's cake | More useful input | Toggling it |
 | 1. Forest | "Things happen in the forest" | Hidden events never change her walk: only input and reward steer a model | Toggling it |
+| 1. Forest | "A few change her basket" (under "Things happen in the forest"); also on the status line's "no cake" after the fox | Text that lands in a chatbot's context steers it, true or not (search results, tool answers, prompt injection) | The first basket event in a session |
 | 1. Forest | "New places every trip" | The same question can bring back different search results, and a chatbot works with whatever it gets | Toggling it |
 | 1. Forest | "Change the forest after her lessons" | Knowledge cutoff | A change or hand edit after lessons |
 | 1. Forest | "New forest, same Red Riding Hood" | Out of training data | Choosing it |
@@ -571,7 +572,7 @@ Thoughts in her voice: "Hey! My cake!", "Thank you! Flowers for Grandma.", "Ooh,
 
 1. ~~New places every trip~~ (built).
 2. ~~Data and effects~~ (built; moved into the design in step 5): the `effect` field and `quiet` versions in the data file and its test, the three kinds, the effect hook in `Walker` and `effects` on the trip, and the tests above.
-3. Trip alone: pop-ups, thoughts, the status line, the trip report's basket row, "Why did she do that?", and the basket-events card.
+3. ~~Trip alone~~ (built): pop-ups, thoughts, the status line, the trip report's basket row, "Why did she do that?", and the basket-events card.
 4. The story: effect events always told, never borrowed.
 5. Measure, then move the finished parts into [Forest events and her story](#forest-events-and-her-story) and the sections above.
 

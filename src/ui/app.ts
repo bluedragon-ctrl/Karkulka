@@ -1,5 +1,5 @@
 /** The app: five tabs that tell the story in order. */
-import { CardKey, Explanation, basketWords, explainTrip, pickupLine, tripReport } from '../explain';
+import { CardKey, Explanation, basketWords, effectWords, explainTrip, pickupLine, tripReport } from '../explain';
 import { CHANGE_SIZES, changeForest, generateForest } from '../forest';
 import { Adam, Model, createAdam, createModel, modelFromJSON, modelToJSON } from '../model';
 import { mulberry32, normalizeCode, pick, randomCode } from '../rng';
@@ -54,6 +54,9 @@ interface Settings {
   heat: boolean;
   brush: Tile;
 }
+
+/** The crossed-out cake: the cake is gone (the wolf grabbed it, or a fox took it). */
+const crossedCake = () => s('g', {}, s('g', { opacity: 0.6 }, cake(0, 0, 9)), s('line', { x1: -10, y1: -10, x2: 10, y2: 10, stroke: COLORS.ink, 'stroke-width': 2.5 }));
 
 const DEFAULTS: Settings = {
   memory: 'medium', hint: false, teacher: 'mother', lessons: 100, practice: 1000, judge: 'grandma', practiceStarts: 'near',
@@ -197,6 +200,8 @@ export class App {
   /** Her story of the last trip alone, and what it was told from (for "Tell it again"). */
   private story: { rec: TripRecord; lines: StorySentence[] } | null = null;
   private storySeen = false;
+  /** The basket-events card pulsed already this session. */
+  private basketEventSeen = false;
   /** The story's own randomness, never the walk's. */
   private storyRng = mulberry32((Math.random() * 2 ** 32) >>> 0);
   private thoughtSeen = false;
@@ -726,8 +731,10 @@ export class App {
     if (w.results[w.t - 1] === 'grabbed' && this.fresh !== 'cakeShield') this.showCard('cakeShield');
     if (this.forest.tiles[w.pos] === SWAMP && !bumped && this.fresh !== 'swamp' && !w.positions.slice(0, -1).some((p) => this.forest.tiles[p] === SWAMP)) this.showCard('swamp');
     this.lastMet = this.tracker?.met.filter((e) => e.t === w.t) ?? [];
+    if (this.lastMet.some((e) => e.effect) && !this.basketEventSeen) { this.basketEventSeen = true; this.showCard('basketEvents'); }
     // Made up after the move is picked, so she can comment on the move she just took.
-    return this.thoughts?.after(w, this.lastMet.map((e) => eventKind(e.kind)?.thoughts ?? [])) ?? null;
+    // A fox that finds no cake has nothing to complain about: no thought for a quiet event.
+    return this.thoughts?.after(w, this.lastMet.filter((e) => !e.quiet).map((e) => eventKind(e.kind)?.thoughts ?? [])) ?? null;
   }
 
   /**
@@ -742,12 +749,14 @@ export class App {
     const res = w.results[w.t - 1];
     if (w.blocked[w.t - 1]) this.board.showOuch(w.pos, w.history.moves[w.t - 1]);
     else if (this.forest.tiles[w.pos] === SWAMP) this.board.showSplash(w.pos);
-    else if (res === 'grabbed') this.board.showPop(w.pos, 'The wolf took the cake!', s('g', {}, s('g', { opacity: 0.6 }, cake(0, 0, 9)), s('line', { x1: -10, y1: -10, x2: 10, y2: 10, stroke: COLORS.ink, 'stroke-width': 2.5 })));
+    else if (res === 'grabbed') this.board.showPop(w.pos, 'The wolf took the cake!', crossedCake());
     else if (res === 'flowers') this.board.showPop(w.pos, 'Flowers!');
     else if (res === 'treasure') this.board.showPop(w.pos, 'Treasure!', gem(0, 0, 8));
     // Forest events pop up their word too, above a basket word if there is one.
     const basketPop = res === 'grabbed' || res === 'flowers' || res === 'treasure';
-    this.lastMet.forEach((e, k) => this.board.showPop(w.pos, eventKind(e.kind)?.popup ?? '', undefined, k + (basketPop ? 2 : 0)));
+    // An event that changed her basket shows what it did: the crossed-out cake, the gem.
+    const effectIcon = (e: EventMet) => (e.effect === 'takeCake' ? crossedCake() : e.effect === 'giveTreasure' ? gem(0, 0, 8) : undefined);
+    this.lastMet.forEach((e, k) => this.board.showPop(w.pos, eventKind(e.kind)?.popup ?? '', effectIcon(e), k + (basketPop ? 2 : 0)));
     // Her first thought of the session makes the "?" by "Her thoughts" pulse, unless something else just did.
     if (thought && this.settings.thoughts && !this.thoughtSeen && this.fresh === fresh) { this.thoughtSeen = true; this.showCard('thoughts'); }
     this.afterTripSteps(w);
@@ -1308,7 +1317,8 @@ export class App {
             this.saveSoon(); this.showCard('events'); this.renderBoard(); this.renderPanel();
           } }),
           h('span', {}, this.hq('Things happen in the forest', 'events'))),
-        this.settings.events ? h('p', { class: 'muted' }, 'An owl, a frog, an empty hut… She can\'t see them, but she meets them on her trips alone, and her story tells about them.') : null,
+        this.settings.events ? h('p', { class: 'muted' }, 'An owl, a frog, an empty hut… She can\'t see them, but she meets them on her trips alone, and her story tells about them. ',
+          this.hq('A few change her basket: a sly fox, a kind neighbour, a magpie.', 'basketEvents')) : null,
         this.settings.events ? h('label', { class: 'check' },
           h('input', { type: 'checkbox', checked: this.settings.newPlaces, onchange: (e: Event) => {
             this.settings.newPlaces = (e.target as HTMLInputElement).checked;
@@ -1391,7 +1401,7 @@ export class App {
         ? [{ home: `Home after ${w.t} steps${w.basket.cake ? '' : ', without the cake'}!`, eaten: `Eaten by a wolf at step ${w.t}.`, lost: `Lost: out of energy after ${w.t} steps.` }[w.outcome!], h('br'), pickupLine(w.pickups)]
         : [
           `Step ${w.t + 1} · energy ${w.energyLeft} / ${w.energy}`,
-          !w.basket.cake ? h('span', { class: 'nowrap' }, this.hq(' · no cake: the next den is the end!', 'cakeShield', 'status')) : null,
+          !w.basket.cake ? h('span', { class: 'nowrap' }, this.hq(' · no cake: the next den is the end!', w.effects.some((e) => e.effect === 'takeCake') ? 'basketEvents' : 'cakeShield', 'status')) : null,
           w.t > 0 && w.blocked[w.t - 1] ? h('span', { class: 'nowrap' }, this.hq(' · ouch, a tree!', 'tree', 'status')) : null,
           this.forest.tiles[w.pos] === SWAMP ? h('span', { class: 'nowrap' }, this.hq(' · in a swamp, tiring!', 'swamp', 'status')) : null,
           this.settings.hint ? h('span', { class: 'nowrap' }, this.hq(` · smells cake to the ${SECTOR_WORDS[homeSector(this.forest, w.pos)]}`, 'hint')) : null,
@@ -1461,17 +1471,21 @@ export class App {
     );
   }
 
-  /** What is in her basket at the end: the cake or not, flowers, treasure. */
+  /** What is in her basket at the end: the cake or not, flowers, treasure, and where the changes came from. */
   private basketRow(w: Walker, icon: (...kids: SVGElement[]) => SVGSVGElement): HTMLElement {
     const b = w.basket;
     const things = basketWords(b);
     const word = w.outcome === 'eaten' ? 'lost with her' : !b.cake ? (things ? `no cake, but ${things}` : 'no cake') : things ? `the cake and ${things}` : 'the cake';
     // Always say how many she found, out of how many the forest has.
-    const picked = pickupLine(w.pickups).replace(/^Picked/, 'picked').replace(/\.$/, '');
+    // Tile pickups first, then what forest events gave her ("plus a bunch of flowers from Grandma's neighbour at step 9").
+    const gifts = w.effects.filter((e) => e.effect !== 'takeCake').map(effectWords);
+    const picked = pickupLine(w.pickups).replace(/^Picked/, 'picked').replace(/\.$/, '') + (gifts.length ? `, plus ${gifts.join(' and ')}` : '');
+    const fox = w.effects.find((e) => e.effect === 'takeCake');
+    const cakeGone = fox ? effectWords(fox) : w.cakeLostAt >= 0 ? `the wolf grabbed the cake at step ${w.cakeLostAt + 1}` : '';
     const detail = w.outcome === 'eaten'
-      ? `${picked}; the wolf has the whole basket`
-      : w.cakeLostAt >= 0
-        ? `${picked}; the wolf grabbed the cake at step ${w.cakeLostAt + 1}${w.outcome === 'home' ? '' : '; flowers only count at Grandma\'s'}`
+      ? `${picked}; ${fox ? `${cakeGone}, and ` : ''}the wolf has the whole basket`
+      : cakeGone
+        ? `${picked}; ${cakeGone}${w.outcome === 'home' ? '' : '; flowers only count at Grandma\'s'}`
         : w.outcome === 'home' ? `${picked}; ${things ? 'all delivered' : 'the cake delivered'} to Grandma` : `${picked}; flowers only count at Grandma's`;
     return h('div', { class: 'report-row' }, icon(cake(0, 1, 10)),
       h('span', {}, h('strong', {}, this.hq(`Basket: ${word}`, 'processReward', 'basketReport')), h('br'), h('small', {}, detail)));

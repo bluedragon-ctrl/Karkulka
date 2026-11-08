@@ -1,5 +1,5 @@
 /** The "Why did she do that?" note after a trip, and the LM corner cards. */
-import type { Walker } from './sim';
+import type { EffectDone, Walker } from './sim';
 import { FIXED, TrainStats, headsHome } from './train';
 import { buildVocabulary, viewKey } from './tokens';
 import { SWAMP_PENALTY, WOLF_PENALTY } from './teachers';
@@ -11,7 +11,7 @@ export type CardKey =
   | 'tech' | 'vocabulary' | 'judge' | 'swamp' | 'tree' | 'thoughts' | 'stop'
   | 'tripReport' | 'judgeGrandma' | 'judgeFather' | 'judgeMother' | 'judgeCrow' | 'rewardHacking' | 'teacherVsJudge'
   | 'wolfTeacher' | 'crowTeacher' | 'grandmaTeacher' | 'magpieTeacher' | 'poisonedData' | 'judgeWolf' | 'fixBadData'
-  | 'basket' | 'cakeShield' | 'judgeMagpie' | 'processReward' | 'events' | 'newPlaces' | 'story' | 'retell'
+  | 'basket' | 'cakeShield' | 'judgeMagpie' | 'processReward' | 'events' | 'newPlaces' | 'basketEvents' | 'story' | 'retell'
   | 'newWorld' | 'movedHome' | 'catchUp' | 'forestCode' | 'editForest' | 'recipe'
   | 'compute' | 'tokenFreq' | 'ambiguous' | 'uncertainty'
   | 'moreData' | 'guess' | 'watchMany' | 'runScore' | 'testTrips' | 'sampling' | 'curriculum' | 'oneHot' | 'weights' | 'loss' | 'hyper' | 'modelFile';
@@ -82,6 +82,7 @@ export const CARDS: Record<CardKey, string> = {
   processReward: "Treasure counts the moment she picks it up; Grandma's flowers count only if she brings them home. A judge can reward each step on the way or only the finished task. Chatbots are trained both ways: points for each step of the working, or only for the final answer.",
   events: "The forest is full of little events, but she cannot see them and no judge scores them, so they never change her walk. A chatbot is the same: only what is in its input and what its training rewarded steer what it writes.",
   story: "Her story is made after the trip from what really happened (footprints), plus bits the storyteller makes up (clouds). The bolder she is, the more it invents. Chatbots do this too: what rests on facts they were given is reliable, and where they fill gaps they invent things that sound just as true.",
+  basketEvents: "The owl doesn't change her walk, but the fox does: it changed her basket, which she reads at every step. A chatbot is the same: whatever lands in its context, a search result or a planted instruction, steers what it writes, true or not.",
   newPlaces: "Off, the owl always lives in the same tree. On, the events move every trip, so you never know what she will meet. A chatbot's world is like that too: the same question can bring back different search results, and it works with whatever it gets.",
   retell: "Tell it again keeps the true parts and the order, but picks new words and new made-up bits. Asking a chatbot to regenerate works the same way: the same facts can come back in a new telling, with new mistakes.",
   fixBadData: "Grandma's practice can undo some of what the wolf taught. Fine-tuning can fix bad habits, but the more there are, the longer it takes. Clean lessons are better than fixing later.",
@@ -229,6 +230,15 @@ export function basketWords(b: { flowers: number; treasure: number }): string {
   return parts.join(' and ');
 }
 
+/** What a forest event did to her basket, for the trip report and the notes: "the fox took the cake at step 7". */
+export function effectWords(e: EffectDone): string {
+  return {
+    takeCake: `the fox took the cake at step ${e.t}`,
+    giveFlowers: `a bunch of flowers from Grandma's neighbour at step ${e.t}`,
+    giveTreasure: `a treasure from a magpie at step ${e.t}`,
+  }[e.effect];
+}
+
 /**
  * "Picked 1 of 3 flowers and 0 of 2 treasures": always both counts, out of how many the
  * forest has, so the end of a trip says plainly what she found.
@@ -243,6 +253,19 @@ function basketNote(w: Walker, stats: TrainStats | null): Explanation | null {
   const n = w.decisions.length;
   const things = basketWords(w.basket);
   const brought = things ? ` She brought ${things}.` : '';
+  const fox = w.effects.find((e) => e.effect === 'takeCake');
+  if (fox) {
+    return { title: 'Why did she do that?', text: `She got home in ${n} steps, but without the cake: at step ${fox.t} a sly fox took it.${brought}`, card: 'basketEvents' };
+  }
+  // Grandma's lessons come home once there are flowers in the basket, whoever put them there.
+  const gift = w.effects.find((e) => e.effect === 'giveFlowers');
+  if (gift && (stats?.teacherCounts.grandma ?? 0) > 0 && w.baskets[gift.t - 1].flowers === 0) {
+    return {
+      title: 'Why did she do that?',
+      text: `She got home in ${n} steps with the cake.${brought} At step ${gift.t} Grandma's neighbour gave her flowers. Grandma's lessons head home once flowers are in the basket, so the flowers told her the errand was done, though she never picked any.`,
+      card: 'basketEvents',
+    };
+  }
   if (w.cakeLostAt >= 0) {
     const father = (stats?.judgeRuns?.father ?? 0) > 0;
     return {
@@ -252,13 +275,14 @@ function basketNote(w: Walker, stats: TrainStats | null): Explanation | null {
       card: 'cakeShield',
     };
   }
-  if (w.basket.treasure && (stats?.judgeRuns?.magpie ?? 0) > 0) {
+  const picked = w.pickups;
+  if (picked.treasure && (stats?.judgeRuns?.magpie ?? 0) > 0) {
     return { title: 'Why did she do that?', text: `She got home in ${n} steps with the cake.${brought} The magpie paid for the treasure the moment she picked it up.`, card: 'judgeMagpie' };
   }
-  if (w.basket.treasure && (stats?.teacherCounts.magpie ?? 0) > 0) {
+  if (picked.treasure && (stats?.teacherCounts.magpie ?? 0) > 0) {
     return { title: 'Why did she do that?', text: `She got home in ${n} steps with the cake.${brought} The magpie's lessons went for the treasure first, so she did too.`, card: 'magpieTeacher' };
   }
-  if (w.basket.flowers && (stats?.teacherCounts.grandma ?? 0) > 0) {
+  if (picked.flowers && (stats?.teacherCounts.grandma ?? 0) > 0) {
     return { title: 'Why did she do that?', text: `She got home in ${n} steps with the cake.${brought} Grandma's lessons fetched flowers first, then came home, so she did too.`, card: 'grandmaTeacher' };
   }
   if (things) {
@@ -303,6 +327,14 @@ export function explainTrip(w: Walker, f: Forest, stats: TrainStats | null, outd
     const raw = d.raw[chosen];
     const taught = stats?.coverage[from] ?? 0;
     const alike = lookAlikes(from);
+    const fox = w.effects.find((e) => e.effect === 'takeCake');
+    if (fox) {
+      return {
+        title: 'Why did she do that?',
+        text: `At step ${fox.t} a sly fox took the cake. Without the cake, the next den at step ${t + 1} was the end.${cutoff}`,
+        card: 'basketEvents',
+      };
+    }
     const grabbedAt = w.cakeLostAt;
     if (grabbedAt >= 0 && (stats?.judgeRuns?.wolf ?? 0) === 0 && (stats?.teacherCounts.wolf ?? 0) === 0) {
       return {

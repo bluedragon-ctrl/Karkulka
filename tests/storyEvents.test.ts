@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { effectWords, explainTrip } from '../src/explain';
 import { generateForest } from '../src/forest';
 import { createAdam, createModel } from '../src/model';
 import { mulberry32 } from '../src/rng';
@@ -261,5 +262,45 @@ describe('events that change her basket', () => {
     w.run();
     expect(w.events).toBeNull();
     expect(w.effects).toEqual([]);
+  });
+});
+
+describe('basket events in the notes after a trip', () => {
+  /** Trips alone with events (new places each trip) after some lessons, until `want` finds one. */
+  function findTrip(teacher: 'grandma' | 'father', want: (w: Walker) => boolean): { w: Walker; stats: ReturnType<typeof newStats>; f: ReturnType<typeof generateForest> } {
+    for (const code of CODES) {
+      const f = generateForest(code);
+      const rng = mulberry32(21);
+      const model = createModel({ memory: 3, hint: false, hidden: FIXED.hidden }, rng);
+      const stats = newStats(f);
+      trainLessons(model, createAdam(model), f, teacher, 80, stats, rng);
+      const starts = eventSpotTiles(f, 60);
+      for (let k = 0; k < 300; k++) {
+        const w = new Walker(f, model, starts[k % starts.length], 80, 1.2, mulberry32(k));
+        w.events = new EventTracker(f, placeStoryEvents(f, CAST, SPOT_COUNT, tripSeed(k)), mulberry32(k));
+        w.run();
+        if (want(w)) return { w, stats, f };
+      }
+    }
+    throw new Error('no such trip');
+  }
+
+  it('eaten after the fox took the cake: the fox is to blame', () => {
+    const { w, stats, f } = findTrip('father', (w) => w.outcome === 'eaten' && w.effects.some((e) => e.effect === 'takeCake'));
+    const e = explainTrip(w, f, stats, false);
+    expect(e.card).toBe('basketEvents');
+    expect(e.text).toMatch(/fox took the cake/);
+  });
+
+  it('home after the neighbour\'s flowers, after Grandma\'s lessons: the flowers told her the errand was done', () => {
+    const { w, stats, f } = findTrip('grandma', (w) => w.outcome === 'home' && w.basket.cake && w.pickups.flowers === 0 && w.effects.some((e) => e.effect === 'giveFlowers'));
+    const e = explainTrip(w, f, stats, false);
+    expect(e.card).toBe('basketEvents');
+    expect(e.text).toMatch(/neighbour gave her flowers/);
+  });
+
+  it('names where a basket change came from', () => {
+    expect(effectWords({ t: 7, kind: 19, effect: 'takeCake' })).toBe('the fox took the cake at step 7');
+    expect(effectWords({ t: 3, kind: 20, effect: 'giveFlowers' })).toMatch(/neighbour at step 3/);
   });
 });
