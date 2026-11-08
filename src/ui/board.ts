@@ -5,8 +5,8 @@ import { COLORS, TeacherFigure, arrowPath, heartPath, parentFigure, redFigure, t
 
 export const T = 40;
 
-type Layer = 'tiles' | 'heat' | 'radius' | 'changed' | 'trails' | 'trace' | 'marks' | 'actors' | 'arrows' | 'fog' | 'fx' | 'talk';
-const LAYERS: Layer[] = ['tiles', 'heat', 'radius', 'changed', 'trails', 'trace', 'marks', 'actors', 'arrows', 'fog', 'fx', 'talk'];
+type Layer = 'tiles' | 'heat' | 'radius' | 'changed' | 'trails' | 'trace' | 'marks' | 'actors' | 'arrows' | 'fog' | 'events' | 'fx' | 'talk';
+const LAYERS: Layer[] = ['tiles', 'heat', 'radius', 'changed', 'trails', 'trace', 'marks', 'actors', 'arrows', 'fog', 'events', 'fx', 'talk'];
 
 export class Board {
   readonly svg: SVGSVGElement;
@@ -152,6 +152,22 @@ export class Board {
       this.layers.changed.append(
         s('rect', { ...box, stroke: COLORS.ink, 'stroke-width': 4 }),
         s('rect', { ...box, stroke: COLORS.changed, 'stroke-width': 4, 'stroke-dasharray': '5 4' }, s('title', {}, 'changed since her lessons')));
+    }
+  }
+
+  /**
+   * "Show events" (for testing): each hidden event spot's kind number in a small white circle
+   * with a dark border, drawn above the fog. Event spots are otherwise never drawn.
+   */
+  setEventMarks(spots: readonly { i: number; kind: number; name?: string }[] | null) {
+    clear(this.layers.events);
+    if (!spots) return;
+    for (const sp of spots) {
+      const [x, y] = xyOf(this.forest, sp.i);
+      this.layers.events.append(s('g', { transform: `translate(${x * T + T - 10},${y * T + T - 10})`, 'pointer-events': 'none' },
+        s('circle', { r: 8.5, fill: '#fff', stroke: COLORS.ink, 'stroke-width': 1.5 }),
+        s('text', { y: 3.5, 'text-anchor': 'middle', 'font-size': 10, 'font-weight': 700, fill: COLORS.ink }, String(sp.kind)),
+        sp.name ? s('title', {}, sp.name) : null));
     }
   }
 

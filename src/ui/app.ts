@@ -4,6 +4,7 @@ import { CHANGE_SIZES, changeForest, generateForest } from '../forest';
 import { Adam, Model, createAdam, createModel, modelFromJSON, modelToJSON } from '../model';
 import { mulberry32, normalizeCode, pick, randomCode } from '../rng';
 import { Outcome, Walker, predictAt } from '../sim';
+import { EventSpot, eventKind, placeStoryEvents } from '../storyEvents';
 import { Thoughts } from '../thoughts';
 import * as store from '../storage';
 import { LessonWalk, TEACHER_KINDS, Teacher, TeacherChoice, costToHome, endsAtDen, endsStuck, teacherMoves, walkLesson } from '../teachers';
@@ -45,13 +46,15 @@ interface Settings {
   fog: boolean;
   /** Her little thought bubbles on a trip alone. */
   thoughts: boolean;
+  /** Hidden forest events on a trip alone, and in her story (missing in older saves: on). */
+  events: boolean;
   heat: boolean;
   brush: Tile;
 }
 
 const DEFAULTS: Settings = {
   memory: 'medium', hint: false, teacher: 'mother', lessons: 100, practice: 1000, judge: 'grandma', practiceStarts: 'near',
-  energy: 80, boldness: 0.7, fog: false, thoughts: true, heat: true, brush: TREE,
+  energy: 80, boldness: 0.7, fog: false, thoughts: true, events: true, heat: true, brush: TREE,
 };
 
 const TEACHERS: { id: TeacherChoice; name: string; text: string }[] = [
@@ -183,6 +186,10 @@ export class App {
   private tripStopped = false;
   private thoughts: Thoughts | null = null;
   private thoughtSeen = false;
+  /** "Show events" (for testing): the event spots' kind numbers on the board. Not saved. */
+  private showEvents = false;
+  /** The forest's event spots, worked out again whenever the tiles change. */
+  private spotsCache: { key: string; spots: EventSpot[] } | null = null;
   watch: { walk: LessonWalk; k: number } | null = null;
   techStep = 0;
   /** The card whose "?" pulses: something just happened that it explains. */
@@ -237,6 +244,21 @@ export class App {
 
   get trained() { return !!this.model && this.stats.lessons > 0; }
   get outdated() { return this.trained && this.modelTiles !== store.packTiles(this.forest.tiles); }
+
+  /** The hidden event spots of the current forest (none when events are off). */
+  get eventSpots(): EventSpot[] {
+    if (!this.settings.events) return [];
+    const key = `${this.forest.code}:${this.forest.size}:${store.packTiles(this.forest.tiles)}`;
+    if (this.spotsCache?.key !== key) this.spotsCache = { key, spots: placeStoryEvents(this.forest) };
+    return this.spotsCache.spots;
+  }
+
+  /** The "Show events" button, shown while events are on. */
+  private showEventsButton(): HTMLElement | null {
+    if (!this.settings.events) return null;
+    return h('button', { class: 'subtle', 'aria-pressed': String(this.showEvents), title: 'For testing: show where the hidden events are, with their numbers',
+      onclick: () => { this.showEvents = !this.showEvents; this.renderBoard(); this.renderPanel(); } }, this.showEvents ? 'Hide events' : 'Show events');
+  }
 
   private markTrained() { this.modelTiles = store.packTiles(this.forest.tiles); }
 
@@ -439,7 +461,7 @@ export class App {
     this.edited = true;
     this.walker = null;
     this.board.updateTile(i, brush);
-    if (brush === HOME) this.renderBoard(); // the practice circle and heatmap follow the house
+    if (brush === HOME || this.showEvents) this.renderBoard(); // the practice circle, heatmap and event spots follow the tiles
     this.renderChanged();
     if (this.trained) this.showCard(brush === HOME ? 'movedHome' : 'outdated');
     else if (brush === HOME) this.showCard('editForest');
@@ -977,6 +999,8 @@ export class App {
     b.setParent(null);
     b.setRed(null);
     b.setPicked(null);
+    b.setEventMarks(this.showEvents && (this.tab === 'forest' || this.tab === 'trip')
+      ? this.eventSpots.map((sp) => ({ ...sp, name: eventKind(sp.kind)?.name })) : null);
     this.renderChanged();
     b.setHeat(this.tab === 'lessons' && this.settings.heat && this.stats.lessons > 0 ? this.stats.coverage : null);
 
@@ -1204,6 +1228,14 @@ export class App {
         h('label', { class: 'check' },
           h('input', { type: 'checkbox', checked: this.settings.hint, onchange: (e: Event) => { const v = (e.target as HTMLInputElement).checked; this.changeMemoryOrHint(() => { this.settings.hint = v; }); this.showCard('hint'); } }),
           h('span', {}, this.hq("Smell of grandma's cake (she senses the rough direction home)", 'hint')))),
+      h('div', { class: 'group' },
+        h('label', { class: 'check' },
+          h('input', { type: 'checkbox', checked: this.settings.events, onchange: (e: Event) => {
+            this.settings.events = (e.target as HTMLInputElement).checked; this.saveSoon(); this.showCard('events'); this.renderBoard(); this.renderPanel();
+          } }),
+          h('span', {}, this.hq('Things happen in the forest', 'events'))),
+        this.settings.events ? h('p', { class: 'muted' }, 'An owl, a frog, an empty hut… She can\'t see them, but she meets them on her trips alone, and her story tells about them.') : null,
+        this.showEventsButton()),
       this.next('Next: Lessons', 'lessons'),
     );
   }
@@ -1311,7 +1343,8 @@ export class App {
       h('label', { class: 'check' }, h('input', { type: 'checkbox', checked: this.settings.fog, onchange: (e: Event) => { this.settings.fog = (e.target as HTMLInputElement).checked; this.saveSoon(); this.renderBoard(); this.showCard('view'); } }), h('span', {}, this.hq('Fog: show only what she sees', 'view', 'fog'))),
       h('label', { class: 'check' }, h('input', { type: 'checkbox', checked: this.settings.thoughts, onchange: (e: Event) => {
         this.settings.thoughts = (e.target as HTMLInputElement).checked; this.saveSoon(); if (!this.settings.thoughts) this.board.say(null); this.showCard('thoughts');
-      } }), h('span', {}, this.hq('Her thoughts (just for fun)', 'thoughts')))),
+      } }), h('span', {}, this.hq('Her thoughts (just for fun)', 'thoughts'))),
+      this.showEventsButton()),
       h('div', { class: 'row' }, this.next('Practice', 'practice'), this.next('Inside the model', 'inside')),
     );
   }
