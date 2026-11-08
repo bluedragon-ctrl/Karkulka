@@ -356,10 +356,11 @@ export class Board {
     this.flash(g, 1000);
   }
 
-  /** A short pop-up word over her (the wolf grabbed the cake, flowers or treasure picked). Gone after a moment. */
-  showPop(i: number, text: string, icon?: SVGElement) {
+  /** A short pop-up word over her (the wolf grabbed the cake, flowers or treasure picked, a forest event). Gone after a moment. */
+  showPop(i: number, text: string, icon?: SVGElement, lift = 0) {
     const [cx, cy] = this.center(i);
-    const g = s('g', { transform: `translate(${cx},${cy - T * 0.7})`, 'pointer-events': 'none' },
+    // `lift`: when several pop up at once, each next one a row higher.
+    const g = s('g', { transform: `translate(${cx},${cy - T * 0.7 - lift * 18})`, 'pointer-events': 'none' },
       s('g', { class: 'fx-ouch' },
         icon ? s('g', { transform: `translate(0 ${T * 0.15})` }, icon) : null,
         s('text', { x: 0, y: -T * 0.3, 'text-anchor': 'middle', 'font-size': 14, 'font-weight': 700, fill: COLORS.ink, stroke: '#fff', 'stroke-width': 3, 'paint-order': 'stroke' }, text)));

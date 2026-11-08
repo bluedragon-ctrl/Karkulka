@@ -4,7 +4,7 @@ import { CHANGE_SIZES, changeForest, generateForest } from '../forest';
 import { Adam, Model, createAdam, createModel, modelFromJSON, modelToJSON } from '../model';
 import { mulberry32, normalizeCode, pick, randomCode } from '../rng';
 import { Outcome, Walker, predictAt } from '../sim';
-import { EventSpot, eventKind, placeStoryEvents } from '../storyEvents';
+import { EventMet, EventSpot, EventTracker, eventKind, placeStoryEvents } from '../storyEvents';
 import { Thoughts } from '../thoughts';
 import * as store from '../storage';
 import { LessonWalk, TEACHER_KINDS, Teacher, TeacherChoice, costToHome, endsAtDen, endsStuck, teacherMoves, walkLesson } from '../teachers';
@@ -185,6 +185,10 @@ export class App {
   /** The trip alone was cut short with Stop (she is still standing where she was). */
   private tripStopped = false;
   private thoughts: Thoughts | null = null;
+  /** The hidden forest events of the trip alone (null with events off). */
+  private tracker: EventTracker | null = null;
+  /** Forest events set off by the last step. */
+  private lastMet: EventMet[] = [];
   private thoughtSeen = false;
   /** "Show events" (for testing): the event spots' kind numbers on the board. Not saved. */
   private showEvents = false;
@@ -679,6 +683,8 @@ export class App {
     this.walker = new Walker(this.forest, this.model, i, this.settings.energy, this.settings.boldness, this.rng);
     this.tripStopped = false;
     this.thoughts = new Thoughts(Math.random, this.model.cfg.hint);
+    // Events and the story have their own randomness, never the walk's.
+    this.tracker = this.settings.events ? new EventTracker(this.forest, this.eventSpots, mulberry32((Math.random() * 2 ** 32) >>> 0)) : null;
     this.why = null;
     this.techStep = 0;
     this.board.clearFx();
@@ -694,8 +700,9 @@ export class App {
     if (bumped && this.fresh !== 'tree' && w.blocked.filter(Boolean).length === 1) this.showCard('tree');
     if (w.results[w.t - 1] === 'grabbed' && this.fresh !== 'cakeShield') this.showCard('cakeShield');
     if (this.forest.tiles[w.pos] === SWAMP && !bumped && this.fresh !== 'swamp' && !w.positions.slice(0, -1).some((p) => this.forest.tiles[p] === SWAMP)) this.showCard('swamp');
+    this.lastMet = this.tracker?.after(w.positions) ?? [];
     // Made up after the move is picked, so she can comment on the move she just took.
-    return this.thoughts?.after(w) ?? null;
+    return this.thoughts?.after(w, this.lastMet.map((e) => eventKind(e.kind)?.thoughts ?? [])) ?? null;
   }
 
   /**
@@ -713,6 +720,9 @@ export class App {
     else if (res === 'grabbed') this.board.showPop(w.pos, 'The wolf took the cake!', s('g', {}, s('g', { opacity: 0.6 }, cake(0, 0, 9)), s('line', { x1: -10, y1: -10, x2: 10, y2: 10, stroke: COLORS.ink, 'stroke-width': 2.5 })));
     else if (res === 'flowers') this.board.showPop(w.pos, 'Flowers!');
     else if (res === 'treasure') this.board.showPop(w.pos, 'Treasure!', gem(0, 0, 8));
+    // Forest events pop up their word too, above a basket word if there is one.
+    const basketPop = res === 'grabbed' || res === 'flowers' || res === 'treasure';
+    this.lastMet.forEach((e, k) => this.board.showPop(w.pos, eventKind(e.kind)?.popup ?? '', undefined, k + (basketPop ? 2 : 0)));
     // Her first thought of the session makes the "?" by "Her thoughts" pulse, unless something else just did.
     if (thought && this.settings.thoughts && !this.thoughtSeen && this.fresh === fresh) { this.thoughtSeen = true; this.showCard('thoughts'); }
     this.afterTripSteps(w);
@@ -1231,7 +1241,9 @@ export class App {
       h('div', { class: 'group' },
         h('label', { class: 'check' },
           h('input', { type: 'checkbox', checked: this.settings.events, onchange: (e: Event) => {
-            this.settings.events = (e.target as HTMLInputElement).checked; this.saveSoon(); this.showCard('events'); this.renderBoard(); this.renderPanel();
+            this.settings.events = (e.target as HTMLInputElement).checked;
+            if (!this.settings.events) this.tracker = null;
+            this.saveSoon(); this.showCard('events'); this.renderBoard(); this.renderPanel();
           } }),
           h('span', {}, this.hq('Things happen in the forest', 'events'))),
         this.settings.events ? h('p', { class: 'muted' }, 'An owl, a frog, an empty hut… She can\'t see them, but she meets them on her trips alone, and her story tells about them.') : null,
