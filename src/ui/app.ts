@@ -4,7 +4,7 @@ import { CHANGE_SIZES, changeForest, generateForest } from '../forest';
 import { Adam, Model, createAdam, createModel, modelFromJSON, modelToJSON } from '../model';
 import { mulberry32, normalizeCode, pick, randomCode } from '../rng';
 import { Outcome, Walker, predictAt } from '../sim';
-import { EventMet, EventSpot, EventTracker, eventKind, placeStoryEvents } from '../storyEvents';
+import { CAST, EventMet, EventSpot, EventTracker, SPOT_COUNT, eventKind, placeStoryEvents, tripSeed } from '../storyEvents';
 import { StorySentence, TripRecord, shapedBy, storyCount, tellStory } from '../story';
 import { Thoughts } from '../thoughts';
 import * as store from '../storage';
@@ -49,13 +49,15 @@ interface Settings {
   thoughts: boolean;
   /** Hidden forest events on a trip alone, and in her story (missing in older saves: on). */
   events: boolean;
+  /** Events placed afresh for every trip alone instead of fixed per forest code (missing in older saves: off). */
+  newPlaces: boolean;
   heat: boolean;
   brush: Tile;
 }
 
 const DEFAULTS: Settings = {
   memory: 'medium', hint: false, teacher: 'mother', lessons: 100, practice: 1000, judge: 'grandma', practiceStarts: 'near',
-  energy: 80, boldness: 0.7, fog: false, thoughts: true, events: true, heat: true, brush: TREE,
+  energy: 80, boldness: 0.7, fog: false, thoughts: true, events: true, newPlaces: false, heat: true, brush: TREE,
 };
 
 const TEACHERS: { id: TeacherChoice; name: string; text: string }[] = [
@@ -188,6 +190,8 @@ export class App {
   private thoughts: Thoughts | null = null;
   /** The hidden forest events of the trip alone (null with events off). */
   private tracker: EventTracker | null = null;
+  /** Where the events of the current trip alone are: the forest's fixed places, or new ones for this trip. */
+  private tripSpots: EventSpot[] = [];
   /** Forest events set off by the last step. */
   private lastMet: EventMet[] = [];
   /** Her story of the last trip alone, and what it was told from (for "Tell it again"). */
@@ -263,9 +267,20 @@ export class App {
     return this.spotsCache.spots;
   }
 
-  /** The "Show events" button, shown while events are on. */
+  /**
+   * The event spots "Show events" shows: on the Forest tab the forest's fixed places (none with
+   * new places every trip); on the Trip alone tab the places of this trip once she has started.
+   */
+  private shownSpots(): EventSpot[] | null {
+    if (this.tab === 'forest') return this.settings.newPlaces ? null : this.eventSpots;
+    if (this.tab === 'trip') return this.walker && this.tracker ? this.tripSpots : this.settings.newPlaces ? null : this.eventSpots;
+    return null;
+  }
+
+  /** The "Show events" button, shown while events are on (on the Forest tab only with fixed places). */
   private showEventsButton(): HTMLElement | null {
     if (!this.settings.events) return null;
+    if (this.tab === 'forest' && this.settings.newPlaces) return h('p', { class: 'muted' }, 'The events move to new places on every trip.');
     return h('button', { class: 'subtle', 'aria-pressed': String(this.showEvents), title: 'For testing: show where the hidden events are, with their numbers',
       onclick: () => { this.showEvents = !this.showEvents; this.renderBoard(); this.renderPanel(); } }, this.showEvents ? 'Hide events' : 'Show events');
   }
@@ -691,7 +706,9 @@ export class App {
     this.story = null;
     this.thoughts = new Thoughts(Math.random, this.model.cfg.hint);
     // Events and the story have their own randomness, never the walk's.
-    this.tracker = this.settings.events ? new EventTracker(this.forest, this.eventSpots, mulberry32((Math.random() * 2 ** 32) >>> 0)) : null;
+    this.tripSpots = !this.settings.events ? []
+      : this.settings.newPlaces ? placeStoryEvents(this.forest, CAST, SPOT_COUNT, tripSeed(this.storyRng() * 2 ** 32)) : this.eventSpots;
+    this.tracker = this.settings.events ? new EventTracker(this.forest, this.tripSpots, mulberry32((Math.random() * 2 ** 32) >>> 0)) : null;
     this.why = null;
     this.techStep = 0;
     this.board.clearFx();
@@ -780,7 +797,7 @@ export class App {
   private tellStory(w: Walker, otherCard: CardKey | null) {
     const rec: TripRecord = {
       forest: this.forest, start: w.start, positions: w.positions, results: w.results, outcome: w.outcome,
-      met: this.tracker?.met ?? [], placed: this.eventSpots.map((sp) => sp.kind),
+      met: this.tracker?.met ?? [], placed: this.tripSpots.map((sp) => sp.kind),
       shapedBy: shapedBy(this.stats.judgeRuns, this.stats.teacherCounts),
     };
     const lines = tellStory(rec, this.settings.boldness, this.storyRng);
@@ -1054,8 +1071,7 @@ export class App {
     b.setParent(null);
     b.setRed(null);
     b.setPicked(null);
-    b.setEventMarks(this.showEvents && (this.tab === 'forest' || this.tab === 'trip')
-      ? this.eventSpots.map((sp) => ({ ...sp, name: eventKind(sp.kind)?.name })) : null);
+    b.setEventMarks(this.showEvents ? this.shownSpots()?.map((sp) => ({ ...sp, name: eventKind(sp.kind)?.name })) ?? null : null);
     this.renderChanged();
     b.setHeat(this.tab === 'lessons' && this.settings.heat && this.stats.lessons > 0 ? this.stats.coverage : null);
 
@@ -1292,6 +1308,12 @@ export class App {
           } }),
           h('span', {}, this.hq('Things happen in the forest', 'events'))),
         this.settings.events ? h('p', { class: 'muted' }, 'An owl, a frog, an empty hut… She can\'t see them, but she meets them on her trips alone, and her story tells about them.') : null,
+        this.settings.events ? h('label', { class: 'check' },
+          h('input', { type: 'checkbox', checked: this.settings.newPlaces, onchange: (e: Event) => {
+            this.settings.newPlaces = (e.target as HTMLInputElement).checked;
+            this.saveSoon(); this.showCard('newPlaces'); this.renderBoard(); this.renderPanel();
+          } }),
+          h('span', {}, this.hq('New places every trip', 'newPlaces'))) : null,
         this.showEventsButton()),
       this.next('Next: Lessons', 'lessons'),
     );

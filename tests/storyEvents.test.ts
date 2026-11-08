@@ -5,7 +5,7 @@ import { mulberry32 } from '../src/rng';
 import { Walker } from '../src/sim';
 import {
   CAST, EventKind, EventTracker, MAX_POPUP, STORY, SPOT_COUNT, StoryData, checkStoryData, eventKind, eventSpotTiles, eventsSetOff,
-  placeStoryEvents, placeTests,
+  fixedSeed, placeStoryEvents, placeTests, tripSeed,
 } from '../src/storyEvents';
 import { FIXED, JUDGES, judgeMaps, judgeRewards, newStats, runOf, trainLessons } from '../src/train';
 import { HOME, PATH, SWAMP, Tile, TREE, forestFromTiles, homeIndex, xyOf } from '../src/world';
@@ -71,6 +71,31 @@ describe('placing the events', () => {
         }
       }
     }
+  });
+
+  it('places afresh from a trip seed: the same seed gives the same placement, new seeds differ, fixed places stay as before', () => {
+    for (const code of CODES) {
+      const f = generateForest(code);
+      // The fixed seed is the default and is what every forest code has always used.
+      expect(placeStoryEvents(f, CAST, SPOT_COUNT, fixedSeed(f))).toEqual(placeStoryEvents(f));
+      expect(eventSpotTiles(f, SPOT_COUNT, fixedSeed(f))).toEqual(eventSpotTiles(f));
+      expect(placeStoryEvents(f, CAST, SPOT_COUNT, tripSeed(42))).toEqual(placeStoryEvents(f, CAST, SPOT_COUNT, tripSeed(42)));
+      const trips = [1, 2, 3, 4, 5].map((n) => JSON.stringify(placeStoryEvents(f, CAST, SPOT_COUNT, tripSeed(n))));
+      expect(new Set(trips).size).toBe(trips.length);
+      expect(trips).not.toContain(JSON.stringify(placeStoryEvents(f)));
+      // The same rules hold for new places: walkable, one per kind, each where it fits.
+      const fits = placeTests(f);
+      for (const n of [1, 2, 3]) {
+        const spots = placeStoryEvents(f, CAST, SPOT_COUNT, tripSeed(n));
+        expect(spots.length).toBeGreaterThan(SPOT_COUNT / 2);
+        expect(new Set(spots.map((s) => s.kind)).size).toBe(spots.length);
+        for (const s of spots) {
+          expect([PATH, SWAMP]).toContain(f.tiles[s.i]);
+          expect(fits(eventKind(s.kind)!.fits, s.i)).toBe(true);
+        }
+      }
+    }
+    expect(tripSeed(2 ** 32 + 5)).toBe(tripSeed(5));
   });
 
   it('works the placement out again after an edit, dropping a spot that is no longer walkable', () => {

@@ -142,6 +142,14 @@ export const SPOT_COUNT = 18;
 
 export interface EventSpot { i: number; kind: number }
 
+/**
+ * The seed of a placement. Fixed places (the default): from the forest code and size, so every
+ * trip in a forest code meets the events in the same places. "New places every trip": any other
+ * label, such as a random number from the story's randomness when she starts.
+ */
+export const fixedSeed = (f: Forest): string => `${f.code}:${f.size}`;
+export const tripSeed = (n: number): string => `trip:${n >>> 0}`;
+
 /** Whether two tiles are within each other's 3 × 3 view. */
 const inView = (f: Forest, a: number, b: number): boolean => {
   const [ax, ay] = xyOf(f, a);
@@ -152,10 +160,10 @@ const inView = (f: Forest, a: number, b: number): boolean => {
 /**
  * Where the event spots go, from the tiles alone: shuffled path and swamp tiles (never a
  * den, home, flowers or treasure), taken one by one while none is within another's view.
- * Its own seeded stream, so the forest's tiles, codes and links do not change.
+ * Its own seeded stream (from `seed`), so the forest's tiles, codes and links do not change.
  */
-export function eventSpotTiles(f: Forest, count = SPOT_COUNT): number[] {
-  const rng = rngFrom(`story:${f.code}:${f.size}`);
+export function eventSpotTiles(f: Forest, count = SPOT_COUNT, seed = fixedSeed(f)): number[] {
+  const rng = rngFrom(`story:${seed}`);
   const spots: number[] = [];
   const candidates = shuffle(rng, f.tiles.flatMap((t, i) => (t === PATH || t === SWAMP ? [i] : [])));
   for (const i of candidates) {
@@ -172,12 +180,12 @@ export function eventSpotTiles(f: Forest, count = SPOT_COUNT): number[] {
  * with its own place first, so "anywhere" kinds do not take the rarer spots).
  * Adding kinds to the cast never moves the spots. A spot where no unused kind fits stays empty.
  */
-export function placeStoryEvents(f: Forest, cast: readonly EventKind[] = CAST, count = SPOT_COUNT): EventSpot[] {
-  const rng = rngFrom(`storyKinds:${f.code}:${f.size}`);
+export function placeStoryEvents(f: Forest, cast: readonly EventKind[] = CAST, count = SPOT_COUNT, seed = fixedSeed(f)): EventSpot[] {
+  const rng = rngFrom(`storyKinds:${seed}`);
   const fits = placeTests(f);
   const used = new Set<number>();
   const out: EventSpot[] = [];
-  for (const i of eventSpotTiles(f, count)) {
+  for (const i of eventSpotTiles(f, count, seed)) {
     // A kind with its own place goes first; "anywhere" kinds fill the rest, so they don't take a rare spot.
     const fitting = cast.filter((k) => !used.has(k.id) && fits(k.fits, i));
     const special = fitting.filter((k) => k.fits !== 'anywhere');
