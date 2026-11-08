@@ -2,7 +2,7 @@
 
 This file is the source of truth for the game's design. Update it in the same pull request as any change to how the game behaves. It started as a design spec written on claude.ai, which is now kept only as a historical reference.
 
-**Status:** version 1, her basket, and the [forest events and her story](#forest-events-and-her-story) are built and live at https://bluedragon-ctrl.github.io/Karkulka/. The planned [events that change her basket](#next-events-that-change-her-basket-planned), the [Later](#later) list and the [Open questions](#open-questions) at the end are what's next.
+**Status:** version 1, her basket, and the [forest events and her story](#forest-events-and-her-story) are built and live at https://bluedragon-ctrl.github.io/Karkulka/. The planned [events that change her basket, and new places each trip](#next-events-that-change-her-basket-and-new-places-each-trip-planned), the [Later](#later) list and the [Open questions](#open-questions) at the end are what's next.
 
 ## Purpose and audience
 
@@ -512,7 +512,7 @@ Fantasy sentences (from boldness 1.2): "A dragon asked her the way to the sea." 
 - `src/thoughts.ts`: says an event's thought line. `src/explain.ts`: the events, story and "Tell it again" cards. `src/ui/app.ts`: the checkbox, the "Show events" button, the pop-up words and the story box; `src/ui/board.ts`: the event numbers layer; `src/ui/symbols.ts`: the footprint and cloud marks.
 - Settings: `events: true` by default. "Show events" is not saved.
 
-### Next: events that change her basket (planned)
+### Next: events that change her basket, and new places each trip (planned)
 
 Not built yet. This is the plan; move each part into [Forest events and her story](#forest-events-and-her-story) and the sections above when it is built, and replace the proposed numbers with measured ones.
 
@@ -521,6 +521,17 @@ Not built yet. This is the plan; move each part into [Forest events and her stor
 This is a chatbot reading whatever lands in its context: a search result, a pasted text, a tool's answer. It acts on it, true or not, and a planted instruction (prompt injection) steers it the same way.
 
 **Events stay optional.** Basket events are forest events, so the same Forest tab checkbox, "Things happen in the forest", turns them off with all the others; there is no second switch. With it off a trip alone is exactly as before: no spots, no pop-ups, no effects, and the story tells only her own trip. Lessons, practice and the test trips never have events, whether the checkbox is on or off, so the charts and every measured number stay comparable.
+
+**Fixed places or new each trip.** A second checkbox under "Things happen in the forest", shown while it is on: "New places every trip", off by default.
+
+- *Off (fixed, as now):* the events sit in the same places for every trip in a forest code, so a class can compare ("did yours meet the owl?"), and "Show events" shows them on the Forest tab before any trip.
+- *On (new each trip):* each trip alone places the events afresh when she starts, by the same rules (spots first, then kinds that fit, one per kind, none within another's view), from the story's own randomness instead of the forest code. Nobody can learn where the fox lives; it is a real surprise every time. Like asking a chatbot the same question twice and its search bringing back different pages: it acts on whatever it gets this time.
+- In both modes events stay out of lessons, practice and test trips, so this changes nothing she learns or any measured number. Either way she cannot see the events, and the walk's randomness is never touched: a trip from the same start with the same walk randomness walks the same in both modes, except where a basket event changes her basket.
+- "Show events": with fixed places, as now. With new places, the Forest tab button is hidden (there is nothing to show before a trip; a muted line says "The events move to new places on every trip.") and the Trip alone button shows this trip's places once she has started.
+- Made-up parts of her story borrow from the events placed for this trip (fixed or new), so a borrowed event is still one that "was in the forest" that time.
+- Kept in the browser save with the other settings (not in links; a missing setting means off; no save-version bump). It is not part of the forest, so a forest link always opens with each user's own choice.
+- Its card (draft, under 300 characters): "Off, the owl always lives in the same tree. On, the events move every trip, so you never know what she will meet. A chatbot's world is like that too: the same question can bring back different search results, and it works with whatever it gets."
+- Code: `placeStoryEvents` takes the seed label (`story:` + code + size for fixed places, a random number from the story's randomness for new ones); the trip keeps its own placement for the story and "Show events".
 
 **Rules**
 
@@ -557,6 +568,7 @@ Thoughts in her voice: "Hey! My cake!", "Thank you! Flowers for Grandma.", "Ooh,
 | In the game | In a language model |
 | --- | --- |
 | A fox takes the cake, a neighbour gives flowers: events that change her pinned basket, so her next steps change | Text that lands in a chatbot's context (a search result, a tool's answer, a prompt injection) steers what it writes, true or not |
+| "New places every trip": events move between trips | The same question can bring back different search results; the model works with whatever it gets |
 
 **LM corner card (draft, under 300 characters).** *Basket events* (by "Things happen in the forest" too, and on the status line or story after one; pulses at the first basket event in a session): "The owl doesn't change her walk, but the fox does: it changed her basket, which she reads at every step. A chatbot is the same: whatever lands in its context, a search result or a planted instruction, steers what it writes, true or not."
 
@@ -564,10 +576,11 @@ Thoughts in her voice: "Hey! My cake!", "Thank you! Flowers for Grandma.", "Ooh,
 
 **Build order** (each step its own commit; the design doc updated as parts are built)
 
-1. Data and effects: the `effect` field and `quiet` versions in the data file and its test, the three kinds, the effect hook in `Walker` and `effects` on the trip, and the tests above.
-2. Trip alone: pop-ups, thoughts, the status line, the trip report's basket row, "Why did she do that?", and the basket-events card.
-3. The story: effect events always told, never borrowed.
-4. Measure, then move the finished parts into [Forest events and her story](#forest-events-and-her-story) and the sections above.
+1. New places every trip: the checkbox and its card, placement from a seed label, the trip's own placement for "Show events" and the story, and tests (the same seed gives the same placement; new places differ between trips; fixed places are unchanged).
+2. Data and effects: the `effect` field and `quiet` versions in the data file and its test, the three kinds, the effect hook in `Walker` and `effects` on the trip, and the tests above.
+3. Trip alone: pop-ups, thoughts, the status line, the trip report's basket row, "Why did she do that?", and the basket-events card.
+4. The story: effect events always told, never borrowed.
+5. Measure (also: events met per trip with new places against fixed), then move the finished parts into [Forest events and her story](#forest-events-and-her-story) and the sections above.
 
 **Not in this plan.** Events that change her energy (a snack, a stumble): energy is not in her input, so she cannot react to them, and on short trips ±5 energy rarely changes how a trip ends. They fit better with the berry bush below, once energy is a pinned token she can sense.
 
