@@ -11,6 +11,7 @@ export type CardKey =
   | 'tech' | 'vocabulary' | 'judge' | 'swamp' | 'tree' | 'thoughts' | 'stop'
   | 'tripReport' | 'judgeGrandma' | 'judgeFather' | 'judgeMother' | 'judgeCrow' | 'rewardHacking' | 'teacherVsJudge'
   | 'wolfTeacher' | 'poisonedData' | 'judgeWolf' | 'fixBadData'
+  | 'basket' | 'cakeShield' | 'judgeMagpie' | 'processReward'
   | 'newWorld' | 'movedHome' | 'catchUp' | 'forestCode' | 'editForest' | 'recipe'
   | 'compute' | 'tokenFreq' | 'ambiguous' | 'uncertainty'
   | 'moreData' | 'guess' | 'watchMany' | 'runScore' | 'testTrips' | 'sampling' | 'curriculum' | 'oneHot' | 'weights' | 'loss' | 'hyper' | 'modelFile';
@@ -51,7 +52,7 @@ export const CARDS: Record<CardKey, string> = {
   swamp: "Not every step is equally cheap: a swamp step uses 3 energy. Her energy is like a model's output budget, and the swamp eats it fast. The hurried father wades through; the careful mother walks around.",
   judge: "The judge knows the whole forest; she never sees the map, only the scores. Whoever judges decides what she learns. A chatbot's judges are people who rate its answers, or a check like \"is the sum right?\". Their taste becomes its taste.",
   tripReport: "Getting home is not all that counts: how tired, wet, scared and bumped she got matters too. A language model's answers are also judged on more than being right, such as length and safety.",
-  judgeGrandma: "Grandma only cares that she gets home. Judging only the result is simple and hard to fool, but it says nothing about how she walked.",
+  judgeGrandma: "Grandma cares that she gets home, with the cake, and flowers are a nice extra. Judging only the result is simple and hard to fool, but it says nothing about how she walked.",
   judgeFather: "The father takes a point off for every step, so practice teaches her shortcuts. The people who rate a model's answers pass on their own values, just as teachers do.",
   judgeMother: "The mother takes points off for every swamp step and every step with a wolf den in sight, so she learns which moves worried her mother. Chatbots can also be judged on each step of their working, not just the answer. A very strict judge can make them too cautious.",
   judgeCrow: "The crow gives points for every step towards home, even straight into a tree, and hardly checks whether she arrives. A judge that measures the wrong thing can be fooled.",
@@ -59,7 +60,7 @@ export const CARDS: Record<CardKey, string> = {
   teacherVsJudge: "Her lessons came from one parent, but now the other one judges her. Fine-tuning can pull a model away from what it learned in pretraining.",
   wolfTeacher: "The wolf in disguise walks like the father until a wolf den comes in sight, then leads her into it. A model copies whatever is in its training data, bad examples as well as good ones.",
   poisonedData: "Only a few of her lessons came from the wolf, yet she now walks into dens much more often. That is called data poisoning: a few bad pages hidden among billions of good ones can teach a chatbot a bad habit.",
-  judgeWolf: "The wolf gives points only when she ends up at his den. Practice makes her better at whatever the judge rewards, so a bad judge can ruin a model that was doing well. That is why chatbot makers guard who can retrain their chatbots.",
+  judgeWolf: "The wolf gives points only when she comes to his den. Practice makes her better at whatever the judge rewards, so a bad judge can ruin a model that was doing well. That is why chatbot makers guard who can retrain their chatbots.",
   moreData: "More lessons means more training data. The first lessons help the most; after a while each extra lesson adds less. Chatbots are the same: more text and bigger brains make them better, but each step up costs much more computer power.",
   guess: "In a lesson she first guesses the next move, then sees the teacher's move and adjusts a little. A chatbot is trained the same way: guess the next word, see the real one, adjust a little. Billions of times.",
   watchMany: "Watch lesson after lesson: at first many of her guesses are wrong, later most match the teacher. A language model learns the same way, and its next-word guesses get better and better.",
@@ -72,6 +73,10 @@ export const CARDS: Record<CardKey, string> = {
   loss: "The loss is how surprised she is by the teacher's move. Training means making this number go down, one example at a time. Chatbot builders watch the same kind of number fall during months of training.",
   hyper: "These numbers are chosen by the builders, not learned in lessons. They are called hyperparameters. Chatbot builders often pick them after trying many small test versions first.",
   modelFile: "The file holds her weights: the trained model itself. Some companies share their chatbot's weights the same way, as a file anyone can load and run; others keep them secret.",
+  basket: "Her basket sits at the front of her memory and never scrolls out, unlike her steps. A chatbot has the same: the instructions its makers give it (the system prompt) and facts its app puts back in every turn stay, while the oldest parts of a long chat drop out.",
+  cakeShield: "The first wolf den only takes the cake. The hurried father doesn't count the cake, so his practice teaches her to cut through dens and let the wolf have it. What a judge doesn't measure, the model gives up. A chatbot rated only on speed may drop care the same way.",
+  judgeMagpie: "The magpie pays a lot for treasure and little for getting home, so practice teaches her to grab treasure and wander off. A judge can measure right and still want the wrong thing most: a chatbot rewarded mostly for a side goal drops the real task.",
+  processReward: "Treasure counts the moment she picks it up; Grandma's flowers count only if she brings them home. A judge can reward each step on the way or only the finished task. Chatbots are trained both ways: points for each step of the working, or only for the final answer.",
   fixBadData: "Grandma's practice can undo some of what the wolf taught. Fine-tuning can fix bad habits, but the more there are, the longer it takes. Clean lessons are better than fixing later.",
 };
 
@@ -110,15 +115,32 @@ export const CARD_DETAILS: Partial<Record<CardKey, { title: string; lines: () =>
     `${num(FIXED.rewardHome)} for reaching home`,
     `${num(FIXED.rewardEaten)} for being eaten`,
     `${num(-FIXED.lostPenalty)} for running out of energy, plus up to ${num(FIXED.partialCreditWeight)} for ending closer to home`,
+    `${num(-FIXED.cakeLost)} when the wolf grabs the cake`,
+    `${num(FIXED.grandmaFlowers)} for each bunch of flowers, only if she gets home with them`,
+    'Being eaten takes back all basket points',
   ] },
   judgeFather: { title: 'How the father scores a run', lines: () => [
-    "Grandma's points, plus:",
+    "Grandma's points for home, eaten and lost, plus:",
     `${num(-FIXED.fatherStepCost)} for every step`,
+    `${num(FIXED.fatherTreasure)} for each treasure, when she picks it up`,
+    'Nothing for the cake or the flowers',
   ] },
   judgeMother: { title: 'How the mother scores a run', lines: () => [
-    "Grandma's points, plus:",
+    "Grandma's points for home, eaten and lost, plus:",
     `${num(-FIXED.motherSwampPenalty)} for every step into a swamp`,
     `${num(-FIXED.motherWolfPenalty)} for every step with a wolf den in sight`,
+    `${num(-FIXED.cakeLost)} when the wolf grabs the cake`,
+  ] },
+  judgeMagpie: { title: 'How the magpie scores a run', lines: () => [
+    `${num(FIXED.magpieTreasure)} for each treasure, when she picks it up, kept even if she never gets home`,
+    `${num(FIXED.magpieHome)} for reaching home`,
+    `${num(FIXED.rewardEaten)} for being eaten, and the treasure is lost`,
+    '0 when she runs out of energy',
+  ] },
+  cakeShield: { title: 'The cake and the dens', lines: () => [
+    'She sets out with the cake. The first wolf den she steps onto takes the cake, and she runs on',
+    'Any den after that, the same one too, and she is eaten',
+    'The parents never walk through a den, so only practice can teach the shortcut',
   ] },
   judgeCrow: { title: 'How the crow scores a run', lines: () => [
     `${num(FIXED.crowHeading)} for every step towards home in a straight line, even into a tree; ${num(-FIXED.crowHeading)} for any other step`,
@@ -126,7 +148,7 @@ export const CARD_DETAILS: Partial<Record<CardKey, { title: string; lines: () =>
     'Nothing for running out of energy',
   ] },
   judgeWolf: { title: 'How the wolf scores a run', lines: () => [
-    `${num(FIXED.wolfDen)} when she walks into a wolf den`,
+    `${num(FIXED.wolfDen)} every time she walks into a wolf den (when he grabs the cake, and when he eats her)`,
     `${num(FIXED.wolfHome)} when she gets home`,
     '0 when she runs out of energy',
   ] },
@@ -175,6 +197,37 @@ export const pct = (p: number) => (p > 0 && p < 0.005 ? 'less than 1%' : p < 1 &
 /** "only 12%", or "less than 1%" (never "only less than 1%"). */
 const onlyPct = (p: number) => (p > 0 && p < 0.005 ? pct(p) : `only ${pct(p)}`);
 
+/** Number words for the basket: "a bunch of flowers", "2 treasures". */
+export function basketWords(b: { flowers: number; treasure: number }): string {
+  const parts: string[] = [];
+  if (b.flowers) parts.push(b.flowers === 1 ? 'a bunch of flowers' : `${b.flowers} bunches of flowers`);
+  if (b.treasure) parts.push(b.treasure === 1 ? 'a treasure' : `${b.treasure} treasures`);
+  return parts.join(' and ');
+}
+
+/** After she got home: a note about her basket when there is something to tell (the cake, flowers, treasure). */
+function basketNote(w: Walker, stats: TrainStats | null): Explanation | null {
+  const n = w.decisions.length;
+  const things = basketWords(w.basket);
+  const brought = things ? ` She brought ${things}.` : '';
+  if (w.cakeLostAt >= 0) {
+    const father = (stats?.judgeRuns?.father ?? 0) > 0;
+    return {
+      title: 'Why did she do that?',
+      text: `She got home in ${n} steps, but without the cake: at step ${w.cakeLostAt + 1} she walked onto a wolf den and the wolf grabbed it.${brought}` +
+        (father ? ' The hurried father only counts steps, not the cake, so his practice taught her this shortcut.' : ''),
+      card: 'cakeShield',
+    };
+  }
+  if (w.basket.treasure && (stats?.judgeRuns?.magpie ?? 0) > 0) {
+    return { title: 'Why did she do that?', text: `She got home in ${n} steps with the cake.${brought} The magpie paid for the treasure the moment she picked it up.`, card: 'judgeMagpie' };
+  }
+  if (things) {
+    return { title: 'Why did she do that?', text: `She got home in ${n} steps with the cake.${brought}`, card: 'processReward' };
+  }
+  return null;
+}
+
 export function explainTrip(w: Walker, f: Forest, stats: TrainStats | null, outdated: boolean): Explanation {
   const dist = walkingDistances(f);
   const vocab = buildVocabulary(f);
@@ -192,6 +245,8 @@ export function explainTrip(w: Walker, f: Forest, stats: TrainStats | null, outd
     const shortest = dist[w.start];
     const extra = n - shortest;
     const d = w.decisions[worst];
+    const basket = basketNote(w, stats);
+    if (basket) return basket;
     return {
       title: 'Why did she do that?',
       text: `She got home in ${n} steps; the shortest way was ${shortest}.` +
@@ -209,6 +264,14 @@ export function explainTrip(w: Walker, f: Forest, stats: TrainStats | null, outd
     const raw = d.raw[chosen];
     const taught = stats?.coverage[from] ?? 0;
     const alike = lookAlikes(from);
+    const grabbedAt = w.cakeLostAt;
+    if (grabbedAt >= 0 && (stats?.judgeRuns?.wolf ?? 0) === 0 && (stats?.teacherCounts.wolf ?? 0) === 0) {
+      return {
+        title: 'Why did she do that?',
+        text: `At step ${grabbedAt + 1} the wolf grabbed the cake and she ran on. Without the cake, the next den at step ${t + 1} was the end.${(stats?.judgeRuns?.father ?? 0) > 0 ? ' The hurried father\'s practice taught her that dens are a shortcut, as long as she has the cake.' : ''}${cutoff}`,
+        card: 'cakeShield',
+      };
+    }
     if (d.tempered[chosen] < 0.3) {
       return {
         title: 'Why did she do that?',
@@ -239,6 +302,14 @@ export function explainTrip(w: Walker, f: Forest, stats: TrainStats | null, outd
       title: 'Why did she do that?',
       text: `At step ${t + 1} she went ${MOVE_NAMES[chosen]} into a wolf den, ${pct(d.tempered[chosen])} sure.${alike ? ` This spot looks exactly like ${alike} other place${alike === 1 ? '' : 's'}, where that move may be fine.` : ''}${stats && stats.teacherCounts.father > 0 ? ' Her father\'s lessons often go right past wolf dens, so walking close to them feels normal to her.' : ''}${cutoff}`,
       card: alike ? 'memory' : 'teacher',
+    };
+  }
+
+  if ((stats?.judgeRuns?.magpie ?? 0) > 0 && w.basket.treasure > 0) {
+    return {
+      title: 'Why did she do that?',
+      text: `She picked up ${w.basket.treasure === 1 ? 'a treasure' : `${w.basket.treasure} treasures`} and never came to grandma. The magpie paid her a lot for treasure and little for coming home, so that is what she learned.${cutoff}`,
+      card: 'judgeMagpie',
     };
   }
 

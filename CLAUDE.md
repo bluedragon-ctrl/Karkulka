@@ -22,8 +22,8 @@ Game logic has no DOM dependencies and is tested directly; the UI lives in `src/
 
 | Module | Purpose |
 | --- | --- |
-| `src/world.ts` | Tiles, moves, energy costs, what she sees, distances |
-| `src/forest.ts` | Seeded forest generator: maze, loops, meadows, swamps, wolf dens |
+| `src/world.ts` | Tiles, moves, energy costs, her basket and the step rules (cake shield, pickups), what she sees, distances |
+| `src/forest.ts` | Seeded forest generator: maze, loops, meadows, swamps, wolf dens, then her basket's tiles (shortcut dens, flowers, treasure) |
 | `src/teachers.ts` | The two parents' route costs and lesson walks |
 | `src/tokens.ts` | Vocabulary and context-window encoding (one-hot views and moves) |
 | `src/model.ts` | One-hidden-layer network, softmax with temperature, Adam and SGD |
@@ -50,7 +50,7 @@ Game logic has no DOM dependencies and is tested directly; the UI lives in `src/
 
 - **Changing the tile kinds or the model's inputs breaks old saves.** Views are one-hot over `TILE_KINDS`, so a new tile or input changes the model's input size. When that happens:
   - bump `SAVE_VERSION` in `src/storage.ts` (it sets the save key and the save and model-file versions), and update the "older version" message in `parseFile`;
-  - check the link format (`packTiles` packs two tiles per character, which fits up to 8 tile kinds);
+  - check the link format (`packTiles` packs two tiles per character, which fits up to 8 tile kinds; there are 7 now, and the edited-tiles link parameter, `map3`, must change when they do);
   - update the tests that check sizes.
 - **Training runs in the worker**, but "Watch one lesson" trains on the main thread through the same `learnFromLesson` function. Keep both paths in sync.
 - **Deployment:** every push to `main` runs `.github/workflows/deploy.yml` (test, build, publish to GitHub Pages). The `github-pages` environment must allow `main` to deploy.

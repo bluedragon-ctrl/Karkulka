@@ -322,6 +322,16 @@ export class Board {
     this.flash(g, 1000);
   }
 
+  /** A short pop-up word over her (the wolf grabbed the cake, flowers or treasure picked). Gone after a moment. */
+  showPop(i: number, text: string, icon?: SVGElement) {
+    const [cx, cy] = this.center(i);
+    const g = s('g', { transform: `translate(${cx},${cy - T * 0.7})`, 'pointer-events': 'none' },
+      s('g', { class: 'fx-ouch' },
+        icon ? s('g', { transform: `translate(0 ${T * 0.15})` }, icon) : null,
+        s('text', { x: 0, y: -T * 0.3, 'text-anchor': 'middle', 'font-size': 14, 'font-weight': 700, fill: COLORS.ink, stroke: '#fff', 'stroke-width': 3, 'paint-order': 'stroke' }, text)));
+    this.flash(g, 1400);
+  }
+
   /** A splash of water drops around her feet in a swamp. Gone after a moment. */
   showSplash(i: number) {
     const [cx, cy] = this.center(i);

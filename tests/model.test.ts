@@ -5,9 +5,9 @@ import { accumulate, createAdam, createModel, forward, modelFromJSON, modelToJSO
 import { mulberry32 } from '../src/rng';
 import { Walker } from '../src/sim';
 import { costToHome, endsAtDen, walkLesson } from '../src/teachers';
-import { MEMORY_PAIRS, SLOT_FEATS, VIEW_FEATS, encodeContext, inputSize, buildVocabulary } from '../src/tokens';
-import { FIXED, JUDGES, Run, chooseTeacher, evalEvery, guessesRight, headsHome, judgeMaps, learnFromRun, practiceSetup, practiceStartTiles, practiceWalker, startTiles, judgeRewards, judgeScore, homeShare, newStats, trainLessons, trainPractice } from '../src/train';
-import { Forest, HOME, Move, PATH, SWAMP, TREE, Tile, WOLF, allReachable, forestFromTiles, neighbor, pathTiles, walkableTiles } from '../src/world';
+import { BASKET_FEATS, MEMORY_PAIRS, SLOT_FEATS, VIEW_FEATS, encodeContext, inputSize, buildVocabulary } from '../src/tokens';
+import { FIXED, JUDGES, Run, chooseTeacher, evalEvery, guessesRight, headsHome, judgeMaps, learnFromRun, practiceSetup, practiceStartTiles, practiceWalker, startTiles, judgeRewards, judgeScore, homeShare, newStats, runOf, trainLessons, trainPractice } from '../src/train';
+import { Forest, HOME, Move, PATH, StepResult, SWAMP, TREE, Tile, WOLF, allReachable, forestFromTiles, neighbor, pathTiles, walkableTiles } from '../src/world';
 
 const cfg = { memory: MEMORY_PAIRS.medium, hint: false, hidden: 16 };
 
@@ -18,13 +18,26 @@ describe('tokens', () => {
     const w = walkLesson(f, 'mother', costToHome(f, 'mother'), pathTiles(f)[0], mulberry32(1));
     const x = encodeContext(cfg, w.history, 2);
     expect(x.length).toBe(inputSize(cfg));
-    expect(x.slice(0, VIEW_FEATS).reduce((a, b) => a + b, 0)).toBe(8);
-    expect(VIEW_FEATS).toBe(8 * 5);
+    // The pinned basket comes first: cake yes, no flowers, no treasure.
+    expect(BASKET_FEATS).toBe(8);
+    expect(Array.from(x.slice(0, BASKET_FEATS))).toEqual([0, 1, 1, 0, 0, 1, 0, 0]);
+    expect(x.slice(BASKET_FEATS, BASKET_FEATS + VIEW_FEATS).reduce((a, b) => a + b, 0)).toBe(8);
+    expect(VIEW_FEATS).toBe(8 * 7);
     // Two steps of history are present, the third slot is empty.
-    expect(x[VIEW_FEATS]).toBe(1);
-    expect(x[VIEW_FEATS + SLOT_FEATS]).toBe(1);
-    expect(x[VIEW_FEATS + 2 * SLOT_FEATS]).toBe(0);
-    expect(inputSize({ memory: 1, hint: true })).toBe(VIEW_FEATS + 8 + SLOT_FEATS);
+    const mem = BASKET_FEATS + VIEW_FEATS;
+    expect(x[mem]).toBe(1);
+    expect(x[mem + SLOT_FEATS]).toBe(1);
+    expect(x[mem + 2 * SLOT_FEATS]).toBe(0);
+    expect(inputSize({ memory: 1, hint: true })).toBe(BASKET_FEATS + VIEW_FEATS + 8 + SLOT_FEATS);
+  });
+
+  it('pins her basket at the front, however far back the pickup was', () => {
+    const w = walkLesson(f, 'mother', costToHome(f, 'mother'), pathTiles(f)[0], mulberry32(1));
+    const t = w.history.views.length - 1;
+    w.history.baskets[t] = { cake: false, flowers: 1, treasure: 3 };
+    const x = encodeContext({ ...cfg, memory: 1 }, w.history, t);
+    // Cake no, flowers 1, treasure 2+.
+    expect(Array.from(x.slice(0, BASKET_FEATS))).toEqual([1, 0, 0, 1, 0, 0, 0, 1]);
   });
 
   it('builds a vocabulary covering every path and swamp tile', () => {
@@ -136,7 +149,7 @@ describe('training', () => {
     const score = learnFromRun(m, f, 'grandma', w, stats, setup);
     expect(stats.practiceRuns).toBe(1);
     expect(stats.judgeRuns).toEqual({ grandma: 1 });
-    expect(score).toBeCloseTo(judgeScore('grandma', f, judgeMaps(f), { outcome: w.outcome!, start: w.start, positions: w.positions, moves: w.history.moves }), 9);
+    expect(score).toBeCloseTo(judgeScore('grandma', f, judgeMaps(f), runOf(w)), 9);
     expect(m.w2.some((v, i) => v !== before[i])).toBe(true);
   });
 
@@ -229,6 +242,48 @@ describe('judges', () => {
     for (let i = 0; i < 2000; i++) if (chooseTeacher('motherWolf', rng) === 'wolf') wolf++;
     expect(wolf / 2000).toBeGreaterThan(FIXED.wolfLessonShare - 0.04);
     expect(wolf / 2000).toBeLessThan(FIXED.wolfLessonShare + 0.04);
+  });
+
+  /** A run with step results, for the basket points. */
+  const withResults = (run: Run, results: StepResult[], basket = { cake: !results.includes('grabbed'), flowers: 0, treasure: 0 }): Run => ({ ...run, results, basket });
+  const homeRun = (results: StepResult[], basket?: { cake: boolean; flowers: number; treasure: number }) =>
+    withResults(walk(at(2, 3), [D, R, R, U, R], 'home'), results, basket);
+
+  it('Grandma and the mother take points off when the wolf grabs the cake; the father does not', () => {
+    const grabbed = homeRun(['moved', 'grabbed', 'moved', 'moved', 'home']);
+    const kept = homeRun(['moved', 'moved', 'moved', 'moved', 'home']);
+    expect(judgeScore('grandma', field, maps, kept) - judgeScore('grandma', field, maps, grabbed)).toBeCloseTo(FIXED.cakeLost);
+    expect(judgeScore('mother', field, maps, kept) - judgeScore('mother', field, maps, grabbed)).toBeCloseTo(FIXED.cakeLost);
+    expect(judgeScore('father', field, maps, kept)).toBeCloseTo(judgeScore('father', field, maps, grabbed));
+    // The points go to the move that lost the cake.
+    expect(judgeRewards('grandma', field, maps, grabbed)[1]).toBeCloseTo(-FIXED.cakeLost);
+  });
+
+  it('Grandma pays for flowers only when they get home', () => {
+    const results: StepResult[] = ['flowers', 'moved', 'moved', 'moved', 'home'];
+    const home = homeRun(results, { cake: true, flowers: 1, treasure: 0 });
+    expect(judgeScore('grandma', field, maps, home)).toBeCloseTo(FIXED.rewardHome + FIXED.grandmaFlowers);
+    expect(judgeRewards('grandma', field, maps, home)[0]).toBe(0);
+    const lost = { ...home, outcome: 'lost' as const };
+    expect(judgeScore('grandma', field, maps, lost)).toBeCloseTo(judgeScore('grandma', field, maps, { ...lost, results: undefined, basket: undefined }));
+  });
+
+  it('the father pays a little and the magpie a lot for treasure, at pickup', () => {
+    const results: StepResult[] = ['treasure', 'moved', 'moved', 'moved', 'home'];
+    const run = homeRun(results, { cake: true, flowers: 0, treasure: 1 });
+    expect(judgeRewards('father', field, maps, run)[0]).toBeCloseTo(FIXED.fatherTreasure - FIXED.fatherStepCost);
+    expect(judgeRewards('magpie', field, maps, run)[0]).toBeCloseTo(FIXED.magpieTreasure);
+    expect(judgeScore('magpie', field, maps, run)).toBeCloseTo(FIXED.magpieTreasure + FIXED.magpieHome);
+    // Kept even if she never gets home.
+    expect(judgeScore('magpie', field, maps, { ...run, outcome: 'lost' })).toBeCloseTo(FIXED.magpieTreasure);
+  });
+
+  it('being eaten takes back every basket point', () => {
+    const eaten = withResults(walk(at(2, 3), [D, R, R, U, R], 'eaten'), ['treasure', 'grabbed', 'moved', 'moved', 'eaten'], { cake: false, flowers: 0, treasure: 0 });
+    expect(judgeScore('magpie', field, maps, eaten)).toBeCloseTo(FIXED.rewardEaten);
+    expect(judgeScore('grandma', field, maps, eaten)).toBeCloseTo(FIXED.rewardEaten);
+    // The wolf pays for both den steps: the cake and her.
+    expect(judgeScore('wolf', field, maps, eaten)).toBeCloseTo(2 * FIXED.wolfDen);
   });
 
   it('each move gets its own points; they add up to the score', () => {

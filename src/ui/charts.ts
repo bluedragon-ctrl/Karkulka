@@ -12,6 +12,8 @@ function ensurePatterns() {
   const defs = s('defs', {},
     s('pattern', { id: 'pat-eaten', width: 6, height: 6, patternUnits: 'userSpaceOnUse', patternTransform: 'rotate(45)' },
       s('rect', { width: 6, height: 6, fill: COLORS.danger }), s('rect', { width: 2, height: 6, fill: '#ffffff66' })),
+    s('pattern', { id: 'pat-nocake', width: 6, height: 6, patternUnits: 'userSpaceOnUse', patternTransform: 'rotate(-45)' },
+      s('rect', { width: 6, height: 6, fill: COLORS.home }), s('rect', { width: 2, height: 6, fill: '#8a4b16aa' })),
     s('pattern', { id: 'pat-lost', width: 5, height: 5, patternUnits: 'userSpaceOnUse' },
       s('rect', { width: 5, height: 5, fill: COLORS.lost }), s('circle', { cx: 2.5, cy: 2.5, r: 1, fill: '#ffffff88' })),
   );
@@ -19,7 +21,8 @@ function ensurePatterns() {
   document.body.append(s('svg', { width: 0, height: 0, 'aria-hidden': 'true', style: 'position:absolute' }, defs));
 }
 
-const FILLS = { home: COLORS.home, eaten: 'url(#pat-eaten)', lost: 'url(#pat-lost)' };
+const FILLS = { home: COLORS.home, noCake: 'url(#pat-nocake)', eaten: 'url(#pat-eaten)', lost: 'url(#pat-lost)' };
+const NAMES = { home: 'home', noCake: 'home without the cake', eaten: 'eaten', lost: 'lost' };
 
 /** Stacked bars of home / eaten / lost, measured on a fixed set of test trips. */
 export function outcomeChart(points: EvalPoint[], xLabel: string): HTMLElement {
@@ -33,12 +36,15 @@ export function outcomeChart(points: EvalPoint[], xLabel: string): HTMLElement {
   const bw = W / Math.max(shown.length, 10);
   shown.forEach((p, k) => {
     let y = H;
-    for (const key of ['home', 'lost', 'eaten'] as const) {
-      const hgt = p[key] * H;
+    // Home is split: with the cake at the bottom, then home without it (hatched).
+    const noCake = Math.min(p.noCake ?? 0, p.home);
+    const parts = { home: p.home - noCake, noCake, lost: p.lost, eaten: p.eaten };
+    for (const key of ['home', 'noCake', 'lost', 'eaten'] as const) {
+      const hgt = parts[key] * H;
       y -= hgt;
       if (hgt > 0) {
         svg.append(s('rect', { x: k * bw + 0.5, y, width: Math.max(1, bw - 1), height: hgt, fill: FILLS[key] },
-          s('title', {}, `after ${p.x}: ${key} ${Math.round(p[key] * 100)}%`)));
+          s('title', {}, `after ${p.x}: ${NAMES[key]} ${Math.round(parts[key] * 100)}%`)));
       }
     }
   });
@@ -48,16 +54,16 @@ export function outcomeChart(points: EvalPoint[], xLabel: string): HTMLElement {
       s('text', { x: W, y: H + 13, 'font-size': 10, fill: '#555', 'text-anchor': 'end' }, `${shown[shown.length - 1].x} ${xLabel}`),
     );
   }
-  wrap.append(svg, legend());
+  wrap.append(svg, legend(shown.some((p) => (p.noCake ?? 0) > 0)));
   return wrap;
 }
 
-function legend(): HTMLElement {
+function legend(noCake: boolean): HTMLElement {
   const item = (fill: string, label: string) => {
     const sw = s('svg', { width: 14, height: 14, viewBox: '0 0 14 14' }, s('rect', { width: 14, height: 14, fill, stroke: '#333', 'stroke-width': 0.5 }));
     return h('span', { class: 'legend-item' }, sw, label);
   };
-  return h('figcaption', { class: 'legend' }, item(FILLS.home, 'home'), item(FILLS.eaten, 'eaten'), item(FILLS.lost, 'lost'));
+  return h('figcaption', { class: 'legend' }, item(FILLS.home, 'home'), noCake ? item(FILLS.noCake, 'home, no cake') : null, item(FILLS.eaten, 'eaten'), item(FILLS.lost, 'lost'));
 }
 
 export function lineChart(series: { points: Point[]; color: string; label: string }[], yLabel: string, fixedMax?: number): HTMLElement {

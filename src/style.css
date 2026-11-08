@@ -156,7 +156,12 @@ input[type="text"] { font: inherit; font-size: 0.92rem; padding: 0.35em 0.5em; b
 .strip { background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 0.5rem 0.8rem; }
 .strip-label { display: flex; gap: 0.8em; align-items: baseline; font-size: 0.88rem; margin-bottom: 0.3em; }
 .strip-label span { color: var(--muted); }
-.strip-row { display: flex; gap: 0.25rem; align-items: center; overflow-x: auto; min-height: 40px; padding-bottom: 4px; }
+.strip-body { display: flex; gap: 0.4rem; align-items: center; }
+.strip-row { display: flex; gap: 0.25rem; align-items: center; overflow-x: auto; min-height: 40px; padding-bottom: 4px; flex: 1; min-width: 0; }
+/* Her basket: pinned at the front of her memory, it never scrolls out. */
+.strip-pinned { display: inline-flex; gap: 2px; align-items: center; padding: 3px 5px 3px 3px; border-radius: 6px; background: #fff3d6; border: 2px solid #c9a227; position: relative; flex: none; }
+.strip-pinned .pin { font-size: 0.72rem; font-weight: 700; color: #6b5310; margin-right: 2px; writing-mode: vertical-rl; transform: rotate(180deg); }
+.strip-pinned .hint-q { margin-left: 2px; }
 .strip-pair { display: inline-flex; gap: 2px; align-items: center; padding: 3px; border-radius: 6px; transition: opacity 0.3s; }
 .strip-pair.in { background: #fde8e8; }
 .strip-pair.now { outline: 2px solid var(--danger); }

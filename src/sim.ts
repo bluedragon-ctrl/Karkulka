@@ -2,8 +2,8 @@
 import { Model, forward, softmax } from './model';
 import type { Rng } from './rng';
 import type { History } from './teachers';
-import { encodeContext } from './tokens';
-import { Forest, Move, homeSector, step, viewAt } from './world';
+import { encodeContext, snapBasket } from './tokens';
+import { Basket, Forest, Move, StepResult, TripState, homeSector, newTrip, step, viewAt } from './world';
 
 export type Outcome = 'home' | 'eaten' | 'lost';
 
@@ -37,6 +37,11 @@ export class Walker {
   /** Decisions made at each step, with the boldness used at the time. */
   readonly decisions: (Decision & { tempered: Float32Array; temperature: number })[] = [];
   readonly blocked: boolean[] = [];
+  /** What each step did (moved, blocked, the wolf grabbed the cake, flowers picked…). */
+  readonly results: StepResult[] = [];
+  /** Her basket after each position, starting with the start (the full basket). */
+  readonly baskets: Basket[];
+  readonly trip: TripState = newTrip();
   energyLeft: number;
   outcome: Outcome | null = null;
   private pending: Decision | null = null;
@@ -51,9 +56,15 @@ export class Walker {
   ) {
     this.pos = start;
     this.positions = [start];
-    this.history = { views: [viewAt(forest, start)], moves: [], sectors: [homeSector(forest, start)] };
+    this.history = { views: [viewAt(forest, start)], moves: [], sectors: [homeSector(forest, start)], baskets: [snapBasket(this.trip.basket)] };
+    this.baskets = [snapBasket(this.trip.basket)];
     this.energyLeft = energy;
   }
+
+  get basket(): Basket { return this.trip.basket; }
+
+  /** The step at which the wolf grabbed the cake (0-based move index), or -1. */
+  get cakeLostAt(): number { return this.results.indexOf('grabbed'); }
 
   get t(): number { return this.history.moves.length; }
   get done(): boolean { return this.outcome !== null; }
@@ -82,9 +93,11 @@ export class Walker {
     const m = sample(tempered, this.rng);
     this.decisions.push({ ...d, tempered, temperature: this.temperature });
     this.pending = null;
-    const r = step(this.forest, this.pos, m);
+    const r = step(this.forest, this.pos, m, this.trip);
     this.history.moves.push(m);
     this.blocked.push(r.result === 'blocked');
+    this.results.push(r.result);
+    this.baskets.push(snapBasket(this.trip.basket));
     this.pos = r.pos;
     this.positions.push(r.pos);
     this.energyLeft = Math.max(0, this.energyLeft - r.cost);
@@ -93,6 +106,7 @@ export class Walker {
     else {
       this.history.views.push(viewAt(this.forest, r.pos));
       this.history.sectors.push(homeSector(this.forest, r.pos));
+      this.history.baskets.push(snapBasket(this.trip.basket));
       if (this.energyLeft <= 0) this.outcome = 'lost';
     }
     return m;

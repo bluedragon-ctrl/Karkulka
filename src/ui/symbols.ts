@@ -1,5 +1,5 @@
 /** Simple symbolic SVG shapes, drawn for this project. Shape plus colour, never colour alone. */
-import { DX, DY, HOME, Move, PATH, SWAMP, TREE, Tile, WOLF } from '../world';
+import { Basket, DX, DY, FLOWERS, HOME, Move, PATH, SWAMP, TREASURE, TREE, Tile, WOLF } from '../world';
 import { s } from './dom';
 
 export const COLORS = {
@@ -27,7 +27,49 @@ export const COLORS = {
   hair: '#d9d9d9',
   crow: '#1f1f24',
   beak: '#e0a020',
+  /** Flowers: white petals round a pink middle. */
+  petal: '#ffffff',
+  bloom: '#d65aa0',
+  stem: '#4f8a3a',
+  /** Treasure: a violet gem (yellow is home's, red is hers and danger's). */
+  gem: '#8e44ad',
+  gemLight: '#c39bd3',
+  gemInk: '#4a235a',
+  /** Cake in her basket. */
+  cake: '#c98a4b',
+  icing: '#fff6e8',
+  /** The magpie's blue tail and wing. */
+  magpie: '#2d6cdf',
 };
+
+/** A small flower centred on (cx, cy): five white petals round a pink middle. */
+function flower(cx: number, cy: number, r: number): SVGElement[] {
+  const out: SVGElement[] = [];
+  for (let k = 0; k < 5; k++) {
+    const a = (k * 2 * Math.PI) / 5 - Math.PI / 2;
+    out.push(s('circle', { cx: cx + Math.cos(a) * r * 0.62, cy: cy + Math.sin(a) * r * 0.62, r: r * 0.42, fill: COLORS.petal, stroke: '#9a9a9a', 'stroke-width': r * 0.08 }));
+  }
+  out.push(s('circle', { cx, cy, r: r * 0.36, fill: COLORS.bloom }));
+  return out;
+}
+
+/** A violet gem centred on (cx, cy) with half-width r: a cut stone, shape plus colour. */
+export function gem(cx: number, cy: number, r: number): SVGGElement {
+  return s('g', {},
+    s('polygon', { points: `${cx - r},${cy - r * 0.3} ${cx - r * 0.55},${cy - r * 0.8} ${cx + r * 0.55},${cy - r * 0.8} ${cx + r},${cy - r * 0.3} ${cx},${cy + r}`, fill: COLORS.gem, stroke: COLORS.gemInk, 'stroke-width': r * 0.12, 'stroke-linejoin': 'round' }),
+    s('polygon', { points: `${cx - r * 0.55},${cy - r * 0.8} ${cx - r * 0.2},${cy - r * 0.3} ${cx + r * 0.2},${cy - r * 0.3} ${cx + r * 0.55},${cy - r * 0.8}`, fill: COLORS.gemLight }),
+    s('line', { x1: cx - r, y1: cy - r * 0.3, x2: cx + r, y2: cy - r * 0.3, stroke: COLORS.gemInk, 'stroke-width': r * 0.08 }),
+  );
+}
+
+/** A round cake centred on (cx, cy) with half-width r: brown sponge, white icing, a pink cherry. */
+export function cake(cx: number, cy: number, r: number): SVGGElement {
+  return s('g', {},
+    s('rect', { x: cx - r, y: cy - r * 0.35, width: r * 2, height: r * 1.1, rx: r * 0.15, fill: COLORS.cake, stroke: COLORS.trunk, 'stroke-width': r * 0.1 }),
+    s('path', { d: `M ${cx - r} ${cy - r * 0.2} Q ${cx - r} ${cy - r * 0.6} ${cx} ${cy - r * 0.6} Q ${cx + r} ${cy - r * 0.6} ${cx + r} ${cy - r * 0.2} q ${-r * 0.33} ${r * 0.3} ${-r * 0.66} 0 t ${-r * 0.67} 0 t ${-r * 0.67} 0 Z`, fill: COLORS.icing, stroke: '#b9a88e', 'stroke-width': r * 0.08 }),
+    s('circle', { cx, cy: cy - r * 0.72, r: r * 0.22, fill: COLORS.bloom }),
+  );
+}
 
 export const heartPath = (cx: number, cy: number, r: number) =>
   `M ${cx} ${cy + r * 0.9} C ${cx - r * 1.6} ${cy - r * 0.2}, ${cx - r * 0.6} ${cy - r * 1.3}, ${cx} ${cy - r * 0.35} ` +
@@ -58,6 +100,16 @@ export function tileSymbol(t: Tile, x: number, y: number, S: number): SVGGElemen
       s('path', { d: wave(S * 0.62), stroke: COLORS.waterInk, 'stroke-width': S * 0.045, fill: 'none', 'stroke-linecap': 'round' }),
       s('path', { d: `M ${S * 0.78} ${S * 0.88} L ${S * 0.74} ${S * 0.5} M ${S * 0.84} ${S * 0.88} L ${S * 0.88} ${S * 0.56}`, stroke: COLORS.reed, 'stroke-width': S * 0.04, 'stroke-linecap': 'round' }),
       s('ellipse', { cx: S * 0.74, cy: S * 0.48, rx: S * 0.03, ry: S * 0.07, fill: COLORS.trunk }),
+    );
+  } else if (t === FLOWERS) {
+    g.append(
+      s('path', { d: `M ${S * 0.3} ${S * 0.85} L ${S * 0.32} ${S * 0.42} M ${S * 0.66} ${S * 0.85} L ${S * 0.64} ${S * 0.36} M ${S * 0.48} ${S * 0.88} L ${S * 0.5} ${S * 0.6}`, stroke: COLORS.stem, 'stroke-width': S * 0.05, 'stroke-linecap': 'round' }),
+      ...flower(S * 0.32, S * 0.36, S * 0.13), ...flower(S * 0.64, S * 0.3, S * 0.13), ...flower(S * 0.5, S * 0.6, S * 0.11),
+    );
+  } else if (t === TREASURE) {
+    g.append(
+      s('ellipse', { cx: S * 0.5, cy: S * 0.8, rx: S * 0.3, ry: S * 0.07, fill: '#00000022' }),
+      gem(S * 0.5, S * 0.5, S * 0.28),
     );
   } else if (t === HOME) {
     g.append(
@@ -143,6 +195,44 @@ export function wolfInDisguise(S: number): SVGGElement {
   );
 }
 
+/** A magpie seen from the side, centred on (0, 0): black head, white belly, a long blue tail. */
+export function magpieFigure(S: number): SVGGElement {
+  return s('g', { class: 'magpie-figure' },
+    s('polygon', { points: `${-S * 0.16},${S * 0.04} ${-S * 0.5},${S * 0.26} ${-S * 0.46},${S * 0.34} ${-S * 0.08},${S * 0.16}`, fill: COLORS.magpie, stroke: COLORS.crow, 'stroke-width': S * 0.02 }),
+    s('ellipse', { cx: 0, cy: S * 0.08, rx: S * 0.25, ry: S * 0.17, fill: COLORS.crow }),
+    s('ellipse', { cx: S * 0.06, cy: S * 0.14, rx: S * 0.15, ry: S * 0.1, fill: '#fff', stroke: '#9a9a9a', 'stroke-width': S * 0.015 }),
+    s('path', { d: `M ${-S * 0.16} ${S * 0.02} Q ${S * 0.02} ${-S * 0.06} ${S * 0.1} ${S * 0.06}`, stroke: COLORS.magpie, 'stroke-width': S * 0.05, fill: 'none' }),
+    s('circle', { cx: S * 0.22, cy: -S * 0.12, r: S * 0.12, fill: COLORS.crow }),
+    s('polygon', { points: `${S * 0.32},${-S * 0.15} ${S * 0.46},${-S * 0.1} ${S * 0.32},${-S * 0.06}`, fill: COLORS.crow }),
+    s('circle', { cx: S * 0.25, cy: -S * 0.15, r: S * 0.03, fill: '#fff' }),
+    s('line', { x1: -S * 0.02, y1: S * 0.24, x2: -S * 0.04, y2: S * 0.38, stroke: COLORS.ink, 'stroke-width': S * 0.03 }),
+    s('line', { x1: S * 0.08, y1: S * 0.24, x2: S * 0.08, y2: S * 0.38, stroke: COLORS.ink, 'stroke-width': S * 0.03 }),
+    gem(S * 0.42, S * 0.3, S * 0.09),
+  );
+}
+
+/**
+ * Her basket as three pinned tokens for the memory strip: the cake (crossed out once the
+ * wolf took it), flowers 0 / 1 / 2+ and treasure 0 / 1 / 2+, each with a picture and a number.
+ */
+export function basketTokens(b: Basket, size = 27): SVGSVGElement[] {
+  const box = (title: string, ...kids: SVGElement[]) => {
+    const svg = s('svg', { width: size, height: size, viewBox: '0 0 27 27', class: 'token basket-token' });
+    svg.append(s('rect', { x: 0.5, y: 0.5, width: 26, height: 26, rx: 4, fill: '#fffaf0', stroke: '#555' }), ...kids, s('title', {}, title));
+    return svg;
+  };
+  const count = (n: number) => s('text', { x: 24, y: 24.5, 'font-size': 10, 'font-weight': 700, 'text-anchor': 'end', fill: COLORS.ink }, n >= 2 ? '2+' : String(n));
+  const cakeBox = b.cake
+    ? box('cake: yes', cake(13.5, 15, 8))
+    : box('cake: no (the wolf took it)', s('g', { opacity: 0.35 }, cake(13.5, 15, 8)),
+      s('line', { x1: 5, y1: 5, x2: 22, y2: 22, stroke: COLORS.ink, 'stroke-width': 2.5, 'stroke-linecap': 'round' }));
+  return [
+    cakeBox,
+    box(`flowers: ${b.flowers >= 2 ? '2 or more' : b.flowers}`, ...flower(10, 10, 6), count(b.flowers)),
+    box(`treasure: ${b.treasure >= 2 ? '2 or more' : b.treasure}`, gem(10, 10, 6), count(b.treasure)),
+  ];
+}
+
 /** A friendly cartoon wolf head, centred on (0, 0). */
 export function wolfHead(S: number): SVGGElement {
   return s('g', { class: 'wolf-head' },
@@ -170,6 +260,10 @@ function miniTile(t: Tile, x: number, y: number, c: number): SVGElement {
   } else if (t === WOLF) {
     g.append(s('rect', { width: c, height: c, fill: COLORS.den }),
       s('rect', { x: c * 0.15, y: c * 0.15, width: c * 0.7, height: c * 0.7, fill: 'none', stroke: COLORS.danger, 'stroke-width': c * 0.18 }));
+  } else if (t === FLOWERS) {
+    g.append(s('rect', { width: c, height: c, fill: COLORS.path }), ...flower(c / 2, c / 2, c * 0.3));
+  } else if (t === TREASURE) {
+    g.append(s('rect', { width: c, height: c, fill: COLORS.path }), gem(c / 2, c / 2, c * 0.36));
   } else {
     g.append(s('rect', { width: c, height: c, fill: COLORS.home }),
       s('polygon', { points: `${c * 0.1},${c * 0.55} ${c / 2},${c * 0.12} ${c * 0.9},${c * 0.55}`, fill: COLORS.roof }));

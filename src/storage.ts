@@ -4,7 +4,7 @@ import type { TrainStats } from './train';
 import { Forest, TILE_KINDS, Tile } from './world';
 
 /** Bump when tile kinds or model inputs change: older saves, links and model files no longer fit. */
-export const SAVE_VERSION = 2;
+export const SAVE_VERSION = 3;
 
 export interface SavedState {
   version: typeof SAVE_VERSION;
@@ -17,7 +17,7 @@ export interface SavedState {
   stats: TrainStats | null;
 }
 
-// Version 2 added swamps: older saves and models don't fit and are ignored.
+// Version 2 added swamps, version 3 her basket (flowers, treasure, pinned basket inputs): older saves and models don't fit and are ignored.
 const KEY = `karkulka-v${SAVE_VERSION}`;
 
 export function save(state: SavedState) {
@@ -36,7 +36,7 @@ export function clearSaved() { try { localStorage.removeItem(KEY); } catch { /* 
 
 const B64 = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_';
 
-/** Two tiles (5 kinds each, 25 combinations) fit in one link-safe character. */
+/** Two tiles (7 kinds each, 49 combinations; up to 8 kinds fit) in one link-safe character. */
 export function packTiles(tiles: readonly Tile[]): string {
   let s = '';
   for (let i = 0; i < tiles.length; i += 2) s += B64[(tiles[i] ?? 0) * TILE_KINDS + (tiles[i + 1] ?? 0)];
@@ -53,17 +53,20 @@ export function unpackTiles(s: string, n: number): Tile[] | null {
   return out.length >= n ? out.slice(0, n) : null;
 }
 
+/** Link parameter for edited tiles; it changes when the tile kinds do, so old links are read as unedited. */
+const MAP_PARAM = 'map3';
+
 export function forestLink(f: Forest, edited: boolean): string {
   const url = new URL(location.href);
-  url.hash = `forest=${f.code}${edited ? `&map=${packTiles(f.tiles)}` : ''}`;
+  url.hash = `forest=${f.code}${edited ? `&${MAP_PARAM}=${packTiles(f.tiles)}` : ''}`;
   return url.toString();
 }
 
 export function readLink(): { code: string; tiles: string | null } | null {
   const params = new URLSearchParams(location.hash.slice(1));
   const code = params.get('forest');
-  // `map` holds edited tiles; links from before swamps used `tiles` and are read as unedited.
-  return code ? { code, tiles: params.get('map') } : null;
+  // `map3` holds edited tiles; older links (`map` before the basket, `tiles` before swamps) are read as unedited.
+  return code ? { code, tiles: params.get(MAP_PARAM) } : null;
 }
 
 export interface ModelFile {
@@ -86,7 +89,7 @@ export function exportFile(f: Forest, edited: boolean, model: Model, stats: Trai
 export function parseFile(text: string): { file: ModelFile; model: Model } {
   const file = JSON.parse(text) as ModelFile;
   if (file.format !== 'karkulka-model') throw new Error('This is not a Red Riding Hood model file');
-  if (file.version !== SAVE_VERSION) throw new Error('This model file is from an older version of the game (before swamps) and cannot be loaded');
+  if (file.version !== SAVE_VERSION) throw new Error('This model file is from an older version of the game (before her basket) and cannot be loaded');
   if (file.forest.tiles.length !== file.forest.size * file.forest.size) throw new Error('The forest in this file is damaged');
   return { file, model: modelFromJSON(file.model) };
 }

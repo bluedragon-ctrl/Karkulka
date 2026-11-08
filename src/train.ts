@@ -4,7 +4,7 @@ import { Rng, mulberry32, pick, rngFrom, shuffle } from './rng';
 import { Outcome, Walker } from './sim';
 import { LessonWalk, Teacher, TeacherChoice, costToDen, costToHome, walkLesson } from './teachers';
 import { encodeContext } from './tokens';
-import { DX, DY, Forest, Move, PATH, SWAMP, energyToHome, nearWolf, tilesWhere, walkingDistances, xyOf } from './world';
+import { Basket, DX, DY, Forest, Move, PATH, StepResult, SWAMP, energyToHome, nearWolf, tilesWhere, walkingDistances, xyOf } from './world';
 
 /** Internals the user never sets; shown read-only in the technical tab. */
 export const FIXED = {
@@ -26,6 +26,15 @@ export const FIXED = {
   /** Wolf judge: a prize when she walks into a den, points off when she gets home. */
   wolfDen: 1,
   wolfHome: -0.5,
+  /** Grandma and the mother: points off when the wolf grabs the cake. */
+  cakeLost: 0.5,
+  /** Grandma: points for each bunch of flowers she brings home (only when she gets home). */
+  grandmaFlowers: 0.3,
+  /** Hurried father: a little for each treasure, at pickup. */
+  fatherTreasure: 0.1,
+  /** Magpie judge: a lot for each treasure, at pickup; a little for getting home. */
+  magpieTreasure: 1,
+  magpieHome: 0.2,
   /** "Mother and the wolf": share of lessons the wolf in disguise slips in. */
   wolfLessonShare: 0.2,
   practiceBoldness: 0.7,
@@ -45,7 +54,12 @@ export const FIXED = {
 } as const;
 
 export interface Point { x: number; y: number }
-export interface EvalPoint { x: number; home: number; eaten: number; lost: number }
+/**
+ * One round of test trips: shares of home, eaten and lost; `noCake` is the share that got
+ * home without the cake (part of `home`); flowers and treasure are brought home per trip.
+ * The basket numbers are missing in charts from before the basket.
+ */
+export interface EvalPoint { x: number; home: number; eaten: number; lost: number; noCake?: number; flowers?: number; treasure?: number }
 
 export interface TrainStats {
   lessons: number;
@@ -114,9 +128,22 @@ export function evaluate(model: Model, f: Forest, x: number): EvalPoint {
   const starts = evalStarts(f);
   const rng = rngFrom(`evalrun:${f.code}:${x}`);
   const counts: Record<Outcome, number> = { home: 0, eaten: 0, lost: 0 };
-  for (const s of starts) counts[new Walker(f, model, s, FIXED.evalEnergy, FIXED.evalBoldness, rng).run()]++;
+  let noCake = 0;
+  let flowers = 0;
+  let treasure = 0;
+  for (const s of starts) {
+    const w = new Walker(f, model, s, FIXED.evalEnergy, FIXED.evalBoldness, rng);
+    const out = w.run();
+    counts[out]++;
+    if (out === 'home') {
+      if (!w.basket.cake) noCake++;
+      flowers += w.basket.flowers;
+    }
+    // Treasure counts once picked, home or not (the magpie's view); eaten loses it.
+    treasure += w.basket.treasure;
+  }
   const n = Math.max(1, starts.length);
-  return { x, home: counts.home / n, eaten: counts.eaten / n, lost: counts.lost / n };
+  return { x, home: counts.home / n, eaten: counts.eaten / n, lost: counts.lost / n, noCake: noCake / n, flowers: flowers / n, treasure: treasure / n };
 }
 
 /** Share of test trips that end at home, over a few rounds of the fixed test trips (steadier than one round). */
@@ -212,8 +239,8 @@ export function trainLessons(
  * she can game: that is reward hacking. The wolf wants her at his den: a judge
  * with bad aims ruins a model that was doing well.
  */
-export type Judge = 'grandma' | 'father' | 'mother' | 'crow' | 'wolf';
-export const JUDGES: readonly Judge[] = ['grandma', 'father', 'mother', 'crow', 'wolf'];
+export type Judge = 'grandma' | 'father' | 'mother' | 'crow' | 'magpie' | 'wolf';
+export const JUDGES: readonly Judge[] = ['grandma', 'father', 'mother', 'crow', 'magpie', 'wolf'];
 
 /** Distances the judges measure with; they know the whole forest. */
 export interface JudgeMaps {
@@ -239,7 +266,16 @@ export interface Run {
   positions: readonly number[];
   /** The move she chose at each step. */
   moves: readonly Move[];
+  /** What each step did; needed for the basket points (the cake grabbed, flowers or treasure picked). */
+  results?: readonly StepResult[];
+  /** Her basket at the end (flowers count only if she brings them home). */
+  basket?: Basket;
 }
+
+/** A finished walker as the judge sees it. */
+export const runOf = (w: Walker): Run => ({
+  outcome: w.outcome ?? 'lost', start: w.start, positions: w.positions, moves: w.history.moves, results: w.results, basket: w.basket,
+});
 
 /** Up to +partialCreditWeight for ending closer than she started (less if she ended further away). */
 const partialCredit = (startDist: number, endDist: number): number => {
@@ -270,6 +306,18 @@ export function judgeRewards(judge: Judge, f: Forest, maps: JudgeMaps, run: Run)
   const n = run.moves.length;
   const r = new Array<number>(n).fill(0);
   if (!n) return r;
+  // Basket points, given at the move that earned them; being eaten takes them all back.
+  let basketPoints = 0;
+  const give = (t: number, pts: number) => { r[t] += pts; basketPoints += pts; };
+  run.results?.forEach((res, t) => {
+    if (res === 'grabbed' && (judge === 'grandma' || judge === 'mother')) give(t, -FIXED.cakeLost);
+    if (res === 'treasure' && judge === 'father') give(t, FIXED.fatherTreasure);
+    if (res === 'treasure' && judge === 'magpie') give(t, FIXED.magpieTreasure);
+    // The wolf pays for every walk into a den, also the one where he only gets the cake.
+    if (res === 'grabbed' && judge === 'wolf') r[t] += FIXED.wolfDen;
+  });
+  if (judge === 'grandma' && run.outcome === 'home' && run.basket) give(n - 1, FIXED.grandmaFlowers * run.basket.flowers);
+  if (run.outcome === 'eaten') r[n - 1] -= basketPoints;
   for (let t = 0; t < n; t++) {
     const from = run.positions[t];
     const to = run.positions[t + 1];
@@ -284,6 +332,8 @@ export function judgeRewards(judge: Judge, f: Forest, maps: JudgeMaps, run: Run)
   // The crow watches from the sky: it sees a wolf, and the house, but not whether she is tired out.
   if (judge === 'crow') r[n - 1] += end === 'eaten' ? FIXED.rewardEaten : end === 'home' ? FIXED.crowHomeBonus : 0;
   else if (judge === 'wolf') r[n - 1] += end === 'eaten' ? FIXED.wolfDen : end === 'home' ? FIXED.wolfHome : 0;
+  // The magpie wants treasure; home is worth a little, being eaten is as bad as ever.
+  else if (judge === 'magpie') r[n - 1] += end === 'eaten' ? FIXED.rewardEaten : end === 'home' ? FIXED.magpieHome : 0;
   else r[n - 1] += outcomeScore(maps, run);
   return r;
 }
@@ -348,7 +398,7 @@ export const practiceWalker = (model: Model, f: Forest, start: number, stats: Tr
  */
 export function learnFromRun(model: Model, f: Forest, judge: Judge, w: Walker, stats: TrainStats, setup: PracticeSetup): number {
   const outcome = w.outcome ?? 'lost';
-  const rewards = judgeRewards(judge, f, setup.maps, { outcome, start: w.start, positions: w.positions, moves: w.history.moves });
+  const rewards = judgeRewards(judge, f, setup.maps, runOf(w));
   const steps = rewards.length;
   // Reward to go: each move gets the points from that move to the end of the run.
   const toGo = rewards.slice();

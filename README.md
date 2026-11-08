@@ -30,10 +30,10 @@ It is for older kids and adults without a technical background, on a classroom p
 
 ## The five tabs
 
-1. **Forest**: generate a forest from a code, share it as a link, edit tiles (path, tree, swamp, wolf den), choose her memory size and the optional home hint ("the smell of grandma's cake").
+1. **Forest**: generate a forest from a code, share it as a link, edit tiles (path, tree, swamp, wolf den, flowers, treasure), choose her memory size and the optional home hint ("the smell of grandma's cake").
 2. **Lessons**: the careful mother (avoids wolf dens and swamps), the hurried father (fewest steps), or both walk her home. Watch one lesson or fast-forward hundreds. The model learns from a per-step loss.
 3. **Trip alone**: click a start tile and watch her decide, step by step or automatically, with arrows, the memory strip, energy, boldness and fog. Afterwards a "Why did she do that?" note explains the main decision.
-4. **Practice**: she walks alone and each run is scored by a fair judge (policy gradient), with an automatic curriculum that starts near home.
+4. **Practice**: she walks alone and each run is scored by a judge (Grandma, the parents, the crow, the magpie or the wolf; policy gradient), with an automatic curriculum that starts near home.
 5. **Inside the model**: vocabulary, the encoded context, network weights, loss curves, fixed settings, and export or import.
 
 Progress is saved in the browser. The forest code (and any edits) is carried in the page link.
@@ -52,7 +52,7 @@ Everything runs in the browser and needs no server. It is a static TypeScript si
 | Module | Purpose |
 | --- | --- |
 | `src/world.ts` | Tiles, moves, energy costs, what she sees, distances |
-| `src/forest.ts` | Seeded forest generator (maze, loops, meadows, swamps, wolf dens) |
+| `src/forest.ts` | Seeded forest generator (maze, loops, meadows, swamps, wolf dens, shortcut dens, flowers and treasure) |
 | `src/teachers.ts` | The two parents' routes and lesson walks |
 | `src/tokens.ts` | Vocabulary and context-window encoding |
 | `src/model.ts` | One-hidden-layer network, softmax with temperature, Adam / SGD |

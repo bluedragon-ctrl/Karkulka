@@ -3,7 +3,7 @@
  * disguise, whose lessons look like the father's until a den comes in sight.
  */
 import { Rng, pick } from './rng';
-import { Forest, HOME, Move, MOVES, SWAMP, Tile, WOLF, cheapestTo, cheapestToHome, isWalkable, neighbor, nearWolf, tilesWhere, viewAt, homeSector } from './world';
+import { Basket, Forest, HOME, Move, MOVES, SWAMP, Tile, WOLF, cheapestTo, cheapestToHome, fullBasket, isItem, isWalkable, neighbor, nearWolf, tilesWhere, viewAt, homeSector } from './world';
 
 export type Teacher = 'mother' | 'father' | 'wolf';
 export const TEACHER_KINDS: readonly Teacher[] = ['mother', 'father', 'wolf'];
@@ -21,8 +21,10 @@ export const SWAMP_PENALTY = 8;
  * careful mother avoids both, even if her route is longer.
  */
 const enterCost = (f: Forest, i: number, careful: boolean) => {
-  if (!careful) return 1;
   const t = f.tiles[i];
+  // The parents never pick anything up: they walk around flowers and treasure.
+  if (isItem(t)) return Infinity;
+  if (!careful) return 1;
   return 1 + (t === SWAMP ? SWAMP_PENALTY : 0) + (t !== HOME && nearWolf(f, i) ? WOLF_PENALTY : 0);
 };
 
@@ -33,7 +35,7 @@ export function costToHome(f: Forest, teacher: Teacher): Float64Array {
 }
 
 /** Steps to the nearest wolf den from every tile: where the wolf really leads her. */
-export const costToDen = (f: Forest): Float64Array => cheapestTo(f, tilesWhere(f, (t) => t === WOLF), () => 1);
+export const costToDen = (f: Forest): Float64Array => cheapestTo(f, tilesWhere(f, (t) => t === WOLF), (i) => (isItem(f.tiles[i]) ? Infinity : 1));
 
 /** The wolf's moves once a den is in sight: the quickest way into it. */
 export function denMoves(f: Forest, denCost: Float64Array, pos: number): Move[] {
@@ -42,7 +44,8 @@ export function denMoves(f: Forest, denCost: Float64Array, pos: number): Move[] 
   for (const m of MOVES) {
     const n = neighbor(f, pos, m);
     if (n < 0) continue;
-    const c = f.tiles[n] === WOLF ? 0 : isWalkable(f.tiles[n]) ? denCost[n] : Infinity;
+    const t = f.tiles[n];
+    const c = t === WOLF ? 0 : isWalkable(t) && !isItem(t) ? denCost[n] : Infinity;
     if (c < best) { best = c; opts = [m]; }
     else if (c === best && c < Infinity) opts.push(m);
   }
@@ -70,6 +73,8 @@ export interface History {
   views: Tile[][];
   moves: Move[];
   sectors: number[];
+  /** Her basket at each view (lessons always carry the full basket: the parents pick nothing up). */
+  baskets: Basket[];
 }
 
 export interface LessonWalk {
@@ -88,7 +93,7 @@ export const endsAtDen = (f: Forest, walk: LessonWalk): boolean => f.tiles[walk.
  */
 export function walkLesson(f: Forest, teacher: Teacher, cost: Float64Array, start: number, rng: Rng, denCost?: Float64Array): LessonWalk {
   const positions = [start];
-  const history: History = { views: [viewAt(f, start)], moves: [], sectors: [homeSector(f, start)] };
+  const history: History = { views: [viewAt(f, start)], moves: [], sectors: [homeSector(f, start)], baskets: [fullBasket()] };
   const toDen = teacher === 'wolf' ? denCost ?? costToDen(f) : null;
   let hunting = false;
   let pos = start;
@@ -103,6 +108,7 @@ export function walkLesson(f: Forest, teacher: Teacher, cost: Float64Array, star
     if (pos !== f.home && f.tiles[pos] !== WOLF) {
       history.views.push(viewAt(f, pos));
       history.sectors.push(homeSector(f, pos));
+      history.baskets.push(fullBasket());
     }
   }
   return { teacher, positions, history };

@@ -1,5 +1,5 @@
 /** The app: five tabs that tell the story in order. */
-import { CardKey, Explanation, explainTrip, tripReport } from '../explain';
+import { CardKey, Explanation, basketWords, explainTrip, tripReport } from '../explain';
 import { CHANGE_SIZES, changeForest, generateForest } from '../forest';
 import { Adam, Model, createAdam, createModel, modelFromJSON, modelToJSON } from '../model';
 import { mulberry32, normalizeCode, pick, randomCode } from '../rng';
@@ -11,7 +11,7 @@ import { MEMORY_PAIRS, MemorySize, ModelConfig } from '../tokens';
 import { FIXED, JUDGES, Judge, PRACTICE_STARTS, PracticeStarts, TrainStats, chooseTeacher, guessesRight, homeShare, learnFromLesson, learnFromRun, newStats, practiceSetup, practiceWalker, recordLessonBatch, recordPracticeBatch, practiceStartTiles, startTiles, teacherCosts } from '../train';
 import { WorkerRequest, runTraining } from '../workerTypes';
 import {
-  DEFAULT_SIZE, Forest, HOME, MOVES, MOVE_ARROWS, MOVE_NAMES, PATH, SECTOR_WORDS, SWAMP, TREE, Tile, WOLF, copyForest,
+  DEFAULT_SIZE, FLOWERS, Forest, HOME, MOVES, MOVE_ARROWS, MOVE_NAMES, PATH, SECTOR_WORDS, SWAMP, TREASURE, TREE, Tile, WOLF, copyForest,
   forestFromTiles, homeSector, moveHome, unreachableTiles, walkingDistances,
 } from '../world';
 import { Board } from './board';
@@ -19,7 +19,7 @@ import { changeChart, outcomeChart } from './charts';
 import { add, clear, h, s } from './dom';
 import { closeHint, hintButton, placeHint } from './hint';
 import { renderStrip } from './strip';
-import { COLORS, crowFigure, grandmaFigure, parentFigure, tileSymbol, wolfHead } from './symbols';
+import { COLORS, cake, crowFigure, gem, grandmaFigure, magpieFigure, parentFigure, tileSymbol, wolfHead } from './symbols';
 import { renderTech } from './tech';
 
 type TabId = 'forest' | 'lessons' | 'trip' | 'practice' | 'inside';
@@ -67,16 +67,17 @@ const teacherCard = (t: TeacherChoice): CardKey => (t === 'wolf' ? 'wolfTeacher'
 
 /** The judges in the panel: a plain line for children. The exact points are in each judge's LM corner card. */
 const JUDGE_INFO: Record<Judge, { name: string; text: string; card: CardKey }> = {
-  grandma: { name: 'Grandma', text: 'Just come home safe, dear! How you walk doesn\'t matter to her.', card: 'judgeGrandma' },
-  father: { name: 'Hurried father', text: 'Home, and quickly! The fewer steps, the happier he is.', card: 'judgeFather' },
-  mother: { name: 'Careful mother', text: 'Home, but stay dry and keep away from wolves.', card: 'judgeMother' },
+  grandma: { name: 'Grandma', text: 'Come home safe, dear, with the cake! Flowers would be lovely. How you walk doesn\'t matter to her.', card: 'judgeGrandma' },
+  father: { name: 'Hurried father', text: 'Home, and quickly! The fewer steps, the happier he is. A treasure is nice; the cake he doesn\'t mind.', card: 'judgeFather' },
+  mother: { name: 'Careful mother', text: 'Home with the cake, but stay dry and keep away from wolves.', card: 'judgeMother' },
   crow: { name: 'Crow', text: 'Watches from the sky: any step towards home looks good to it, even into a tree.', card: 'judgeCrow' },
+  magpie: { name: 'Magpie', text: 'Loves shiny things: treasure is what counts. Getting home? Not so important.', card: 'judgeMagpie' },
   wolf: { name: 'Wolf', text: 'A sneaky judge: he wants her at his den, not at grandma\'s.', card: 'judgeWolf' },
 };
 
 function judgeIcon(j: Judge): SVGSVGElement {
   const icon = s('svg', { width: 30, height: 30, viewBox: '-20 -24 40 44' });
-  icon.append(j === 'grandma' ? grandmaFigure(40) : j === 'crow' ? crowFigure(40) : j === 'wolf' ? s('g', { transform: 'scale(.7)' }, wolfHead(40)) : parentFigure(40, j));
+  icon.append(j === 'grandma' ? grandmaFigure(40) : j === 'crow' ? crowFigure(40) : j === 'magpie' ? magpieFigure(40) : j === 'wolf' ? s('g', { transform: 'scale(.7)' }, wolfHead(40)) : parentFigure(40, j as 'mother' | 'father'));
   return icon;
 }
 
@@ -188,7 +189,7 @@ export class App {
   /** The practice run being watched. */
   runWatch: Walker | null = null;
   /** The judge's score for the last watched practice run. */
-  lastRun: { outcome: Outcome; score: number; judge: Judge } | null = null;
+  lastRun: { outcome: Outcome; score: number; judge: Judge; noCake: boolean } | null = null;
   lastPractice: PracticeSummary | null = null;
   private auto: number | null = null;
   private saveTimer: number | null = null;
@@ -658,6 +659,7 @@ export class App {
     w.step();
     const bumped = w.blocked[w.t - 1];
     if (bumped && this.fresh !== 'tree' && w.blocked.filter(Boolean).length === 1) this.showCard('tree');
+    if (w.results[w.t - 1] === 'grabbed' && this.fresh !== 'cakeShield') this.showCard('cakeShield');
     if (this.forest.tiles[w.pos] === SWAMP && !bumped && this.fresh !== 'swamp' && !w.positions.slice(0, -1).some((p) => this.forest.tiles[p] === SWAMP)) this.showCard('swamp');
     // Made up after the move is picked, so she can comment on the move she just took.
     return this.thoughts?.after(w) ?? null;
@@ -672,8 +674,12 @@ export class App {
     if (!w || !this.tripLive(w)) return null;
     const fresh = this.fresh;
     const thought = this.advanceTrip(w);
+    const res = w.results[w.t - 1];
     if (w.blocked[w.t - 1]) this.board.showOuch(w.pos, w.history.moves[w.t - 1]);
     else if (this.forest.tiles[w.pos] === SWAMP) this.board.showSplash(w.pos);
+    else if (res === 'grabbed') this.board.showPop(w.pos, 'The wolf took the cake!', s('g', {}, s('g', { opacity: 0.6 }, cake(0, 0, 9)), s('line', { x1: -10, y1: -10, x2: 10, y2: 10, stroke: COLORS.ink, 'stroke-width': 2.5 })));
+    else if (res === 'flowers') this.board.showPop(w.pos, 'Flowers!');
+    else if (res === 'treasure') this.board.showPop(w.pos, 'Treasure!', gem(0, 0, 8));
     // Her first thought of the session makes the "?" by "Her thoughts" pulse, unless something else just did.
     if (thought && this.settings.thoughts && !this.thoughtSeen && this.fresh === fresh) { this.thoughtSeen = true; this.showCard('thoughts'); }
     this.afterTripSteps(w);
@@ -816,7 +822,7 @@ export class App {
         const score = learnFromRun(model, this.forest, judge, w, this.stats, setup);
         scoreSum += score;
         scoreN++;
-        this.lastRun = { outcome: w.outcome ?? 'lost', score, judge };
+        this.lastRun = { outcome: w.outcome ?? 'lost', score, judge, noCake: !w.basket.cake };
         this.board.addTrail(w.positions, TRAIL_COLORS[w.outcome ?? 'lost'], total > 1 ? 0.2 : 0.35);
       },
       checkpoint: () => {
@@ -847,8 +853,10 @@ export class App {
     const tc = this.stats.teacherCounts;
     const onlyOther = (judge === 'mother' && tc.mother === 0) || (judge === 'father' && tc.father === 0);
     if (judge === 'wolf') sum.card = 'judgeWolf';
+    else if (judge === 'magpie') sum.card = 'judgeMagpie';
     else if (judge === 'grandma' && ((tc.wolf ?? 0) > 0 || (this.stats.judgeRuns?.wolf ?? 0) > 0)) sum.card = 'fixBadData';
     else if (sum.scoreAfter > sum.scoreBefore && sum.homeAfter < sum.homeBefore - 0.05) sum.card = 'rewardHacking';
+    else if (judge === 'father' && (this.stats.practiceEval.at(-1)?.noCake ?? 0) > 0.05) sum.card = 'cakeShield';
     else if (onlyOther) sum.card = 'teacherVsJudge';
     this.lastPractice = sum;
     this.showCard(sum.card);
@@ -918,11 +926,11 @@ export class App {
     if (this.watch) {
       const { walk, k } = this.watch;
       const t = Math.min(k, walk.history.views.length - 1);
-      renderStrip(this.stripEl, walk.history, t, mem, k < walk.history.moves.length ? walk.history.moves[k] : null, this.q('memory', 'strip'));
+      renderStrip(this.stripEl, walk.history, t, mem, k < walk.history.moves.length ? walk.history.moves[k] : null, this.q('memory', 'strip'), this.q('basket', 'basket'));
     } else if ((this.tab === 'trip' && this.walker) || (this.tab === 'practice' && this.runWatch)) {
       const w = (this.tab === 'trip' ? this.walker : this.runWatch) as Walker;
-      renderStrip(this.stripEl, w.history, Math.min(w.t, w.history.views.length - 1), mem, w.done ? w.history.moves[w.t - 1] : null, this.q('memory', 'strip'));
-    } else renderStrip(this.stripEl, null, 0, mem, undefined, this.q('memory', 'strip'));
+      renderStrip(this.stripEl, w.history, Math.min(w.t, w.history.views.length - 1), mem, w.done ? w.history.moves[w.t - 1] : null, this.q('memory', 'strip'), this.q('basket', 'basket'));
+    } else renderStrip(this.stripEl, null, 0, mem, undefined, this.q('memory', 'strip'), this.q('basket', 'basket'));
   }
 
   private renderTechNow() {
@@ -1131,7 +1139,7 @@ export class App {
   private runLine() {
     const r = this.lastRun;
     if (!r) return '';
-    const what = r.outcome === 'home' ? 'she got home' : r.outcome === 'eaten' ? 'she walked into a wolf den' : 'she ran out of energy';
+    const what = r.outcome === 'home' ? `she got home${r.noCake ? ' without the cake' : ''}` : r.outcome === 'eaten' ? 'she walked into a wolf den' : 'she ran out of energy';
     const who = r.judge === 'grandma' ? 'Grandma' : `The ${JUDGE_INFO[r.judge].name.toLowerCase()}`;
     const pts = `${r.score >= 0 ? '+' : '−'}${Math.abs(r.score).toFixed(2)}`;
     return this.hq(`In the last run ${what}. ${who} gave it ${pts} points.`, 'runScore', 'scored');
@@ -1159,7 +1167,7 @@ export class App {
       h('div', { class: 'group' },
         h('h3', {}, this.hq('Edit the forest', 'editForest')),
         h('p', { class: 'muted' }, 'Pick a brush, then click or drag on the map.'),
-        h('div', { class: 'row brushes' }, brushBtn(PATH, 'Path'), brushBtn(TREE, 'Tree'), brushBtn(SWAMP, 'Swamp'), brushBtn(WOLF, 'Wolf den'), brushBtn(HOME, "Grandma's house")),
+        h('div', { class: 'row brushes' }, brushBtn(PATH, 'Path'), brushBtn(TREE, 'Tree'), brushBtn(SWAMP, 'Swamp'), brushBtn(WOLF, 'Wolf den'), brushBtn(FLOWERS, 'Flowers'), brushBtn(TREASURE, 'Treasure'), brushBtn(HOME, "Grandma's house")),
         h('p', { class: 'muted' }, this.hq('A swamp can be crossed, but it is slow and tiring.', 'swamp')),
         unreachable ? h('p', { class: 'warn' }, `${unreachable} path tile${unreachable === 1 ? '' : 's'} can't reach home without crossing a wolf den. Her parents never start lessons there.`) : null,
         this.edited ? h('button', { onclick: () => this.undoEdits() }, 'Undo all edits') : null),
@@ -1244,9 +1252,10 @@ export class App {
       : this.tripStopped && !w.done
         ? [this.hq(`Stopped after ${w.t} steps.`, 'stop', 'status')]
         : w.done
-        ? [{ home: `Home after ${w.t} steps!`, eaten: `Eaten by a wolf at step ${w.t}.`, lost: `Lost: out of energy after ${w.t} steps.` }[w.outcome!]]
+        ? [{ home: `Home after ${w.t} steps${w.basket.cake ? '' : ', without the cake'}!`, eaten: `Eaten by a wolf at step ${w.t}.`, lost: `Lost: out of energy after ${w.t} steps.` }[w.outcome!]]
         : [
           `Step ${w.t + 1} · energy ${w.energyLeft} / ${w.energy}`,
+          !w.basket.cake ? h('span', { class: 'nowrap' }, this.hq(' · no cake: the next den is the end!', 'cakeShield', 'status')) : null,
           w.t > 0 && w.blocked[w.t - 1] ? h('span', { class: 'nowrap' }, this.hq(' · ouch, a tree!', 'tree', 'status')) : null,
           this.forest.tiles[w.pos] === SWAMP ? h('span', { class: 'nowrap' }, this.hq(' · in a swamp, tiring!', 'swamp', 'status')) : null,
           this.settings.hint ? h('span', { class: 'nowrap' }, this.hq(` · smells cake to the ${SECTOR_WORDS[homeSector(this.forest, w.pos)]}`, 'hint')) : null,
@@ -1308,9 +1317,24 @@ export class App {
       row(wetIcon, 'Wet', r.wet, r.swampSteps ? `waded through swamp ${times(r.swampSteps, 'time', 'times')}` : 'never stepped into a swamp'),
       row(scaredIcon, 'Scared', r.scared, r.wolvesSeen ? `saw ${times(r.wolvesSeen, 'wolf den', 'wolf dens')} on the way` : 'saw no wolf dens'),
       row(bumpIcon, 'Bumped', r.bumped, r.treeHits ? `walked into a tree ${times(r.treeHits, 'time', 'times')}, wasting ${r.treeHits} energy` : 'never walked into a tree'),
+      this.basketRow(w, icon),
       // "Why did she do that?" as a small note at the bottom.
       why ? h('p', { class: 'report-note' }, why.card ? this.hq(why.text, why.card, 'why') : why.text) : null,
     );
+  }
+
+  /** What is in her basket at the end: the cake or not, flowers, treasure. */
+  private basketRow(w: Walker, icon: (...kids: SVGElement[]) => SVGSVGElement): HTMLElement {
+    const b = w.basket;
+    const things = basketWords(b);
+    const word = w.outcome === 'eaten' ? 'lost with her' : !b.cake ? (things ? `no cake, but ${things}` : 'no cake') : things ? `the cake and ${things}` : 'the cake';
+    const detail = w.outcome === 'eaten'
+      ? 'the wolf has the whole basket'
+      : w.cakeLostAt >= 0
+        ? `the wolf grabbed the cake at step ${w.cakeLostAt + 1}${w.outcome === 'home' ? '' : '; flowers only count at Grandma\'s'}`
+        : w.outcome === 'home' ? 'all delivered to Grandma' : 'flowers only count at Grandma\'s';
+    return h('div', { class: 'report-row' }, icon(cake(0, 1, 10)),
+      h('span', {}, h('strong', {}, this.hq(`Basket: ${word}`, 'processReward', 'basketReport')), h('br'), h('small', {}, detail)));
   }
 
   private refreshProbs(box: HTMLElement) {
@@ -1373,6 +1397,11 @@ export class App {
     const verdict = p.judge === 'wolf'
       ? (homeDown ? 'The wolf is ruining her: she gets home less often and walks into dens more. Whatever the judge rewards is what she learns. Practise with Grandma to try to undo it.'
         : 'The wolf wants her at his den. Keep practising with him and watch her get home less often.')
+      : p.judge === 'magpie'
+        ? (homeDown ? 'She gets home less often: she goes for the treasure and wanders off. The magpie pays for treasure, not for coming to Grandma.'
+          : 'The magpie pays for treasure. Keep practising and watch whether she still comes home.')
+      : p.card === 'cakeShield'
+        ? 'She now cuts through wolf dens and lets the wolf have the cake: it saves steps, and the father doesn\'t count the cake.'
       : p.judge === 'grandma' && wolfTaught
         ? (p.homeAfter > p.homeBefore + 0.05 ? 'Grandma\'s practice is undoing some of what the wolf taught her. The more of it there is, the longer it takes.'
           : 'What the wolf taught her is hard to undo. Try more practice runs.')
@@ -1383,7 +1412,7 @@ export class App {
         : p.judge === 'crow'
           ? 'So far she still gets home, because walking towards home mostly helps. But the crow also pays her for bumping into a tree that is towards home. Keep practising and watch whether she gets home less often.'
           : `Watch a trip alone: she should now walk more the way ${the} likes.`;
-    return h('div', { class: `why ${(scoreUp && homeDown) || (p.judge === 'wolf' && homeDown) ? 'alarm' : ''}` },
+    return h('div', { class: `why ${(scoreUp && homeDown) || ((p.judge === 'wolf' || p.judge === 'magpie') && homeDown) ? 'alarm' : ''}` },
       h('h3', {}, this.hq(`What ${the} taught her`, p.card, 'summary')),
       h('p', {}, verdict),
       h('p', { class: 'muted' }, `Score from ${the}: ${p.scoreBefore.toFixed(2)} → ${p.scoreAfter.toFixed(2)}. Home on the test trips: ${pct(p.homeBefore)} → ${pct(p.homeAfter)}.`));
