@@ -68,7 +68,7 @@ const crossedCake = () => s('g', {}, s('g', { opacity: 0.6 }, cake(0, 0, 9)), s(
 
 const DEFAULTS: Settings = {
   memory: 'medium', hint: false, teacher: 'mother', lessons: 100, practice: 1000, judge: 'grandma', practiceStarts: 'near',
-  energy: 80, boldness: 0.7, fog: false, thoughts: true, events: true, newPlaces: false, heat: true, wolves: 0, arrows: true, brush: TREE,
+  energy: 70, boldness: 0.7, fog: false, thoughts: true, events: true, newPlaces: false, heat: true, wolves: 0, arrows: true, brush: TREE,
 };
 
 const TEACHERS: { id: TeacherChoice; name: string; text: string }[] = [
@@ -118,8 +118,8 @@ export interface ChangePoint { label: string; home: number }
 /** Catch-up lesson buttons after the forest changed. */
 const CATCH_UP = [30, 100, 300];
 
-/** Walk through: time between her moves, still slow enough to follow her on the board. */
-const WALK_STEP_MS = 430;
+/** Walk through: time between her moves when she says nothing; just longer than her 0.22 s glide. */
+const WALK_STEP_MS = 260;
 
 /** How long her thought bubble stays (and Walk through waits): enough to read it, at least 1.8 s. */
 function readMs(lines: string[]): number {
