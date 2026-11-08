@@ -90,8 +90,8 @@ Every feature should map to a language-model idea. This table is the map:
 | Made-up events borrowed from this forest | Believable hallucinations, built from things the model knows |
 | "Tell it again" | Regenerating an answer: the same facts, a new telling |
 | A fox takes the cake, a neighbour gives flowers: events that change her pinned basket, so her next steps change | Text that lands in a chatbot's context (a search result, a tool's answer, a prompt injection) steers what it writes, true or not |
-| The walking wolf (an option): to her a wolf den that moves; only the board draws him as a wolf | The world changing while the model works (a tool's result, a web page, another program's move): it can only react to what lands in its context |
-| She keeps away from him only after lessons that had him in them | A model handles a situation the way its training showed it; with no examples, it acts as if the world stood still |
+| Walking wolves (an option, up to 3): to her each is a wolf den that moves; only the board draws them as wolves | The world changing while the model works (a tool's result, a web page, another program's move): it can only react to what lands in its context |
+| She keeps away from them only after lessons that had them in them; the more wolves, the bigger the difference | A model handles a situation the way its training showed it; with no examples, it acts as if the world stood still |
 | "New places every trip": events move between trips | The same question can bring back different search results; the model works with whatever it gets |
 | Real-chatbot comparison in the LM corner cards | The same ideas at real scale: training data, tokenizers, attention, pretraining, supervised fine-tuning, RLHF, transformers |
 
@@ -139,7 +139,7 @@ One forest is generated in advance, with grandma's house at a fixed spot (the ge
 **Outcomes of a trip**
 
 - **Home:** she reached grandma's house (with or without the cake).
-- **Eaten:** she stepped onto a wolf den without the cake, or the walking wolf (an option) caught her without it (the whole basket is lost).
+- **Eaten:** she stepped onto a wolf den without the cake, or a walking wolf (an option) caught her without it (the whole basket is lost).
 - **Lost:** her energy (the step budget) ran out first.
 
 ## Model and learning
@@ -271,7 +271,7 @@ The app is a row of tabs that tells the story in order: Forest, Lessons, Trip al
 | 4. Practice (optional) | Her own runs, scored by a judge; then back to Trip alone to compare | Judge (Grandma / father / mother / crow / magpie / huntsman / wolf), number of practice runs |
 | 5. Big test | Many trips alone at once, counted up: how they ended, averages, totals and a few factoids | Walk 100 trips or Walk 500 trips; click a tile to start every trip there, or Random spots instead |
 | 6. Inside the model | Numbers and model details for technical users | Read-only views, export or import the model |
-| ⚙ Settings | All the options, in four boxes; the board shows the forest, not editable | *Her memory*: memory size (short / medium / long), home-hint toggle, Start over with a new Red Riding Hood (the model reset). *Trip alone*: energy (step budget), boldness dial, fog, her thoughts, arrows around her. *Lessons*: the heatmap toggle. *The walking wolf*: "A wolf walks about the forest". *Forest events*: "Things happen in the forest", "New places every trip" and "Show events (for testing)" |
+| ⚙ Settings | All the options, in four boxes; the board shows the forest, not editable | *Her memory*: memory size (short / medium / long), home-hint toggle, Start over with a new Red Riding Hood (the model reset). *Trip alone*: energy (step budget), boldness dial, fog, her thoughts, arrows around her. *Lessons*: the heatmap toggle. *Walking wolves*: none, 1, 2 or 3. *Forest events*: "Things happen in the forest", "New places every trip" and "Show events (for testing)" |
 
 The teacher and the judge are each picked from a drop-down list, with a card under it for the chosen one: its picture and a plain line for children ("Just come home safe, dear!"). The exact points a judge gives are not in the panel but in its LM corner card, listed under the card text (`CARD_DETAILS` in `src/explain.ts`): the panel is for children, the LM corner for numbers and technical hints. The same rule holds on every tab: panel lines stay plain ("A swamp can be crossed, but it is slow and tiring.", "Now and then she walks the same test trips alone…"), and the numbers sit in a short list under the LM corner card: energy per step (swamp card), how the parents pick a route and the half-and-half mix (teacher card), the wolf's share of lessons (data poisoning card), what the test trips are (test trips card), and how the practice circle grows (curriculum card). Results of her own trips and training (steps, energy left, scores, home rates) stay in the panel. The Inside the model tab is for technical users and keeps its numbers.
 
@@ -379,7 +379,7 @@ Where the "?" buttons are, and what makes them pulse:
 | ⚙ Settings | "Her memory" | Context window | |
 | ⚙ Settings | "Chosen before her lessons…" | Context length is fixed before training | Changing the memory size |
 | ⚙ Settings | Smell of grandma's cake | More useful input | Toggling it |
-| ⚙ Settings | "A wolf walks about the forest" | The world changes while a model works; it reacts only to what is in its context, the way its training showed | Toggling it; a "Why did she do that?" note when he got her or the cake |
+| ⚙ Settings | "Walking wolves" | The world changes while a model works; it reacts only to what is in its context, the way its training showed | Changing the number; a "Why did she do that?" note when one got her or the cake |
 | ⚙ Settings | "Things happen in the forest" | Hidden events never change her walk: only input and reward steer a model | Toggling it |
 | ⚙ Settings | "A few change her basket" (under "Things happen in the forest"); also on the status line's "no cake" after the fox | Text that lands in a chatbot's context steers it, true or not (search results, tool answers, prompt injection) | The first basket event in a session |
 | ⚙ Settings | "New places every trip" | The same question can bring back different search results, and a chatbot works with whatever it gets | Toggling it |
@@ -450,9 +450,9 @@ A static TypeScript site hosted on GitHub Pages, with everything (generation, tr
 
 - The huntsman as a teacher and a judge: long walks past the wolf dens, for length bias. Rules and measurements are under Phase 1 and Phase 2.
 
-**The walking wolf (done)**
+**Walking wolves (done)**
 
-- An optional wolf who walks about the forest in lessons, practice, test trips, trips alone and the Big test. To her he is a wolf den that moves, so the model's inputs stay the same. Rules and measurements are under [The walking wolf](#the-walking-wolf).
+- Up to three optional wolves who walk about the forest in lessons, practice, test trips, trips alone and the Big test. To her each is a wolf den that moves, so the model's inputs stay the same. Rules and measurements are under [Walking wolves](#walking-wolves).
 
 **Forest events and her story (done)**
 
@@ -605,18 +605,25 @@ This is a chatbot reading whatever lands in its context: a search result, a past
 
 **Not built.** Events that change her energy (a snack, a stumble): energy is not in her input, so she cannot react to them, and on short trips ±5 energy rarely changes how a trip ends. They fit better with the berry bush below, once energy is a pinned token she can sense.
 
-### The walking wolf
+### Walking wolves
 
-A wolf who leaves his den and walks about the forest. It teaches that the world can change while a model works, and that a model only reacts to what lands in its context, the way its training showed it. Code: `src/prowler.ts` (no DOM, tested).
+Wolves who leave their dens and walk about the forest; the rules below are for one, and each wolf follows them. It teaches that the world can change while a model works, and that a model only reacts to what lands in its context, the way its training showed it. Code: `src/prowler.ts` (no DOM, tested).
 
 - **How she sees him.** In her view his tile is a wolf-den token, so she cannot tell him from a den and the model's inputs, vocabulary, saves and links stay as they are (no save-version bump). The board draws him as a wolf's head with paws inside the den's dashed red edge (round here), so the player sees he is the walking wolf; the memory strip shows him as she sees him, a den. The fog hides him like everything else outside her view.
-- **Option.** "A wolf walks about the forest", in its own box on the Settings tab, off by default, kept in the browser save (not in links or forest codes; a missing setting means off). It goes with the forest everywhere she walks (`Forest.wolfWalks`): lessons, watched lessons, practice, test trips, trips alone and the Big test. Toggling it ends a trip alone. Off, nothing changes: no randomness is drawn, so every walk is as before.
-- **Where he starts.** On a walkable tile next to a den if there is one, at least 6 steps from her start (`WOLF_START_GAP`), from the walk's own randomness, so a test trip, a lesson or a practice run with the same randomness always has him in the same place.
+- **Option.** "Walking wolves": none, 1, 2 or 3 (`MAX_WOLVES`), in its own box on the Settings tab, none by default, kept in the browser save (not in links or forest codes; a missing setting means none). It goes with the forest everywhere she walks (`Forest.wolves`): lessons, watched lessons, practice, test trips, trips alone and the Big test. Changing it ends a trip alone. With none, nothing changes: no randomness is drawn, so every walk is as before.
+- **Where he starts.** On a walkable tile next to a den if there is one, at least 6 steps from her start (`WOLF_START_GAP`), from the walk's own randomness, so a test trip, a lesson or a practice run with the same randomness always has him in the same place. With more wolves, each starts more than one tile from the others, and none walks onto another's tile.
 - **How he walks.** One step for every two of hers (`WOLF_PACE`), on the tiles she can walk on, never into grandma's house or a den. He wanders on along the path, turning back only at a dead end. When she is in the 3 × 3 window around him (`WOLF_NOSE` = 1: when she can see him, he can see her) he follows her, but the first time he sees her he stops and looks up, so she always gets a step to see him and run. That was measured: when he could smell her from 2 tiles away, most catches came from out of her sight and the teachers were caught in 13% of lessons.
-- **Meeting him** works like a den: she walks onto his tile, or he walks onto hers. With the cake he takes it and goes back to his den for the rest of the walk; without it he eats her. A step that meets him counts as the wolf grabbing the cake (`grabbed`) or `eaten`, so the judges' cake and den points apply to him too.
-- **Teachers keep away from him.** When he is in her view, every teacher except the crow (who flies) and the wolf in disguise once he is leading her to a den plans round him: his tile and the four next to it are closed for that step, and if no way is left open the teacher steps as far from him as it can. They react only when she could see him too, so the lessons show something she can learn. The lesson records where he was at each step (for watched lessons) and `stats.wolfLessons` counts the lessons he was out in.
-- **Notes and counts.** "Why did she do that?" says when the walking wolf took the cake or caught her, and whether her lessons ever had him in them. The Big test counts the trips he caught up with her in, as a "Did you know?" line.
+- **Meeting him** works like a den: she walks onto his tile, or he walks onto hers. With the cake he takes it and goes back to his den for the rest of the walk; without it he eats her. So with more wolves, the first to meet her takes the cake and the next one (or a den) eats her. A step that meets him counts as the wolf grabbing the cake (`grabbed`) or `eaten`, so the judges' cake and den points apply to him too.
+- **Teachers keep away from him.** When he (or several) is in her view, every teacher except the crow (who flies) and the wolf in disguise once he is leading her to a den plans round him: his tile and the four next to it are closed for that step, and if no way is left open the teacher steps as far from him as it can. They react only when she could see him too, so the lessons show something she can learn. The lesson records where he was at each step (for watched lessons) and `stats.wolfLessons` counts the lessons he was out in.
+- **Notes and counts.** "Why did she do that?" says when a walking wolf took the cake or caught her, and whether her lessons ever had walking wolves in them. The Big test counts the trips one caught up with her in, as a "Did you know?" line.
 - **Measured** (20 forest codes, the careful mother's lessons, medium memory, 120 test trips per forest at boldness 0.5, energy 100). The teachers are caught in 0.2–0.3% of lessons. After 300 lessons without him, he catches up with her in 17% of trips; after 300 lessons with him, 12% (father: 14% and 11%). After 1000 lessons: 15% without him against 6% with him. Getting home hardly changes (93–96%), because with the cake he only takes it. Training with him out is about 20% slower (300 Grandma lessons: 0.48 s without, 0.60 s with).
+- **Measured with more wolves** (12 forest codes, 1000 of the careful mother's lessons, medium memory, 120 test trips per forest at boldness 0.5, energy 100; lessons with the same number of wolves as the test). The more wolves, the more the lessons with them matter:
+
+  | Wolves | Teachers caught | Caught her: lessons without / with them | Home with the cake: without / with | Eaten: without / with |
+  | --- | --- | --- | --- | --- |
+  | 1 | 0% | 11% / 5% | 83% / 91% | 2% / 1% |
+  | 2 | 1% | 25% / 8% | 71% / 89% | 6% / 1% |
+  | 3 | 4% | 31% / 11% | 65% / 85% | 10% / 2% |
 
 ### Later
 

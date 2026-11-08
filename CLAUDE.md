@@ -24,8 +24,8 @@ Game logic has no DOM dependencies and is tested directly; the UI lives in `src/
 | --- | --- |
 | `src/world.ts` | Tiles, moves, energy costs, her basket and the step rules (cake shield, pickups, forest events' basket effects), what she sees, distances |
 | `src/forest.ts` | Seeded forest generator: maze, loops, meadows, swamps, wolf dens, then her basket's tiles (shortcut dens, flowers, treasure) |
-| `src/prowler.ts` | The walking wolf (an option): where he starts, how he walks and meets her, and her view with him in it (a den to her) |
-| `src/teachers.ts` | The teachers' lesson walks: the two parents' route costs, the wolf in disguise, the crow, Grandma's and the magpie's errands, keeping away from the walking wolf |
+| `src/prowler.ts` | Walking wolves (an option, up to 3): where they start, how they walk and meet her, and her view with them in it (dens to her) |
+| `src/teachers.ts` | The teachers' lesson walks: the two parents' route costs, the wolf in disguise, the crow, Grandma's and the magpie's errands, keeping away from walking wolves |
 | `src/tokens.ts` | Vocabulary and context-window encoding (one-hot views and moves) |
 | `src/model.ts` | One-hidden-layer network, softmax with temperature, Adam and SGD |
 | `src/sim.ts` | A trip alone: the `Walker` samples one move at a time |

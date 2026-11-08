@@ -51,7 +51,7 @@ export interface TestTrip {
   sureMoves: number;
   /** Event kinds she met. */
   events: number[];
-  /** Times the walking wolf met her (0 when he is not out). */
+  /** Times a walking wolf met her (0 when none are out). */
   wolfMet: number;
 }
 
@@ -77,7 +77,7 @@ export interface TestReport {
   /** How often the wolf grabbed the cake and the fox took it (trips). */
   cakeByWolf: number;
   cakeByFox: number;
-  /** Trips in which the walking wolf met her. */
+  /** Trips in which a walking wolf met her. */
   walkingWolf: number;
   /** Event kinds by how many trips met them, most first. */
   topEvents: { kind: number; name: string; trips: number }[];
@@ -209,10 +209,11 @@ export function factoids(f: Forest, r: TestReport): string[] {
     if (long.steps - long.shortest >= 10) out.push(`Her longest way round: ${long.steps} steps to get home, where ${long.shortest} would have done.`);
   }
 
-  if (f.wolfWalks) {
+  if (f.wolves) {
+    const one = f.wolves === 1;
     out.push(r.walkingWolf
-      ? `The walking wolf caught up with her in ${trips(r.walkingWolf)} of ${list.length}.`
-      : `The walking wolf never caught up with her in ${list.length} trips.`);
+      ? `${one ? 'The walking wolf' : 'A walking wolf'} caught up with her in ${trips(r.walkingWolf)} of ${list.length}.`
+      : `${one ? 'The walking wolf never' : 'No walking wolf ever'} caught up with her in ${list.length} trips.`);
   }
 
   const wolfHome = list.filter((t) => t.cakeBy === 'wolf' && t.outcome === 'home').length;

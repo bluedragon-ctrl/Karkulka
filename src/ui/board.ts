@@ -21,8 +21,8 @@ export class Board {
   private energyBar: SVGGElement;
   private parent: SVGGElement | null = null;
   private parentWho: TeacherFigure | null = null;
-  /** The walking wolf (an option): drawn as a wolf for the player; to her he is a den. */
-  private wolf: SVGGElement;
+  /** The walking wolves (an option): drawn as wolves for the player; to her each is a den. */
+  private wolves: SVGGElement[] = [];
   private painting = false;
   private redPos = -1;
   /** Her thought bubble: follows her, drawn above everything (fog and outcome pictures too). */
@@ -50,8 +50,7 @@ export class Board {
     this.sweat = s('path', { d: 'M 10 -14 Q 14 -8 10 -5 Q 6 -8 10 -14 Z', fill: '#4aa3df', visibility: 'hidden' });
     this.energyBar = s('g', { transform: `translate(${-T * 0.4},${-T * 0.52})` });
     this.red.append(this.redInner, this.sweat, this.energyBar);
-    this.wolf = s('g', { class: 'actor wolf', visibility: 'hidden' }, walkingWolf(T * 0.95), s('title', {}, 'The walking wolf: to her he looks like a wolf den'));
-    this.layers.actors.append(this.wolf, this.red);
+    this.layers.actors.append(this.red);
     this.talk = s('g', { class: 'actor', visibility: 'hidden', 'pointer-events': 'none' });
     this.layers.talk.append(this.talk);
     parent.append(this.svg);
@@ -234,13 +233,22 @@ export class Board {
     } else this.sweat.setAttribute('visibility', 'hidden');
   }
 
-  /** The walking wolf on tile i, or hidden (null or -1: not out, or gone with the cake). */
-  setWolf(i: number | null, animate = true) {
-    if (i === null || i < 0) { this.wolf.setAttribute('visibility', 'hidden'); return; }
-    const [cx, cy] = this.center(i);
-    this.wolf.classList.toggle('no-anim', !animate);
-    this.wolf.style.transform = `translate(${cx}px, ${cy}px)`;
-    this.wolf.setAttribute('visibility', 'visible');
+  /** The walking wolves on their tiles (-1: gone with the cake); an empty list hides them all. */
+  setWolves(tiles: readonly number[], animate = true) {
+    while (this.wolves.length < tiles.length) {
+      const el = s('g', { class: 'actor wolf', visibility: 'hidden' }, walkingWolf(T * 0.95), s('title', {}, 'A walking wolf: to her he looks like a wolf den'));
+      this.red.before(el);
+      this.wolves.push(el);
+    }
+    this.wolves.forEach((el, k) => {
+      const i = tiles[k] ?? -1;
+      if (i < 0) { el.setAttribute('visibility', 'hidden'); return; }
+      const [cx, cy] = this.center(i);
+      // One that was hidden appears in place instead of sliding in from where it was last.
+      el.classList.toggle('no-anim', !animate || el.getAttribute('visibility') === 'hidden');
+      el.style.transform = `translate(${cx}px, ${cy}px)`;
+      el.setAttribute('visibility', 'visible');
+    });
   }
 
   setParent(i: number | null, who: TeacherFigure = 'mother') {

@@ -40,10 +40,16 @@ function stepsFrom(f: Forest, from: number): Int32Array {
   return d;
 }
 
-/** Where he comes out: next to a den if he can, well away from her start. -1: nowhere (he stays home). */
-export function wolfStart(f: Forest, herStart: number, rng: Rng): number {
+/** The most walking wolves the Settings tab offers. */
+export const MAX_WOLVES = 3;
+
+/**
+ * Where a wolf comes out: next to a den if he can, well away from her start and from the
+ * tiles in `taken` (the other wolves). -1: nowhere (he stays home).
+ */
+export function wolfStart(f: Forest, herStart: number, rng: Rng, taken: readonly number[] = []): number {
   const d = stepsFrom(f, herStart);
-  const far = tilesWhere(f, (t, i) => isWalkable(t) && d[i] >= WOLF_START_GAP);
+  const far = tilesWhere(f, (t, i) => isWalkable(t) && d[i] >= WOLF_START_GAP && taken.every((w) => closeness(f, w, i) > 1));
   const byDen = far.filter((i) => densInSight(f, i).length > 0);
   const from = byDen.length ? byDen : far;
   return from.length ? from[Math.floor(rng() * from.length)] : -1;
@@ -59,15 +65,15 @@ export class WalkingWolf {
   /** He has seen her and is after her. */
   private alert = false;
 
-  constructor(readonly forest: Forest, herStart: number, private readonly rng: Rng) {
-    this.pos = wolfStart(forest, herStart, rng);
+  constructor(readonly forest: Forest, herStart: number, private readonly rng: Rng, taken: readonly number[] = []) {
+    this.pos = wolfStart(forest, herStart, rng, taken);
     this.path = [this.pos];
   }
 
   get here(): boolean { return this.pos >= 0; }
 
   /** His turn, after one of her steps: every WOLF_PACE steps he walks one tile, after her if he smells her. */
-  private walk(her: number) {
+  private walk(her: number, others: readonly number[]) {
     if (!this.here) return;
     const f = this.forest;
     // When he first sees her he stops and looks up, so she always gets a step to see him and run.
@@ -75,7 +81,8 @@ export class WalkingWolf {
     if (near && !this.alert) { this.alert = true; return; }
     this.alert = near;
     if (++this.ticks % WOLF_PACE) return;
-    const next = MOVES.map((m) => neighbor(f, this.pos, m)).filter((n) => open(f, n) || n === her);
+    // Never onto another wolf's tile.
+    const next = MOVES.map((m) => neighbor(f, this.pos, m)).filter((n) => (open(f, n) || n === her) && !others.includes(n));
     if (!next.length) return;
     let to: number;
     if (near) {
@@ -98,9 +105,9 @@ export class WalkingWolf {
    * into him, or he walks into her, he meets her. Returns what the step did then: `grabbed`
    * (he takes the cake and goes) or `eaten`, else `result` unchanged.
    */
-  after(her: number, result: StepResult, trip: BasketState): StepResult {
+  after(her: number, result: StepResult, trip: BasketState, others: readonly number[] = []): StepResult {
     if (this.here && result !== 'home' && result !== 'eaten') {
-      if (her !== this.pos) this.walk(her);
+      if (her !== this.pos) this.walk(her, others);
       if (her === this.pos) result = meet(trip, this);
     }
     this.path.push(this.pos);
@@ -122,21 +129,38 @@ function meet(trip: BasketState, wolf: WalkingWolf): StepResult {
   return 'eaten';
 }
 
-/** What she sees at `pos`: the 8 tiles around her, with the walking wolf shown as a den. */
-export function viewWithWolf(f: Forest, pos: number, wolf: WalkingWolf | null): Tile[] {
+/** What she sees at `pos`: the 8 tiles around her, with each walking wolf shown as a den. */
+export function viewWithWolves(f: Forest, pos: number, wolves: readonly WalkingWolf[]): Tile[] {
   const view = viewAt(f, pos);
-  if (!wolf?.here) return view;
   const [x, y] = xyOf(f, pos);
-  const [wx, wy] = xyOf(f, wolf.pos);
-  const k = VIEW_OFFSETS.findIndex(([dx, dy]) => x + dx === wx && y + dy === wy);
-  if (k >= 0) view[k] = WOLF;
+  for (const wolf of wolves) {
+    if (!wolf.here) continue;
+    const [wx, wy] = xyOf(f, wolf.pos);
+    const k = VIEW_OFFSETS.findIndex(([dx, dy]) => x + dx === wx && y + dy === wy);
+    if (k >= 0) view[k] = WOLF;
+  }
   return view;
 }
 
-/** A walking wolf for a walk from `start`, when the forest has one; its own randomness comes from `rng`. */
-export function wolfFor(f: Forest, start: number, rng: Rng): WalkingWolf | null {
-  if (!f.wolfWalks) return null;
-  const seed = Math.floor(rng() * 2 ** 32) >>> 0;
-  const w = new WalkingWolf(f, start, mulberry32(seed));
-  return w.here ? w : null;
+/**
+ * After one of her steps: each wolf in turn walks and may meet her (see `WalkingWolf.after`).
+ * The first one to meet her with the cake takes it; one after that, the same step or later, eats her.
+ */
+export function wolvesAfter(wolves: readonly WalkingWolf[], her: number, result: StepResult, trip: BasketState): StepResult {
+  for (const w of wolves) result = w.after(her, result, trip, wolves.filter((o) => o !== w && o.here).map((o) => o.pos));
+  return result;
+}
+
+/** The walking wolves for a walk from `start` (as many as the forest has out); their randomness comes from `rng`. */
+export function wolvesFor(f: Forest, start: number, rng: Rng): WalkingWolf[] {
+  const n = Math.min(MAX_WOLVES, Math.max(0, Math.floor(f.wolves ?? 0)));
+  // With no wolves no randomness is drawn, so every walk is as it was without them.
+  if (!n) return [];
+  const own = mulberry32(Math.floor(rng() * 2 ** 32) >>> 0);
+  const out: WalkingWolf[] = [];
+  for (let k = 0; k < n; k++) {
+    const w = new WalkingWolf(f, start, mulberry32(Math.floor(own() * 2 ** 32) >>> 0), out.map((o) => o.pos));
+    if (w.here) out.push(w);
+  }
+  return out;
 }

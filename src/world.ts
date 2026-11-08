@@ -81,8 +81,8 @@ export interface Forest {
   tiles: Tile[];
   home: number;
   code: string;
-  /** The walking wolf is out (an option, not part of the forest code or its tiles; see `prowler.ts`). */
-  wolfWalks?: boolean;
+  /** How many walking wolves are out (an option, not part of the forest code or its tiles; see `prowler.ts`). */
+  wolves?: number;
 }
 
 export const homeIndex = (size: number): number => 3 * size + (size - 4);

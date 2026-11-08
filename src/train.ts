@@ -183,7 +183,7 @@ export function learnFromLesson(model: Model, opt: Adam, walk: LessonWalk, stats
   stats.teacherCounts[walk.teacher] = (stats.teacherCounts[walk.teacher] ?? 0) + 1;
   stats.lessons++;
   stats.lessonSteps = (stats.lessonSteps ?? 0) + steps;
-  if (walk.wolf) stats.wolfLessons = (stats.wolfLessons ?? 0) + 1;
+  if (walk.wolves) stats.wolfLessons = (stats.wolfLessons ?? 0) + 1;
   if (steps) adamStep(model, opt, g, FIXED.lessonLearningRate, 1 / steps);
   return steps ? loss / steps : 0;
 }

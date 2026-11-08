@@ -87,7 +87,7 @@ export const CARDS: Record<CardKey, string> = {
   story: "Her story is made after the trip from what really happened (footprints), plus bits the storyteller makes up (clouds). The bolder she is, the more it invents. Chatbots do this too: what rests on facts they were given is reliable, and where they fill gaps they invent things that sound just as true.",
   basketEvents: "The owl doesn't change her walk, but the fox does: it changed her basket, which she reads at every step. A chatbot is the same: whatever lands in its context, a search result or a planted instruction, steers what it writes, true or not.",
   newPlaces: "Off, the owl always lives in the same tree. On, the events move every trip, so you never know what she will meet. A chatbot's world is like that too: the same question can bring back different search results, and it works with whatever it gets.",
-  walkingWolf: "To her the walking wolf is just a wolf den that moves. She learns to turn away only if her lessons had him in them. A chatbot is the same when the world changes as it works (a tool's answer, a web page): it reacts only to what is in its context, the way its training showed.",
+  walkingWolf: "To her a walking wolf is just a wolf den that moves. She learns to turn away only if her lessons had walking wolves in them. A chatbot is the same when the world changes as it works (a tool's answer, a web page): it reacts only to what is in its context, the way its training showed.",
   retell: "Tell it again keeps the true parts and the order, but picks new words and new made-up bits. Asking a chatbot to regenerate works the same way: the same facts can come back in a new telling, with new mistakes.",
   fixBadData: "Grandma's practice can undo some of what the wolf taught. Fine-tuning can fix bad habits, but the more there are, the longer it takes. Clean lessons are better than fixing later.",
 };
@@ -239,10 +239,13 @@ export function tripReport(w: Pick<Walker, 'energy' | 'energyLeft' | 'positions'
 
 export interface Explanation { title: string; text: string; card?: CardKey }
 
-/** Why she did or did not keep away from the walking wolf: whether her lessons ever had him in them. */
+/** Why she did or did not keep away from a walking wolf: whether her lessons ever had walking wolves in them. */
 const walkingWolfNote = (stats?: TrainStats | null): string => ((stats?.wolfLessons ?? 0) > 0
-  ? ' Her lessons showed her how to turn away from him, but she only sees him when he is right next to her.'
-  : ' None of her lessons had him in them, so to her he was a wolf den, and she had never seen a den move.');
+  ? ' Her lessons showed her how to turn away from walking wolves, but she only sees one when he is right next to her.'
+  : ' None of her lessons had walking wolves in them, so to her he was a wolf den, and she had never seen a den move.');
+
+/** "The walking wolf" when there is one, "a walking wolf" when there are more. */
+const theWolf = (f: Forest): string => (f.wolves === 1 ? 'the walking wolf' : 'a walking wolf');
 
 /** A percentage that never rounds a real chance to 0% or 100%. */
 export const pct = (p: number) => (p > 0 && p < 0.005 ? 'less than 1%' : p < 1 && p > 0.995 ? 'over 99%' : `${Math.round(p * 100)}%`);
@@ -297,7 +300,7 @@ function basketNote(w: Walker, stats: TrainStats | null, dist: ArrayLike<number>
   if (w.cakeLostAt >= 0 && w.wolfMet.includes(w.cakeLostAt)) {
     return {
       title: 'Why did she do that?',
-      text: `She got home in ${n} steps, but without the cake: at step ${w.cakeLostAt + 1} the walking wolf caught up with her and took it.${brought}${walkingWolfNote(stats)}`,
+      text: `She got home in ${n} steps, but without the cake: at step ${w.cakeLostAt + 1} ${theWolf(w.forest)} caught up with her and took it.${brought}${walkingWolfNote(stats)}`,
       card: 'walkingWolf',
     };
   }
@@ -385,7 +388,7 @@ export function explainTrip(w: Walker, f: Forest, stats: TrainStats | null, outd
     if (w.wolfMet.includes(t)) {
       return {
         title: 'Why did she do that?',
-        text: `At step ${t + 1} the walking wolf caught her. ${fox ? `A sly fox had taken the cake at step ${fox.t}, so she had nothing to give him.` : w.cakeLostAt >= 0 ? `She had lost the cake at step ${w.cakeLostAt + 1}, so she had nothing to give him.` : 'She had no cake left to give him.'}${walkingWolfNote(stats)}${cutoff}`,
+        text: `At step ${t + 1} ${theWolf(f)} caught her. ${fox ? `A sly fox had taken the cake at step ${fox.t}, so she had nothing to give him.` : w.cakeLostAt >= 0 ? `She had lost the cake at step ${w.cakeLostAt + 1}, so she had nothing to give him.` : 'She had no cake left to give him.'}${walkingWolfNote(stats)}${cutoff}`,
         card: 'walkingWolf',
       };
     }

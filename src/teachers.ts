@@ -6,7 +6,7 @@
  * every treasure before it heads home, and the huntsman, who goes the long way
  * round to have a look at every wolf den. The teachers are the same cast as the judges.
  */
-import { WalkingWolf, closeness, viewWithWolf, wolfFor } from './prowler';
+import { closeness, viewWithWolves, wolvesAfter, wolvesFor } from './prowler';
 import { Rng, pick } from './rng';
 import { Basket, copyForest, densInSight, stepCost, FLOWERS, Forest, HOME, TREASURE, TREE, headsHome, xyOf, Move, MOVES, SWAMP, Tile, WOLF, cheapestTo, cheapestToHome, isWalkable, neighbor, nearWolf, newBasketState, pickUpAtStart, step, tilesWhere, homeSector } from './world';
 
@@ -136,8 +136,8 @@ export interface LessonWalk {
   history: History;
   /** The crow flew on over a tree with its last move: she bumped into the tree and was left behind. */
   stuck?: boolean;
-  /** The walking wolf's tile at each of her positions (-1: gone), when he was out. */
-  wolf?: number[];
+  /** Each walking wolf's tile at each of her positions (-1: gone), when any were out. */
+  wolves?: number[][];
 }
 
 /** Whether a lesson walk ended at a wolf den (only the wolf's lessons can). */
@@ -146,33 +146,34 @@ export const endsAtDen = (f: Forest, walk: LessonWalk): boolean => f.tiles[walk.
 /** A cost map, or null when its goal can't be reached from `pos` (then the teacher simply walks home). */
 const reachable = (cost: Float64Array, pos: number): Float64Array | null => (Number.isFinite(cost[pos]) ? cost : null);
 
-/** The teachers start keeping away from the walking wolf when he is this close (diagonals count as one). */
+/** The teachers start keeping away from a walking wolf when he is this close (diagonals count as one). */
 export const FLEE_RANGE = 1;
 
 /**
- * The forest as a teacher plans in it while the walking wolf is near: his tile and the tiles
- * next to it are closed, so the cheapest way goes round him (or back the way they came).
+ * The forest as a teacher plans in it while walking wolves are near: their tiles and the tiles
+ * next to them are closed, so the cheapest way goes round them (or back the way they came).
  */
-export function forestAroundWolf(f: Forest, wolf: number): Forest {
+export function forestAroundWolves(f: Forest, wolves: readonly number[]): Forest {
   const g = copyForest(f);
-  g.tiles[wolf] = TREE;
-  for (const m of MOVES) {
-    const n = neighbor(f, wolf, m);
-    if (n >= 0 && isWalkable(f.tiles[n])) g.tiles[n] = TREE;
+  for (const wolf of wolves) {
+    g.tiles[wolf] = TREE;
+    for (const m of MOVES) {
+      const n = neighbor(f, wolf, m);
+      if (n >= 0 && isWalkable(f.tiles[n])) g.tiles[n] = TREE;
+    }
   }
   return g;
 }
 
-/** When no way round the walking wolf is open: the step that gets furthest from him (never onto him). */
-export function fleeMoves(f: Forest, pos: number, wolf: number): Move[] {
+/** When no way round the walking wolves is open: the step that gets furthest from the nearest (never onto one). */
+export function fleeMoves(f: Forest, pos: number, wolves: readonly number[]): Move[] {
   let best = -1;
   let opts: Move[] = [];
   for (const m of MOVES) {
     const n = neighbor(f, pos, m);
-    if (n < 0 || n === wolf || !(isWalkable(f.tiles[n]) || f.tiles[n] === HOME)) continue;
+    if (n < 0 || wolves.includes(n) || !(isWalkable(f.tiles[n]) || f.tiles[n] === HOME)) continue;
     const [x, y] = xyOf(f, n);
-    const [wx, wy] = xyOf(f, wolf);
-    const d = Math.abs(x - wx) + Math.abs(y - wy);
+    const d = Math.min(...wolves.map((wolf) => { const [wx, wy] = xyOf(f, wolf); return Math.abs(x - wx) + Math.abs(y - wy); }));
     if (d > best) { best = d; opts = [m]; } else if (d === best) opts.push(m);
   }
   return opts;
@@ -193,15 +194,15 @@ export function walkLesson(f: Forest, teacher: Teacher, cost: Float64Array, star
   // Her basket follows the same rules as on a trip alone: a flower patch or treasure at the start or on the way is picked up.
   const trip = newBasketState();
   pickUpAtStart(f, start, trip);
-  const wolf: WalkingWolf | null = wolfFor(f, start, rng);
-  const history: History = { views: [viewWithWolf(f, start, wolf)], moves: [], sectors: [homeSector(f, start)], baskets: [{ ...trip.basket }] };
+  const wolves = wolvesFor(f, start, rng);
+  const history: History = { views: [viewWithWolves(f, start, wolves)], moves: [], sectors: [homeSector(f, start)], baskets: [{ ...trip.basket }] };
   const toDen = teacher === 'wolf' ? denCost ?? costToDen(f) : null;
   let hunting = false;
   // The dens the huntsman has had a look at so far.
   const seen = new Set<number>(densInSight(f, start));
   let spent = 0;
   // Grandma, the magpie and the huntsman first walk to something, then home: `goal` is the cost to what they are after.
-  // `g` is the forest as planned in: the real one, or one with the walking wolf's tiles closed.
+  // `g` is the forest as planned in: the real one, or one with the walking wolves' tiles closed.
   const errand = (g: Forest, home: Float64Array): Float64Array | null => {
     if (teacher === 'grandma' && trip.basket.flowers === 0) return reachable(costToTiles(g, tilesWhere(g, (t) => t === FLOWERS), 'careful'), pos);
     if (teacher === 'magpie') return reachable(costToTiles(g, tilesWhere(g, (t, i) => t === TREASURE && !trip.picked.includes(i)), 'quick'), pos);
@@ -218,28 +219,29 @@ export function walkLesson(f: Forest, teacher: Teacher, cost: Float64Array, star
   let doneSoFar = -1;
   let pos = start;
   let eaten = false;
-  const out = (extra: Partial<LessonWalk> = {}): LessonWalk => ({ teacher, positions, history, ...(wolf ? { wolf: wolf.path } : {}), ...extra });
+  const out = (extra: Partial<LessonWalk> = {}): LessonWalk => ({ teacher, positions, history, ...(wolves.length ? { wolves: wolves.map((w) => w.path) } : {}), ...extra });
   for (let guard = 0; guard < f.tiles.length * 2 && pos !== f.home && f.tiles[pos] !== WOLF && !eaten; guard++) {
     if (toDen && !hunting && nearWolf(f, pos) && denMoves(f, toDen, pos).length) hunting = true;
     const crow = teacher === 'crow' ? crowMoves(f, pos) : null;
     // A new errand after each pickup or new den (the magpie looks for the next treasure, the huntsman for the next den; Grandma heads home).
     const done = teacher === 'huntsman' ? seen.size : trip.picked.length;
     if (doneSoFar !== done) { goal = errand(f, cost); doneSoFar = done; }
-    // The walking wolf near: everyone but the crow (who flies) and the wolf at his den keeps away from him,
-    // planning round him, or just getting away when there is no way round.
+    // A walking wolf near: everyone but the crow (who flies) and the wolf at his den keeps away from the
+    // ones in sight, planning round them, or just getting away when there is no way round.
+    const near = wolves.filter((w) => w.here && closeness(f, pos, w.pos) <= FLEE_RANGE).map((w) => w.pos);
     let opts: Move[];
     if (crow) opts = crow.moves;
     else if (hunting && toDen) opts = denMoves(f, toDen, pos);
-    else if (wolf?.here && closeness(f, pos, wolf.pos) <= FLEE_RANGE) {
-      const g = forestAroundWolf(f, wolf.pos);
+    else if (near.length) {
+      const g = forestAroundWolves(f, near);
       const home = costToHome(g, teacher);
       opts = teacherMoves(g, errand(g, home) ?? home, teacher, pos);
-      if (!opts.length) opts = fleeMoves(f, pos, wolf.pos);
+      if (!opts.length) opts = fleeMoves(f, pos, near);
     } else opts = teacherMoves(f, goal ?? cost, teacher, pos);
     if (!opts.length) break;
     const m = pick(rng, opts);
     const stepped = step(f, pos, m, trip);
-    if (wolf) stepped.result = wolf.after(stepped.pos, stepped.result, trip);
+    if (wolves.length) stepped.result = wolvesAfter(wolves, stepped.pos, stepped.result, trip);
     eaten = stepped.result === 'eaten';
     pos = stepped.pos;
     spent += stepped.cost;
@@ -249,7 +251,7 @@ export function walkLesson(f: Forest, teacher: Teacher, cost: Float64Array, star
     // The crow flew over a tree; she stays put, and the lesson ends there.
     if (crow?.flies) return out({ stuck: true });
     if (pos !== f.home && f.tiles[pos] !== WOLF && !eaten) {
-      history.views.push(viewWithWolf(f, pos, wolf));
+      history.views.push(viewWithWolves(f, pos, wolves));
       history.sectors.push(homeSector(f, pos));
       history.baskets.push({ ...trip.basket });
     }
