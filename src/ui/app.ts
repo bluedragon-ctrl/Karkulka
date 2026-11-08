@@ -6,13 +6,13 @@ import { mulberry32, normalizeCode, pick, randomCode } from '../rng';
 import { Outcome, Walker, predictAt } from '../sim';
 import { Thoughts } from '../thoughts';
 import * as store from '../storage';
-import { LessonWalk, Teacher, TeacherChoice, costToHome, endsAtDen, teacherMoves, walkLesson } from '../teachers';
+import { LessonWalk, Teacher, TeacherChoice, costToHome, endsAtDen, endsStuck, teacherMoves, walkLesson } from '../teachers';
 import { MEMORY_PAIRS, MemorySize, ModelConfig } from '../tokens';
 import { EvalPoint, FIXED, JUDGES, Judge, PRACTICE_STARTS, PracticeStarts, TrainStats, chooseTeacher, guessesRight, homeShare, learnFromLesson, learnFromRun, newStats, practiceSetup, practiceWalker, recordLessonBatch, recordPracticeBatch, practiceStartTiles, startTiles, teacherCosts } from '../train';
 import { WorkerRequest, runTraining } from '../workerTypes';
 import {
   DEFAULT_SIZE, FLOWERS, Forest, HOME, MOVES, MOVE_ARROWS, MOVE_NAMES, PATH, SECTOR_WORDS, SWAMP, TREASURE, TREE, Tile, WOLF, copyForest,
-  forestFromTiles, homeSector, isItem, moveHome, unreachableTiles, walkingDistances,
+  forestFromTiles, homeSector, isItem, moveHome, neighbor, unreachableTiles, walkingDistances,
 } from '../world';
 import { Board } from './board';
 import { changeChart, outcomeChart } from './charts';
@@ -60,10 +60,11 @@ const TEACHERS: { id: TeacherChoice; name: string; text: string }[] = [
   { id: 'both', name: 'Both', text: 'Sometimes the mother, sometimes the father. Where they disagree, she is torn.' },
   { id: 'wolf', name: 'The wolf in disguise', text: 'Walks like the father, but when he sees a wolf den he leads her into it.' },
   { id: 'motherWolf', name: 'Mother, and sometimes the wolf', text: 'The careful mother, but now and then the wolf secretly takes her place.' },
+  { id: 'crow', name: 'Crow', text: 'Flies straight towards home. When a tree is in the way, it flies on over it and leaves her behind.' },
 ];
 
 /** The LM corner card for a teacher choice. */
-const teacherCard = (t: TeacherChoice): CardKey => (t === 'wolf' ? 'wolfTeacher' : t === 'motherWolf' ? 'poisonedData' : 'teacher');
+const teacherCard = (t: TeacherChoice): CardKey => (t === 'wolf' ? 'wolfTeacher' : t === 'motherWolf' ? 'poisonedData' : t === 'crow' ? 'crowTeacher' : 'teacher');
 
 /** The judges in the panel: a plain line for children. The exact points are in each judge's LM corner card. */
 const JUDGE_INFO: Record<Judge, { name: string; text: string; card: CardKey }> = {
@@ -88,7 +89,7 @@ interface PracticeSummary {
   evalBefore?: EvalPoint; evalAfter?: EvalPoint;
 }
 
-const TRAIL_COLORS: Record<Outcome | Teacher, string> = { home: '#c99700', eaten: COLORS.danger, lost: COLORS.lost, mother: COLORS.mother, father: COLORS.father, wolf: COLORS.den };
+const TRAIL_COLORS: Record<Outcome | Teacher, string> = { home: '#c99700', eaten: COLORS.danger, lost: COLORS.lost, mother: COLORS.mother, father: COLORS.father, wolf: COLORS.den, crow: COLORS.crow };
 
 /** One point of the "since the forest changed" chart: home on test trips after a change or catch-up. */
 export interface ChangePoint { label: string; home: number }
@@ -184,8 +185,8 @@ export class App {
   /** The card whose "?" pulses: something just happened that it explains. */
   fresh: CardKey | null = 'forest';
   why: Explanation | null = null;
-  /** The last watched lesson ended at a wolf den. */
-  watchedDen = false;
+  /** How the last watched lesson ended, when it is worth a warning: at a wolf den (the wolf) or stuck at a tree (the crow). */
+  watchedEnd: 'den' | 'stuck' | null = null;
   /** Speed of the lessons being watched; can change while they play. */
   watchSpeed: WatchSpeed = 'slow';
   /** How many steps of the last watched lesson she guessed right before learning from it. */
@@ -503,7 +504,7 @@ export class App {
     this.stopTrip();
     this.checkEdits();
     const catchUp = this.outdated;
-    this.watchedDen = false;
+    this.watchedEnd = null;
     this.runJob(
       { kind: 'lessons', model, forest: copyForest(this.forest), stats: this.stats, count, seed: this.seed(), teacher: this.settings.teacher },
       0.1,
@@ -512,7 +513,7 @@ export class App {
         if (this.changeLog.length) this.logCheck(`+${count} new lesson${count === 1 ? '' : 's'}`);
         const t = this.settings.teacher;
         if (catchUp) this.showCard('catchUp');
-        else this.showCard(t === 'both' || t === 'wolf' || t === 'motherWolf' ? teacherCard(t) : 'coverage');
+        else this.showCard(t === 'both' || t === 'wolf' || t === 'motherWolf' || t === 'crow' ? teacherCard(t) : 'coverage');
       },
     );
     this.render();
@@ -598,13 +599,13 @@ export class App {
     if (!starts.length) return;
     this.stopTrip();
     this.checkEdits();
-    this.watchedDen = false;
+    this.watchedEnd = null;
     this.lastGuess = null;
     this.board.clearTrails();
     const costs = teacherCosts(this.forest);
     let lossSum = 0;
     let lossN = 0;
-    let lastDen = false;
+    let lastEnd: 'den' | 'stuck' | null = null;
     this.showCard('guess');
     this.play<{ walk: LessonWalk; k: number }>({
       kind: 'watch', total,
@@ -621,7 +622,7 @@ export class App {
         this.lastGuess = guessesRight(model, walk);
         lossSum += learnFromLesson(model, this.opt, walk, this.stats);
         lossN++;
-        lastDen = endsAtDen(this.forest, walk);
+        lastEnd = endsAtDen(this.forest, walk) ? 'den' : endsStuck(walk) ? 'stuck' : null;
         this.board.addTrail(walk.positions, TRAIL_COLORS[walk.teacher], total > 1 ? 0.2 : 0.35);
         this.markTrained();
       },
@@ -635,8 +636,8 @@ export class App {
       finish: (done) => {
         if (!done) return;
         if (this.changeLog.length) this.logCheck(`+${done} new lesson${done === 1 ? '' : 's'}`);
-        this.watchedDen = total === 1 && lastDen;
-        this.showCard(this.watchedDen ? 'wolfTeacher' : total > 1 ? 'watchMany' : 'exposure');
+        this.watchedEnd = total === 1 ? lastEnd : null;
+        this.showCard(this.watchedEnd === 'den' ? 'wolfTeacher' : this.watchedEnd === 'stuck' ? 'crowTeacher' : total > 1 ? 'watchMany' : 'exposure');
       },
     }, speed);
   }
@@ -879,7 +880,7 @@ export class App {
     if (this.tab === 'forest') this.checkEdits();
     if (id !== this.tab) this.board.say(null);
     this.tab = id;
-    this.watchedDen = false;
+    this.watchedEnd = null;
     this.board.clearTrails();
     closeHint();
     const cards: Record<TabId, CardKey> = { forest: 'forest', lessons: 'lessons', trip: 'view', practice: 'practice', inside: 'tech' };
@@ -977,7 +978,8 @@ export class App {
       const { walk, k } = this.watch;
       const n = walk.history.moves.length;
       const t = Math.min(k, n);
-      b.setParent(walk.positions[Math.min(t + 1, n)], walk.teacher);
+      // The teacher is a step ahead of her; at the end of a crow's lesson, on the tree it flew over.
+      b.setParent(walk.stuck && t >= n - 1 ? neighbor(this.forest, walk.positions[n - 1], walk.history.moves[n - 1]) : walk.positions[Math.min(t + 1, n)], walk.teacher);
       b.setRed(walk.positions[t], { animate: t > 0 && this.stepMs() >= ANIMATE_MS });
       b.setTrace(walk.positions.slice(0, t + 1));
       // The parent picks up an item on the way too, by the same rule as her trips.
@@ -1231,14 +1233,15 @@ export class App {
         }, icon, this.hq(t.text, teacherCard(t.id), 'chosen'));
       })(),
       h('h3', {}, 'Give her more lessons'),
-      h('p', {}, st.lessons ? `So far: ${st.lessons} lesson${st.lessons === 1 ? '' : 's'} (${(['mother', 'father', 'wolf'] as Teacher[]).filter((t) => st.teacherCounts[t]).map((t) => `${t} ${st.teacherCounts[t]}`).join(', ')})` : 'So far: no lessons yet'),
+      h('p', {}, st.lessons ? `So far: ${st.lessons} lesson${st.lessons === 1 ? '' : 's'} (${(['mother', 'father', 'wolf', 'crow'] as Teacher[]).filter((t) => st.teacherCounts[t]).map((t) => `${t} ${st.teacherCounts[t]}`).join(', ')})` : 'So far: no lessons yet'),
       this.addSlider('Lessons to add', this.settings.lessons, 10, 2000, 10, (v) => { this.settings.lessons = v; }, 'moreData'),
       this.runControls({
         what: 'lesson', total: this.settings.lessons, sofar: st.lessons, watch: (n, sp) => this.watchLessons(n, sp), watchCard: 'watchMany',
         all: () => this.startLessons(), explainCard: 'guess', last: this.guessLine(),
       }),
       this.lastGuess && !(this.job?.kind === 'watch' && this.job.total > 1) ? h('p', {}, this.guessLine()) : null,
-      this.watchedDen && !busy ? h('p', { class: 'warn' }, this.hq('That lesson came from the wolf in disguise: it ended at a wolf den, and she learned from it all the same.', 'wolfTeacher', 'watched')) : null,
+      this.watchedEnd === 'den' && !busy ? h('p', { class: 'warn' }, this.hq('That lesson came from the wolf in disguise: it ended at a wolf den, and she learned from it all the same.', 'wolfTeacher', 'watched')) : null,
+      this.watchedEnd === 'stuck' && !busy ? h('p', { class: 'warn' }, this.hq('The crow flew on over a tree. She can\'t fly, so she bumped into it, and she learned that move all the same.', 'crowTeacher', 'watched')) : null,
       h('h3', {}, this.hq('How she does alone', 'testTrips')),
       outcomeChart(st.lessonEval, 'lessons'),
       h('p', { class: 'muted' }, 'Now and then she walks the same test trips alone, to see how much she has improved.'),

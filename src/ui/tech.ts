@@ -5,7 +5,7 @@ import type { Walker } from '../sim';
 import { FIXED, TrainStats } from '../train';
 import { BASKET_FEATS, HINT_FEATS, SLOT_FEATS, VIEW_FEATS, ViewToken, buildVocabulary } from '../tokens';
 import { Forest, MOVE_ARROWS, MOVE_NAMES, MOVES, SWAMP_COST, TILE_KINDS } from '../world';
-import { SWAMP_PENALTY, WOLF_PENALTY, Teacher } from '../teachers';
+import { SWAMP_PENALTY, WOLF_PENALTY } from '../teachers';
 import {
   Ambiguous, BIG_MODEL, OPS_PER_WEIGHT, RARE, ambiguityByTeacher, chanceText, frequencySummary, sci, sup, tokenCounts, trainingCompute, tripMeasures,
 } from '../measures';
@@ -132,7 +132,7 @@ function trainingData(counts: number[], stats: TrainStats, hint: (key: CardKey) 
 function arrowsOf(moves: readonly number[]) { return moves.map((m) => MOVE_ARROWS[m]).join('/'); }
 
 /** Look-alike tokens where the teacher's best move depends on the place. */
-function lookAlikes(vocab: ViewToken[], counts: number[], amb: Record<Teacher, Map<number, Ambiguous>>, parents: ('mother' | 'father')[], hintOn: boolean, hint: (key: CardKey) => Node): HTMLElement {
+function lookAlikes(vocab: ViewToken[], counts: number[], amb: Record<'mother' | 'father', Map<number, Ambiguous>>, parents: ('mother' | 'father')[], hintOn: boolean, hint: (key: CardKey) => Node): HTMLElement {
   const multi = vocab.filter((v) => v.places.length > 1).length;
   const ids = new Set(parents.flatMap((t) => [...amb[t].keys()]));
   const total = counts.reduce((a, b) => a + b, 0);
@@ -238,6 +238,7 @@ export function renderTech(el: HTMLElement, ctx: TechContext) {
     ['Judges', `Grandma: the scores above. Father: also −${FIXED.fatherStepCost} per step. Mother: also −${FIXED.motherSwampPenalty} per swamp step, −${FIXED.motherWolfPenalty} per step with a den in sight. Crow: ±${FIXED.crowHeading} per step towards or away from home in a straight line, +${FIXED.crowHomeBonus} home, ${FIXED.rewardEaten} eaten, 0 lost. Magpie: +${FIXED.magpieTreasure} per treasure at pickup, +${FIXED.magpieHome} home, ${FIXED.rewardEaten} eaten, 0 lost. Wolf: +${FIXED.wolfDen} per step into a den (cake grabbed or eaten), ${FIXED.wolfHome} home, 0 lost`],
     ['Basket points', `Grandma and mother: −${FIXED.cakeLost} when the wolf grabs the cake. Grandma: +${FIXED.grandmaFlowers} per bunch of flowers brought home. Father: +${FIXED.fatherTreasure} per treasure at pickup. Being eaten takes back all basket points`],
     ['Wolf in disguise (teacher)', `Walks the father's route until a den is in her view, then takes the quickest way into it. "Mother, and sometimes the wolf": ${FIXED.wolfLessonShare * 100}% of lessons are the wolf's`],
+    ['Crow (teacher)', 'Steps towards home in a straight line, the longer way first, onto any tile she can walk but a den. With only trees ahead it flies over one: the lesson ends with her move into the tree. With only a den ahead the lesson ends'],
     ['Practice credit', 'Reward to go: each move is credited with the points from that move to the end of the run, minus a running average (baseline), clipped to ±1'],
     ['Energy per step', `1 on path, ${SWAMP_COST} in a swamp, 1 for bumping into a tree`],
     ['Careful mother\'s extra cost', `+${WOLF_PENALTY} next to a wolf den, +${SWAMP_PENALTY} in a swamp (the father counts only steps)`],

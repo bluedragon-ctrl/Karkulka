@@ -1,12 +1,13 @@
 /**
- * The teachers: two parents who walk her home their own way, and the wolf in
- * disguise, whose lessons look like the father's until a den comes in sight.
+ * The teachers: two parents who walk her home their own way, the wolf in
+ * disguise, whose lessons look like the father's until a den comes in sight, and
+ * the crow, who heads straight for home and flies on over the first tree in the way.
  */
 import { Rng, pick } from './rng';
-import { Basket, Forest, HOME, Move, MOVES, SWAMP, Tile, WOLF, cheapestTo, cheapestToHome, fullBasket, isWalkable, neighbor, nearWolf, newBasketState, step, tilesWhere, viewAt, homeSector } from './world';
+import { Basket, Forest, HOME, TREE, headsHome, xyOf, Move, MOVES, SWAMP, Tile, WOLF, cheapestTo, cheapestToHome, fullBasket, isWalkable, neighbor, nearWolf, newBasketState, step, tilesWhere, viewAt, homeSector } from './world';
 
-export type Teacher = 'mother' | 'father' | 'wolf';
-export const TEACHER_KINDS: readonly Teacher[] = ['mother', 'father', 'wolf'];
+export type Teacher = 'mother' | 'father' | 'wolf' | 'crow';
+export const TEACHER_KINDS: readonly Teacher[] = ['mother', 'father', 'wolf', 'crow'];
 /** "both" mixes the parents half and half; "motherWolf" is the mother with a few of the wolf's lessons slipped in. */
 export type TeacherChoice = Teacher | 'both' | 'motherWolf';
 
@@ -68,6 +69,25 @@ export function teacherMoves(f: Forest, cost: Float64Array, teacher: Teacher, po
   return best < Infinity ? opts : [];
 }
 
+/**
+ * The crow's moves from a tile: towards home as the crow flies, the longer way
+ * first. It takes a step she can walk if one heads home (never onto a den, which
+ * it sees from the sky). When only trees are in the way it flies on over one:
+ * `flies` is set and the move is one she cannot follow.
+ */
+export function crowMoves(f: Forest, pos: number): { moves: Move[]; flies: boolean } {
+  const [x, y] = xyOf(f, pos);
+  const [hx, hy] = xyOf(f, f.home);
+  const gap = (m: Move) => (m === 1 || m === 3 ? Math.abs(hx - x) : Math.abs(hy - y));
+  const heading = MOVES.filter((m) => headsHome(f, pos, m)).sort((a, b) => gap(b) - gap(a));
+  const tile = (m: Move) => f.tiles[neighbor(f, pos, m)];
+  const best = (ms: Move[]) => ms.filter((m) => gap(m) === gap(ms[0]));
+  const open = heading.filter((m) => isWalkable(tile(m)) || tile(m) === HOME);
+  if (open.length) return { moves: best(open), flies: false };
+  const trees = heading.filter((m) => tile(m) === TREE);
+  return { moves: trees.length ? best(trees) : [], flies: trees.length > 0 };
+}
+
 export interface History {
   views: Tile[][];
   moves: Move[];
@@ -80,15 +100,22 @@ export interface LessonWalk {
   teacher: Teacher;
   positions: number[];
   history: History;
+  /** The crow flew on over a tree with its last move: she bumped into the tree and was left behind. */
+  stuck?: boolean;
 }
 
 /** Whether a lesson walk ended at a wolf den (only the wolf's lessons can). */
 export const endsAtDen = (f: Forest, walk: LessonWalk): boolean => f.tiles[walk.positions[walk.positions.length - 1]] === WOLF;
 
+/** Whether a lesson walk ended with the crow flying over a tree and leaving her stuck. */
+export const endsStuck = (walk: LessonWalk): boolean => walk.stuck === true;
+
 /**
  * A teacher walks her from a start tile: one lesson, one "story". The parents walk
  * home. The wolf walks home like the father until a den comes in sight, then leads
- * her into it. `denCost` (from `costToDen`) is only needed for the wolf.
+ * her into it. The crow heads straight for home; when a tree is in the way it flies
+ * on, and the lesson ends with her bumping into the tree. `denCost` (from
+ * `costToDen`) is only needed for the wolf; the crow ignores `cost`.
  */
 export function walkLesson(f: Forest, teacher: Teacher, cost: Float64Array, start: number, rng: Rng, denCost?: Float64Array): LessonWalk {
   const positions = [start];
@@ -100,12 +127,15 @@ export function walkLesson(f: Forest, teacher: Teacher, cost: Float64Array, star
   let pos = start;
   for (let guard = 0; guard < f.tiles.length * 2 && pos !== f.home && f.tiles[pos] !== WOLF; guard++) {
     if (toDen && !hunting && nearWolf(f, pos) && denMoves(f, toDen, pos).length) hunting = true;
-    const opts = hunting && toDen ? denMoves(f, toDen, pos) : teacherMoves(f, cost, teacher, pos);
+    const crow = teacher === 'crow' ? crowMoves(f, pos) : null;
+    const opts = crow ? crow.moves : hunting && toDen ? denMoves(f, toDen, pos) : teacherMoves(f, cost, teacher, pos);
     if (!opts.length) break;
     const m = pick(rng, opts);
     pos = step(f, pos, m, trip).pos;
     history.moves.push(m);
     positions.push(pos);
+    // The crow flew over a tree; she stays put, and the lesson ends there.
+    if (crow?.flies) return { teacher, positions, history, stuck: true };
     if (pos !== f.home && f.tiles[pos] !== WOLF) {
       history.views.push(viewAt(f, pos));
       history.sectors.push(homeSector(f, pos));
