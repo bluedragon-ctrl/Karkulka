@@ -150,7 +150,7 @@ One small neural network learns in two phases, mirroring how real LLMs are built
   - *Both:* a mix of lessons; her arrows visibly split where the two disagree.
   - *The wolf in disguise:* walks the father's route until a wolf den comes into her 3 × 3 view, then takes the quickest way into it. About two thirds of his lessons end at a den (measured over 16 forest codes); the rest look exactly like the father's. Drawn in grandma's shawl and bonnet with grey ears and snout showing; his lesson trail is den brown.
   - *Mother, and sometimes the wolf:* the careful mother, with 1 lesson in 5 secretly the wolf's (data poisoning).
-- The parents never pick anything up and never walk through a den: they treat flowers and treasure as blocked (the wolf in disguise does too). Lessons always carry the full basket. The wolf's lessons still end at the first den.
+- The parents never walk through a den, and never detour for flowers or treasure: to them an item is ordinary path (the wolf in disguise too). If one lies on their way, they walk over it and it goes into her basket, by the same rule as on a trip alone, so the lesson's basket tokens show what really happens on that tile. The generator puts items off both parents' routes, so in a generated forest this only happens after the forest is edited or changed. The wolf's lessons still end at the first den.
 - **Measured effect** (16 forest codes, 300 lessons, medium memory, 120 test trips each): mother only: home 93%, eaten 1%. Mother and sometimes the wolf: home 76%, eaten 19%. Wolf only: home 23%, eaten 65%. (Before the basket: 81 / 14, 46 / 50 and 24 / 75. The cake now saves her at the first den, so the mother's lessons and a little poisoning hurt less; a lot of poisoning still ruins her.)
 - **Known weakness, shown on purpose:** lessons are always correct, so she never learns how to recover after a wrong step (exposure bias). Phase 2 fixes this.
 
@@ -395,7 +395,7 @@ She carries a basket. What is in it is shown to the model as **pinned tokens**: 
 Three kinds of judge problem sit side by side, each with its own card: the **crow** measures badly (reward hacking), the **magpie** measures right but wants the wrong thing most, and the **father** measures right but does not measure everything.
 
 - Tiles do not change during a trip (a picked patch stays drawn and simply counts once), so distance maps, views and the vocabulary stay fixed per trip.
-- Every new behaviour (shortcuts through dens, detours for flowers or treasure) can only come from practice: the lessons never show it.
+- Every new behaviour (shortcuts through dens, detours for flowers or treasure) can only come from practice: the lessons never show it. (A parent may walk over an item that lies on the way, but never goes out of the way for one.)
 - Code: `BasketState`, `Basket` and the step rules in `src/world.ts`; the pinned inputs in `encodeContext` (`src/tokens.ts`); the basket points in `judgeRewards` (`src/train.ts`); placement in `placeBasketTiles` (`src/forest.ts`).
 - Save version 3: older saves and model files no longer load; edited-forest links use a new `map3` parameter (older `map` links open the forest from its code, unedited). Tiles are 7 kinds; `packTiles` fits 8.
 
@@ -411,6 +411,7 @@ Three kinds of judge problem sit side by side, each with its own card: the **cro
 - Two models side by side for comparison
 - Berry bush that restores energy (+15, once per trip), with her energy level as an extra pinned token in her basket (a "how tired am I" sense, like a model knowing its remaining output budget); it would be the 8th and last tile kind the link format fits. Parents never teach the detour, so only practice can discover it: fine-tuning learning behaviour that was never in the training examples
 - Phone layout
+- A pickup action: a fifth output, "pick up", instead of picking items up just by stepping on them. It is like a chatbot choosing to call a tool instead of writing the next word, and each pickup becomes a choice a judge can reward on its own. Costs: the model's outputs, vocabulary and save files change (a save-version bump), and it needs an energy cost per pickup, a decision whether the parents ever demonstrate it, and the judges' basket points measured again
 
 ### Open questions
 

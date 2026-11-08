@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { SHORTCUT_MIN_SAVING, disagreement, generateForest, parentRouteTiles, shortcutSaving } from '../src/forest';
 import { packTiles, unpackTiles } from '../src/storage';
 import { costToHome, teacherMoves, walkLesson } from '../src/teachers';
+import { startTiles } from '../src/train';
 import { mulberry32 } from '../src/rng';
 import {
   FLOWERS, HOME, PATH, SWAMP, TREASURE, isItem, newBasketState, SWAMP_COST, TREE, WOLF, cheapestToHome, energyToHome, forestFromTiles, homeIndex, moveHome, stepCost, loopCount, walkableTiles, homeSector, neighbor, pathTiles, step, tileAt, unreachableTiles, viewAt, walkingDistances,
@@ -179,7 +180,7 @@ describe('her basket', () => {
     expect(treasure).toBeLessThanOrEqual(3);
     const used = parentRouteTiles(g);
     g.tiles.forEach((t, i) => { if (isItem(t)) expect(used.has(i)).toBe(false); });
-    // The parents still walk home from every walkable tile without picking anything up.
+    // Off their routes, so the parents walk home from every other tile without picking anything up.
     for (const teacher of ['mother', 'father'] as const) {
       const cost = costToHome(g, teacher);
       for (const i of walkableTiles(g)) {
@@ -188,6 +189,24 @@ describe('her basket', () => {
         expect(walk.positions.at(-1)).toBe(g.home);
         expect(walk.positions.some((p) => isItem(g.tiles[p]) || g.tiles[p] === WOLF)).toBe(false);
       }
+    }
+  });
+
+  it('the parents walk over an item in their way and pick it up, as she would', () => {
+    // A corridor: home, path, flowers, path, path; everything else is trees.
+    const size = 9;
+    const tiles = new Array(size * size).fill(TREE);
+    const at = (x: number, y: number) => y * size + x;
+    tiles[at(1, 1)] = HOME;
+    [2, 4, 5].forEach((x) => { tiles[at(x, 1)] = PATH; });
+    tiles[at(3, 1)] = FLOWERS;
+    const f = forestFromTiles('ITEM', size, tiles);
+    expect(startTiles(f)).toContain(at(5, 1));
+    for (const teacher of ['mother', 'father', 'wolf'] as const) {
+      const walk = walkLesson(f, teacher, costToHome(f, teacher), at(5, 1), mulberry32(1));
+      expect(walk.positions.at(-1)).toBe(f.home);
+      expect(walk.history.baskets.map((b) => b.flowers)).toEqual([0, 0, 1, 1]);
+      expect(walk.history.baskets.every((b) => b.cake && b.treasure === 0)).toBe(true);
     }
   });
 
