@@ -5,8 +5,8 @@ import { COLORS, TeacherFigure, arrowPath, heartPath, parentFigure, redFigure, t
 
 export const T = 40;
 
-type Layer = 'tiles' | 'heat' | 'radius' | 'changed' | 'trails' | 'trace' | 'marks' | 'actors' | 'arrows' | 'fog' | 'fx' | 'talk';
-const LAYERS: Layer[] = ['tiles', 'heat', 'radius', 'changed', 'trails', 'trace', 'marks', 'actors', 'arrows', 'fog', 'fx', 'talk'];
+type Layer = 'tiles' | 'heat' | 'radius' | 'changed' | 'trails' | 'trace' | 'marks' | 'actors' | 'arrows' | 'fog' | 'events' | 'fx' | 'talk';
+const LAYERS: Layer[] = ['tiles', 'heat', 'radius', 'changed', 'trails', 'trace', 'marks', 'actors', 'arrows', 'fog', 'events', 'fx', 'talk'];
 
 export class Board {
   readonly svg: SVGSVGElement;
@@ -152,6 +152,22 @@ export class Board {
       this.layers.changed.append(
         s('rect', { ...box, stroke: COLORS.ink, 'stroke-width': 4 }),
         s('rect', { ...box, stroke: COLORS.changed, 'stroke-width': 4, 'stroke-dasharray': '5 4' }, s('title', {}, 'changed since her lessons')));
+    }
+  }
+
+  /**
+   * "Show events" (for testing): each hidden event spot's kind number in a small white circle
+   * with a dark border, drawn above the fog. Event spots are otherwise never drawn.
+   */
+  setEventMarks(spots: readonly { i: number; kind: number; name?: string }[] | null) {
+    clear(this.layers.events);
+    if (!spots) return;
+    for (const sp of spots) {
+      const [x, y] = xyOf(this.forest, sp.i);
+      this.layers.events.append(s('g', { transform: `translate(${x * T + T - 10},${y * T + T - 10})`, 'pointer-events': 'none' },
+        s('circle', { r: 8.5, fill: '#fff', stroke: COLORS.ink, 'stroke-width': 1.5 }),
+        s('text', { y: 3.5, 'text-anchor': 'middle', 'font-size': 10, 'font-weight': 700, fill: COLORS.ink }, String(sp.kind)),
+        sp.name ? s('title', {}, sp.name) : null));
     }
   }
 
@@ -340,10 +356,11 @@ export class Board {
     this.flash(g, 1000);
   }
 
-  /** A short pop-up word over her (the wolf grabbed the cake, flowers or treasure picked). Gone after a moment. */
-  showPop(i: number, text: string, icon?: SVGElement) {
+  /** A short pop-up word over her (the wolf grabbed the cake, flowers or treasure picked, a forest event). Gone after a moment. */
+  showPop(i: number, text: string, icon?: SVGElement, lift = 0) {
     const [cx, cy] = this.center(i);
-    const g = s('g', { transform: `translate(${cx},${cy - T * 0.7})`, 'pointer-events': 'none' },
+    // `lift`: when several pop up at once, each next one a row higher.
+    const g = s('g', { transform: `translate(${cx},${cy - T * 0.7 - lift * 18})`, 'pointer-events': 'none' },
       s('g', { class: 'fx-ouch' },
         icon ? s('g', { transform: `translate(0 ${T * 0.15})` }, icon) : null,
         s('text', { x: 0, y: -T * 0.3, 'text-anchor': 'middle', 'font-size': 14, 'font-weight': 700, fill: COLORS.ink, stroke: '#fff', 'stroke-width': 3, 'paint-order': 'stroke' }, text)));

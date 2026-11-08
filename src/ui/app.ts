@@ -1,9 +1,11 @@
 /** The app: five tabs that tell the story in order. */
-import { CardKey, Explanation, basketWords, explainTrip, pickupLine, tripReport } from '../explain';
+import { CardKey, Explanation, basketWords, effectWords, explainTrip, pickupLine, tripReport } from '../explain';
 import { CHANGE_SIZES, changeForest, generateForest } from '../forest';
 import { Adam, Model, createAdam, createModel, modelFromJSON, modelToJSON } from '../model';
 import { mulberry32, normalizeCode, pick, randomCode } from '../rng';
 import { Outcome, Walker, predictAt } from '../sim';
+import { CAST, EventMet, EventSpot, EventTracker, SPOT_COUNT, eventKind, placeStoryEvents, tripSeed } from '../storyEvents';
+import { StorySentence, TripRecord, shapedBy, storyCount, tellStory } from '../story';
 import { Thoughts } from '../thoughts';
 import * as store from '../storage';
 import { LessonWalk, TEACHER_KINDS, Teacher, TeacherChoice, costToHome, endsAtDen, endsStuck, teacherMoves, walkLesson } from '../teachers';
@@ -19,7 +21,7 @@ import { changeChart, outcomeChart } from './charts';
 import { add, clear, h, s } from './dom';
 import { closeHint, hintButton, placeHint } from './hint';
 import { renderStrip } from './strip';
-import { COLORS, cake, crowFigure, gem, grandmaFigure, magpieFigure, parentFigure, tileSymbol, wolfHead } from './symbols';
+import { COLORS, cake, cloudMark, crowFigure, footprintMark, gem, grandmaFigure, magpieFigure, parentFigure, tileSymbol, wolfHead } from './symbols';
 import { renderTech } from './tech';
 
 type TabId = 'forest' | 'lessons' | 'trip' | 'practice' | 'inside';
@@ -45,13 +47,20 @@ interface Settings {
   fog: boolean;
   /** Her little thought bubbles on a trip alone. */
   thoughts: boolean;
+  /** Hidden forest events on a trip alone, and in her story (missing in older saves: on). */
+  events: boolean;
+  /** Events placed afresh for every trip alone instead of fixed per forest code (missing in older saves: off). */
+  newPlaces: boolean;
   heat: boolean;
   brush: Tile;
 }
 
+/** The crossed-out cake: the cake is gone (the wolf grabbed it, or a fox took it). */
+const crossedCake = () => s('g', {}, s('g', { opacity: 0.6 }, cake(0, 0, 9)), s('line', { x1: -10, y1: -10, x2: 10, y2: 10, stroke: COLORS.ink, 'stroke-width': 2.5 }));
+
 const DEFAULTS: Settings = {
   memory: 'medium', hint: false, teacher: 'mother', lessons: 100, practice: 1000, judge: 'grandma', practiceStarts: 'near',
-  energy: 80, boldness: 0.7, fog: false, thoughts: true, heat: true, brush: TREE,
+  energy: 80, boldness: 0.7, fog: false, thoughts: true, events: true, newPlaces: false, heat: true, brush: TREE,
 };
 
 const TEACHERS: { id: TeacherChoice; name: string; text: string }[] = [
@@ -182,7 +191,24 @@ export class App {
   /** The trip alone was cut short with Stop (she is still standing where she was). */
   private tripStopped = false;
   private thoughts: Thoughts | null = null;
+  /** The hidden forest events of the trip alone (null with events off). */
+  private tracker: EventTracker | null = null;
+  /** Where the events of the current trip alone are: the forest's fixed places, or new ones for this trip. */
+  private tripSpots: EventSpot[] = [];
+  /** Forest events set off by the last step. */
+  private lastMet: EventMet[] = [];
+  /** Her story of the last trip alone, and what it was told from (for "Tell it again"). */
+  private story: { rec: TripRecord; lines: StorySentence[] } | null = null;
+  private storySeen = false;
+  /** The basket-events card pulsed already this session. */
+  private basketEventSeen = false;
+  /** The story's own randomness, never the walk's. */
+  private storyRng = mulberry32((Math.random() * 2 ** 32) >>> 0);
   private thoughtSeen = false;
+  /** "Show events" (for testing): the event spots' kind numbers on the board. Not saved. */
+  private showEvents = false;
+  /** The forest's event spots, worked out again whenever the tiles change. */
+  private spotsCache: { key: string; spots: EventSpot[] } | null = null;
   watch: { walk: LessonWalk; k: number } | null = null;
   techStep = 0;
   /** The card whose "?" pulses: something just happened that it explains. */
@@ -237,6 +263,32 @@ export class App {
 
   get trained() { return !!this.model && this.stats.lessons > 0; }
   get outdated() { return this.trained && this.modelTiles !== store.packTiles(this.forest.tiles); }
+
+  /** The hidden event spots of the current forest (none when events are off). */
+  get eventSpots(): EventSpot[] {
+    if (!this.settings.events) return [];
+    const key = `${this.forest.code}:${this.forest.size}:${store.packTiles(this.forest.tiles)}`;
+    if (this.spotsCache?.key !== key) this.spotsCache = { key, spots: placeStoryEvents(this.forest) };
+    return this.spotsCache.spots;
+  }
+
+  /**
+   * The event spots "Show events" shows: on the Forest tab the forest's fixed places (none with
+   * new places every trip); on the Trip alone tab the places of this trip once she has started.
+   */
+  private shownSpots(): EventSpot[] | null {
+    if (this.tab === 'forest') return this.settings.newPlaces ? null : this.eventSpots;
+    if (this.tab === 'trip') return this.walker && this.tracker ? this.tripSpots : this.settings.newPlaces ? null : this.eventSpots;
+    return null;
+  }
+
+  /** The "Show events" button, shown while events are on (on the Forest tab only with fixed places). */
+  private showEventsButton(): HTMLElement | null {
+    if (!this.settings.events) return null;
+    if (this.tab === 'forest' && this.settings.newPlaces) return h('p', { class: 'muted' }, 'The events move to new places on every trip.');
+    return h('button', { class: 'subtle', 'aria-pressed': String(this.showEvents), title: 'For testing: show where the hidden events are, with their numbers',
+      onclick: () => { this.showEvents = !this.showEvents; this.renderBoard(); this.renderPanel(); } }, this.showEvents ? 'Hide events' : 'Show events');
+  }
 
   private markTrained() { this.modelTiles = store.packTiles(this.forest.tiles); }
 
@@ -439,7 +491,7 @@ export class App {
     this.edited = true;
     this.walker = null;
     this.board.updateTile(i, brush);
-    if (brush === HOME) this.renderBoard(); // the practice circle and heatmap follow the house
+    if (brush === HOME || this.showEvents) this.renderBoard(); // the practice circle, heatmap and event spots follow the tiles
     this.renderChanged();
     if (this.trained) this.showCard(brush === HOME ? 'movedHome' : 'outdated');
     else if (brush === HOME) this.showCard('editForest');
@@ -656,7 +708,13 @@ export class App {
     this.stopTrip();
     this.walker = new Walker(this.forest, this.model, i, this.settings.energy, this.settings.boldness, this.rng);
     this.tripStopped = false;
+    this.story = null;
     this.thoughts = new Thoughts(Math.random, this.model.cfg.hint);
+    // Events and the story have their own randomness, never the walk's.
+    this.tripSpots = !this.settings.events ? []
+      : this.settings.newPlaces ? placeStoryEvents(this.forest, CAST, SPOT_COUNT, tripSeed(this.storyRng() * 2 ** 32)) : this.eventSpots;
+    this.tracker = this.settings.events ? new EventTracker(this.forest, this.tripSpots, mulberry32((Math.random() * 2 ** 32) >>> 0)) : null;
+    this.walker.events = this.tracker;
     this.why = null;
     this.techStep = 0;
     this.board.clearFx();
@@ -672,8 +730,11 @@ export class App {
     if (bumped && this.fresh !== 'tree' && w.blocked.filter(Boolean).length === 1) this.showCard('tree');
     if (w.results[w.t - 1] === 'grabbed' && this.fresh !== 'cakeShield') this.showCard('cakeShield');
     if (this.forest.tiles[w.pos] === SWAMP && !bumped && this.fresh !== 'swamp' && !w.positions.slice(0, -1).some((p) => this.forest.tiles[p] === SWAMP)) this.showCard('swamp');
+    this.lastMet = this.tracker?.met.filter((e) => e.t === w.t) ?? [];
+    if (this.lastMet.some((e) => e.effect) && !this.basketEventSeen) { this.basketEventSeen = true; this.showCard('basketEvents'); }
     // Made up after the move is picked, so she can comment on the move she just took.
-    return this.thoughts?.after(w) ?? null;
+    // A fox that finds no cake has nothing to complain about: no thought for a quiet event.
+    return this.thoughts?.after(w, this.lastMet.filter((e) => !e.quiet).map((e) => eventKind(e.kind)?.thoughts ?? [])) ?? null;
   }
 
   /**
@@ -688,9 +749,14 @@ export class App {
     const res = w.results[w.t - 1];
     if (w.blocked[w.t - 1]) this.board.showOuch(w.pos, w.history.moves[w.t - 1]);
     else if (this.forest.tiles[w.pos] === SWAMP) this.board.showSplash(w.pos);
-    else if (res === 'grabbed') this.board.showPop(w.pos, 'The wolf took the cake!', s('g', {}, s('g', { opacity: 0.6 }, cake(0, 0, 9)), s('line', { x1: -10, y1: -10, x2: 10, y2: 10, stroke: COLORS.ink, 'stroke-width': 2.5 })));
+    else if (res === 'grabbed') this.board.showPop(w.pos, 'The wolf took the cake!', crossedCake());
     else if (res === 'flowers') this.board.showPop(w.pos, 'Flowers!');
     else if (res === 'treasure') this.board.showPop(w.pos, 'Treasure!', gem(0, 0, 8));
+    // Forest events pop up their word too, above a basket word if there is one.
+    const basketPop = res === 'grabbed' || res === 'flowers' || res === 'treasure';
+    // An event that changed her basket shows what it did: the crossed-out cake, the gem.
+    const effectIcon = (e: EventMet) => (e.effect === 'takeCake' ? crossedCake() : e.effect === 'giveTreasure' ? gem(0, 0, 8) : undefined);
+    this.lastMet.forEach((e, k) => this.board.showPop(w.pos, eventKind(e.kind)?.popup ?? '', effectIcon(e), k + (basketPop ? 2 : 0)));
     // Her first thought of the session makes the "?" by "Her thoughts" pulse, unless something else just did.
     if (thought && this.settings.thoughts && !this.thoughtSeen && this.fresh === fresh) { this.thoughtSeen = true; this.showCard('thoughts'); }
     this.afterTripSteps(w);
@@ -728,9 +794,46 @@ export class App {
     const e = explainTrip(w, this.forest, this.stats, this.outdated);
     this.why = e;
     if (e.card) this.showCard(e.card);
+    this.tellStory(w, e.card ?? null);
     if (w.outcome === 'home') this.board.showHearts(w.pos);
     else if (w.outcome === 'eaten') this.board.showWolf(w.pos);
     else this.board.showLostNote(w.pos);
+  }
+
+  /**
+   * Her story of the trip that just ended (or was stopped). Its "?" pulses at the first story
+   * of a session, and when a story has a made-up part unless a more telling card just did.
+   */
+  private tellStory(w: Walker, otherCard: CardKey | null) {
+    const rec: TripRecord = {
+      forest: this.forest, start: w.start, positions: w.positions, results: w.results, outcome: w.outcome,
+      met: this.tracker?.met ?? [], placed: this.tripSpots.map((sp) => sp.kind),
+      shapedBy: shapedBy(this.stats.judgeRuns, this.stats.teacherCounts),
+    };
+    const lines = tellStory(rec, this.settings.boldness, this.storyRng);
+    this.story = { rec, lines };
+    if (!this.storySeen || (lines.some((l) => l.madeUp) && (!otherCard || otherCard === 'home'))) {
+      this.storySeen = true;
+      this.showCard('story');
+    }
+  }
+
+  /** Tell it again: the same trip, new wording and new made-up parts (at the boldness set now). */
+  private tellAgain() {
+    if (!this.story) return;
+    this.story.lines = tellStory(this.story.rec, this.settings.boldness, this.storyRng);
+    this.renderPanel();
+  }
+
+  /** The "Her story" box: each sentence with a footprint (true) or a dashed cloud (made up). */
+  private storyBox(): HTMLElement | null {
+    const st = this.story;
+    if (!st) return null;
+    return h('div', { class: 'story' },
+      h('h4', {}, this.hq('Her story', 'story')),
+      h('ol', {}, ...st.lines.map((l) => h('li', { class: l.madeUp ? 'made-up' : '' }, l.madeUp ? cloudMark() : footprintMark(), h('span', {}, l.text)))),
+      h('p', { class: 'story-count' }, storyCount(st.lines)),
+      h('div', { class: 'row spaced' }, h('button', { onclick: () => this.tellAgain(), title: 'The same trip, told again' }, 'Tell it again'), this.q('retell')));
   }
 
   private toggleAuto() {
@@ -759,6 +862,7 @@ export class App {
     this.tripStopped = true;
     this.board.say(null);
     this.showCard('stop');
+    if (w.t > 0) this.tellStory(w, 'stop');
     this.render();
   }
 
@@ -977,6 +1081,7 @@ export class App {
     b.setParent(null);
     b.setRed(null);
     b.setPicked(null);
+    b.setEventMarks(this.showEvents ? this.shownSpots()?.map((sp) => ({ ...sp, name: eventKind(sp.kind)?.name })) ?? null : null);
     this.renderChanged();
     b.setHeat(this.tab === 'lessons' && this.settings.heat && this.stats.lessons > 0 ? this.stats.coverage : null);
 
@@ -1204,6 +1309,23 @@ export class App {
         h('label', { class: 'check' },
           h('input', { type: 'checkbox', checked: this.settings.hint, onchange: (e: Event) => { const v = (e.target as HTMLInputElement).checked; this.changeMemoryOrHint(() => { this.settings.hint = v; }); this.showCard('hint'); } }),
           h('span', {}, this.hq("Smell of grandma's cake (she senses the rough direction home)", 'hint')))),
+      h('div', { class: 'group' },
+        h('label', { class: 'check' },
+          h('input', { type: 'checkbox', checked: this.settings.events, onchange: (e: Event) => {
+            this.settings.events = (e.target as HTMLInputElement).checked;
+            if (!this.settings.events) { this.tracker = null; if (this.walker) this.walker.events = null; }
+            this.saveSoon(); this.showCard('events'); this.renderBoard(); this.renderPanel();
+          } }),
+          h('span', {}, this.hq('Things happen in the forest', 'events'))),
+        this.settings.events ? h('p', { class: 'muted' }, 'An owl, a frog, an empty hut… She can\'t see them, but she meets them on her trips alone, and her story tells about them. ',
+          this.hq('A few change her basket: a sly fox, a kind neighbour, a magpie.', 'basketEvents')) : null,
+        this.settings.events ? h('label', { class: 'check' },
+          h('input', { type: 'checkbox', checked: this.settings.newPlaces, onchange: (e: Event) => {
+            this.settings.newPlaces = (e.target as HTMLInputElement).checked;
+            this.saveSoon(); this.showCard('newPlaces'); this.renderBoard(); this.renderPanel();
+          } }),
+          h('span', {}, this.hq('New places every trip', 'newPlaces'))) : null,
+        this.showEventsButton()),
       this.next('Next: Lessons', 'lessons'),
     );
   }
@@ -1279,7 +1401,7 @@ export class App {
         ? [{ home: `Home after ${w.t} steps${w.basket.cake ? '' : ', without the cake'}!`, eaten: `Eaten by a wolf at step ${w.t}.`, lost: `Lost: out of energy after ${w.t} steps.` }[w.outcome!], h('br'), pickupLine(w.pickups)]
         : [
           `Step ${w.t + 1} · energy ${w.energyLeft} / ${w.energy}`,
-          !w.basket.cake ? h('span', { class: 'nowrap' }, this.hq(' · no cake: the next den is the end!', 'cakeShield', 'status')) : null,
+          !w.basket.cake ? h('span', { class: 'nowrap' }, this.hq(' · no cake: the next den is the end!', w.effects.some((e) => e.effect === 'takeCake') ? 'basketEvents' : 'cakeShield', 'status')) : null,
           w.t > 0 && w.blocked[w.t - 1] ? h('span', { class: 'nowrap' }, this.hq(' · ouch, a tree!', 'tree', 'status')) : null,
           this.forest.tiles[w.pos] === SWAMP ? h('span', { class: 'nowrap' }, this.hq(' · in a swamp, tiring!', 'swamp', 'status')) : null,
           this.settings.hint ? h('span', { class: 'nowrap' }, this.hq(` · smells cake to the ${SECTOR_WORDS[homeSector(this.forest, w.pos)]}`, 'hint')) : null,
@@ -1299,6 +1421,7 @@ export class App {
       probsBox,
       // After every trip, also one cut short with Stop: there was a walk to tell about.
       w && !walking && w.t > 0 ? this.reportBox(w, this.why) : null,
+      w && !walking && w.t > 0 ? this.storyBox() : null,
       // Purely optional settings, in their own box below.
       h('div', { class: 'settings-box' },
       h('h3', {}, 'Settings (optional)'),
@@ -1311,7 +1434,8 @@ export class App {
       h('label', { class: 'check' }, h('input', { type: 'checkbox', checked: this.settings.fog, onchange: (e: Event) => { this.settings.fog = (e.target as HTMLInputElement).checked; this.saveSoon(); this.renderBoard(); this.showCard('view'); } }), h('span', {}, this.hq('Fog: show only what she sees', 'view', 'fog'))),
       h('label', { class: 'check' }, h('input', { type: 'checkbox', checked: this.settings.thoughts, onchange: (e: Event) => {
         this.settings.thoughts = (e.target as HTMLInputElement).checked; this.saveSoon(); if (!this.settings.thoughts) this.board.say(null); this.showCard('thoughts');
-      } }), h('span', {}, this.hq('Her thoughts (just for fun)', 'thoughts')))),
+      } }), h('span', {}, this.hq('Her thoughts (just for fun)', 'thoughts'))),
+      this.showEventsButton()),
       h('div', { class: 'row' }, this.next('Practice', 'practice'), this.next('Inside the model', 'inside')),
     );
   }
@@ -1347,17 +1471,21 @@ export class App {
     );
   }
 
-  /** What is in her basket at the end: the cake or not, flowers, treasure. */
+  /** What is in her basket at the end: the cake or not, flowers, treasure, and where the changes came from. */
   private basketRow(w: Walker, icon: (...kids: SVGElement[]) => SVGSVGElement): HTMLElement {
     const b = w.basket;
     const things = basketWords(b);
     const word = w.outcome === 'eaten' ? 'lost with her' : !b.cake ? (things ? `no cake, but ${things}` : 'no cake') : things ? `the cake and ${things}` : 'the cake';
     // Always say how many she found, out of how many the forest has.
-    const picked = pickupLine(w.pickups).replace(/^Picked/, 'picked').replace(/\.$/, '');
+    // Tile pickups first, then what forest events gave her ("plus a bunch of flowers from Grandma's neighbour at step 9").
+    const gifts = w.effects.filter((e) => e.effect !== 'takeCake').map(effectWords);
+    const picked = pickupLine(w.pickups).replace(/^Picked/, 'picked').replace(/\.$/, '') + (gifts.length ? `, plus ${gifts.join(' and ')}` : '');
+    const fox = w.effects.find((e) => e.effect === 'takeCake');
+    const cakeGone = fox ? effectWords(fox) : w.cakeLostAt >= 0 ? `the wolf grabbed the cake at step ${w.cakeLostAt + 1}` : '';
     const detail = w.outcome === 'eaten'
-      ? `${picked}; the wolf has the whole basket`
-      : w.cakeLostAt >= 0
-        ? `${picked}; the wolf grabbed the cake at step ${w.cakeLostAt + 1}${w.outcome === 'home' ? '' : '; flowers only count at Grandma\'s'}`
+      ? `${picked}; ${fox ? `${cakeGone}, and ` : ''}the wolf has the whole basket`
+      : cakeGone
+        ? `${picked}; ${cakeGone}${w.outcome === 'home' ? '' : '; flowers only count at Grandma\'s'}`
         : w.outcome === 'home' ? `${picked}; ${things ? 'all delivered' : 'the cake delivered'} to Grandma` : `${picked}; flowers only count at Grandma's`;
     return h('div', { class: 'report-row' }, icon(cake(0, 1, 10)),
       h('span', {}, h('strong', {}, this.hq(`Basket: ${word}`, 'processReward', 'basketReport')), h('br'), h('small', {}, detail)));

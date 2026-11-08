@@ -140,3 +140,25 @@ describe('basket thoughts', () => {
     }
   });
 });
+
+describe('forest event thoughts', () => {
+  const OWL = ['Who\'s there? Just an owl.'];
+  it('always says an event\'s line, keeping the 2-step gap after the last thought', () => {
+    const f = forest();
+    expect(new Thoughts(never).after(trip(f, at(1, 1), [1, 1, 1]), [OWL])).toEqual(OWL);
+    // Right after another thought it waits its turn, then says it.
+    const th = new Thoughts(never);
+    expect(th.after(trip(f, at(3, 3), [1]))).not.toBeNull(); // sees grandma's house
+    expect(th.after(trip(f, at(3, 3), [1, 2]), [OWL])).toBeNull();
+    expect(th.after(trip(f, at(3, 3), [1, 2, 2]))).toEqual(OWL);
+  });
+
+  it('forgets an event that waited too long', () => {
+    const f = forest();
+    const th = new Thoughts(never);
+    th.after(trip(f, at(1, 1), [1, 1, 1], { outcome: undefined, energyLeft: 30 }));
+    th.after(trip(f, at(1, 1), [1, 1, 1, 1], { energyLeft: 30 }), [OWL]);
+    // Five steps later, nothing else to say: the owl is long gone.
+    expect(th.after(trip(f, at(1, 1), [1, 1, 1, 1, 1, 1, 1, 1, 1], { energyLeft: 30 }))).toBeNull();
+  });
+});

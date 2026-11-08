@@ -76,6 +76,8 @@ const MOVE_SECTOR = [2, 0, 6, 4] as const;
 
 /** Steps that must pass after a thought before the next one, by kind. */
 const GAP = { event: 2, swamp: 3, loop: 4, chatter: 6 } as const;
+/** How many steps a forest event's thought may wait for its turn. */
+const EVENT_WAIT = 3;
 
 export class Thoughts {
   private lastAt = -100;
@@ -85,10 +87,17 @@ export class Thoughts {
   private readonly densSaid = new Set<number>();
   private readonly lastPick = new Map<readonly Line[], number>();
 
+  /** Forest events that just happened, waiting for a thought (each with the step it happened at). */
+  private events: { lines: readonly string[]; t: number }[] = [];
+
   constructor(private readonly rng: Rng, private readonly hint = false) {}
 
-  /** Call after every step of the trip; returns her thought (one or two lines), or null to stay quiet. */
-  after(w: TripState): string[] | null {
+  /**
+   * Call after every step of the trip; returns her thought (one or two lines), or null to stay quiet.
+   * `events`: the thought lines of forest events that just happened (an owl, a frog…).
+   */
+  after(w: TripState, events: readonly (readonly string[])[] = []): string[] | null {
+    for (const lines of events) this.events.push({ lines, t: w.t });
     const lines = this.think(w);
     if (lines) this.lastAt = w.t;
     return lines;
@@ -119,6 +128,11 @@ export class Thoughts {
     }
     if (res === 'flowers') return [this.say(FLOWER_LINES)];
     if (res === 'treasure') return [this.say(TREASURE_LINES)];
+
+    // Forest events: always worth a thought, like the basket, but keeping the gap after the last
+    // thought. One waits a few steps for its turn, then it is forgotten.
+    this.events = this.events.filter((e) => t - e.t <= EVENT_WAIT);
+    if (this.events.length && gap >= GAP.event) return [this.say(this.events.shift()!.lines)];
 
     if (w.blocked[t - 1] && gap >= GAP.event && chance(0.7)) {
       return chance(0.35) ? [decision(), this.say(BUMP_LINES)] : [this.say(BUMP_LINES)];

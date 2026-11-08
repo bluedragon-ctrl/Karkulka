@@ -220,6 +220,13 @@ input[type="text"] { font: inherit; font-size: 0.92rem; padding: 0.35em 0.5em; b
 .report h4 { margin: 0 0 0.1em; }
 .settings-box { display: flex; flex-direction: column; gap: 0.55rem; border: 1px solid var(--line); border-radius: 10px; padding: 0.6em 0.8em; }
 .settings-box h3 { margin: 0; }
+.story { display: flex; flex-direction: column; gap: 0.35em; background: #fffdf6; border: 1px solid var(--line); border-radius: 10px; padding: 0.5em 0.7em; margin-top: 0.6em; }
+.story h4 { margin: 0 0 0.1em; }
+.story ol { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 0.3em; }
+.story li { display: grid; grid-template-columns: auto 1fr; gap: 0.45em; align-items: start; font-size: 0.95rem; }
+.story li svg { margin-top: 0.15em; }
+.story li.made-up { font-style: italic; color: #555; }
+.story .story-count { font-size: 0.85rem; color: var(--muted); margin: 0; }
 .report-note { margin: 0.3em 0 0; padding-top: 0.4em; border-top: 1px solid var(--line); font-size: 0.88rem; color: var(--muted); }
 .change-chart { display: flex; flex-direction: column; gap: 0.25em; }
 .change-row { display: grid; grid-template-columns: 11em 1fr 3em; gap: 0.4em; align-items: center; font-size: 0.85rem; }

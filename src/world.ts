@@ -32,6 +32,24 @@ export const fullBasket = (): Basket => ({ cake: true, flowers: 0, treasure: 0 }
 export interface BasketState { basket: Basket; picked: number[] }
 export const newBasketState = (): BasketState => ({ basket: fullBasket(), picked: [] });
 
+/** What a forest event can do to her basket on a trip alone: take the cake, give flowers, give a treasure. */
+export const EFFECTS = ['takeCake', 'giveFlowers', 'giveTreasure'] as const;
+export type Effect = typeof EFFECTS[number];
+
+/**
+ * A forest event's effect on her basket, exactly like the same change by a tile: the cake gone
+ * as when the wolf grabs it (so the next den eats her), one bunch of flowers or one treasure.
+ * False when there is nothing to change (no cake left to take).
+ */
+export function applyEffect(b: Basket, e: Effect): boolean {
+  if (e === 'takeCake') {
+    if (!b.cake) return false;
+    b.cake = false;
+  } else if (e === 'giveFlowers') b.flowers++;
+  else b.treasure++;
+  return true;
+}
+
 /** Moves are the output tokens: up, right, down, left. */
 export type Move = 0 | 1 | 2 | 3;
 export const MOVES: readonly Move[] = [0, 1, 2, 3];

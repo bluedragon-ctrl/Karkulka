@@ -3,7 +3,7 @@ import { Model, forward, softmax } from './model';
 import type { Rng } from './rng';
 import type { History } from './teachers';
 import { encodeContext, snapBasket } from './tokens';
-import { Basket, FLOWERS, Forest, Move, StepResult, TREASURE, BasketState, homeSector, newBasketState, step, viewAt } from './world';
+import { Basket, Effect, FLOWERS, Forest, Move, StepResult, TREASURE, BasketState, homeSector, newBasketState, step, viewAt } from './world';
 
 export type Outcome = 'home' | 'eaten' | 'lost';
 
@@ -20,6 +20,15 @@ export function sample(probs: ArrayLike<number>, rng: Rng): Move {
 export function predictAt(model: Model, h: History, t: number): Float32Array {
   return softmax(forward(model, encodeContext(model.cfg, h, t)).logits);
 }
+
+/** A basket change by a forest event: at which step (1-based, like `t`), by which event kind. */
+export interface EffectDone { t: number; kind: number; effect: Effect }
+
+/**
+ * Forest events on a trip alone (an `EventTracker`): called after each step with her positions
+ * and basket; it may change the basket, and returns the basket changes it made.
+ */
+export interface StepEvents { after(positions: readonly number[], basket: Basket): readonly { t: number; kind: number; effect?: Effect }[] }
 
 export interface Decision {
   logits: Float32Array;
@@ -42,6 +51,10 @@ export class Walker {
   /** Her basket after each position, starting with the start (the full basket). */
   readonly baskets: Basket[];
   readonly trip: BasketState = newBasketState();
+  /** Forest events that may change her basket (a trip alone with events on); null: none. */
+  events: StepEvents | null = null;
+  /** Basket changes made by forest events, in order. */
+  readonly effects: EffectDone[] = [];
   energyLeft: number;
   outcome: Outcome | null = null;
   private pending: Decision | null = null;
@@ -110,9 +123,13 @@ export class Walker {
     this.history.moves.push(m);
     this.blocked.push(r.result === 'blocked');
     this.results.push(r.result);
-    this.baskets.push(snapBasket(this.trip.basket));
     this.pos = r.pos;
     this.positions.push(r.pos);
+    // Forest events act right after the step, so the basket she reads next already shows it.
+    for (const e of this.events?.after(this.positions, this.trip.basket) ?? []) {
+      if (e.effect) this.effects.push({ t: e.t, kind: e.kind, effect: e.effect });
+    }
+    this.baskets.push(snapBasket(this.trip.basket));
     this.energyLeft = Math.max(0, this.energyLeft - r.cost);
     if (r.result === 'home') this.outcome = 'home';
     else if (r.result === 'eaten') this.outcome = 'eaten';
