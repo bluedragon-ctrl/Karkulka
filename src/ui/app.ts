@@ -118,8 +118,8 @@ export interface ChangePoint { label: string; home: number }
 /** Catch-up lesson buttons after the forest changed. */
 const CATCH_UP = [30, 100, 300];
 
-/** Walk through: time between her moves, still slow enough to follow her on the board. */
-const WALK_STEP_MS = 430;
+/** Walk through: time between her moves when she says nothing; just longer than her 0.22 s glide. */
+const WALK_STEP_MS = 260;
 
 /** How long her thought bubble stays (and Walk through waits): enough to read it, at least 1.8 s. */
 function readMs(lines: string[]): number {
