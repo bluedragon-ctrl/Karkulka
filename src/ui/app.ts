@@ -121,6 +121,9 @@ const CATCH_UP = [30, 100, 300];
 /** Walk through: time between her moves when she says nothing; just longer than her 0.22 s glide. */
 const WALK_STEP_MS = 260;
 
+/** How long she says where she is going before she makes the move (and Walk through waits). */
+const PLAN_MS = 1100;
+
 /** How long her thought bubble stays (and Walk through waits): enough to read it, at least 1.8 s. */
 function readMs(lines: string[]): number {
   const chars = lines.join(' ').length;
@@ -227,6 +230,8 @@ export class App {
   /** The story's own randomness, never the walk's. */
   private storyRng = mulberry32((Math.random() * 2 ** 32) >>> 0);
   private thoughtSeen = false;
+  /** Timer of a move held back while she says where she is going. */
+  private held: number | null = null;
   /** "Show events" (for testing): the event spots' kind numbers on the board. Not saved. */
   private showEvents = false;
   /** The forest's event spots, worked out again whenever the tiles change. */
@@ -777,9 +782,20 @@ export class App {
    */
   private stepTrip(): string[] | null {
     const w = this.walker;
-    if (!w || !this.tripLive(w)) return null;
+    if (!w || !this.tripLive(w) || this.held) return null;
     const fresh = this.fresh;
     const thought = this.advanceTrip(w);
+    // A thought about the move ("Let's go north.") is said first, where she still stands; the move follows.
+    if (thought && this.thoughts?.planned && this.settings.thoughts && !w.done) {
+      this.board.say(thought);
+      this.held = window.setTimeout(() => { this.held = null; this.board.say(null); this.showMove(w, fresh, thought, false); }, PLAN_MS);
+      return null;
+    }
+    return this.showMove(w, fresh, thought, true);
+  }
+
+  /** Draws the move just made (her pops, thought and the board). */
+  private showMove(w: Walker, fresh: unknown, thought: string[] | null, say: boolean): string[] | null {
     const res = w.results[w.t - 1];
     if (w.blocked[w.t - 1]) this.board.showOuch(w.pos, w.history.moves[w.t - 1]);
     else if (this.forest.tiles[w.pos] === SWAMP) this.board.showSplash(w.pos);
@@ -794,7 +810,7 @@ export class App {
     // Her first thought of the session makes the "?" by "Her thoughts" pulse, unless something else just did.
     if (thought && this.settings.thoughts && !this.thoughtSeen && this.fresh === fresh) { this.thoughtSeen = true; this.showCard('thoughts'); }
     this.afterTripSteps(w);
-    return this.sayThought(w, thought);
+    return say ? this.sayThought(w, thought) : null;
   }
 
   /** The whole rest of the trip at once, drawn only at the end, with no thought bubbles. */
@@ -802,6 +818,7 @@ export class App {
     const w = this.walker;
     if (!w || !this.tripLive(w)) return;
     this.stopAuto();
+    this.releaseHeld();
     this.board.say(null);
     while (!w.done) this.advanceTrip(w);
     this.afterTripSteps(w);
@@ -880,7 +897,8 @@ export class App {
     const tick = () => {
       const thought = this.stepTrip();
       if (!this.auto) return;
-      this.auto = window.setTimeout(tick, thought ? readMs(thought) : WALK_STEP_MS);
+      // A thought about the move is said first, so she waits for it before the move, then goes on quickly.
+      this.auto = window.setTimeout(tick, this.held !== null ? PLAN_MS + WALK_STEP_MS : thought ? readMs(thought) : WALK_STEP_MS);
     };
     this.auto = window.setTimeout(tick, WALK_STEP_MS);
     this.renderPanel();
@@ -896,6 +914,7 @@ export class App {
     const w = this.walker;
     if (!w || !this.tripLive(w)) return;
     this.stopAuto();
+    this.releaseHeld();
     this.tripStopped = true;
     this.board.say(null);
     this.showCard('stop');
@@ -908,8 +927,17 @@ export class App {
     this.auto = null;
   }
 
+  /** Her move waiting for her to finish saying where she goes: do it now (the state has moved on already). */
+  private releaseHeld() {
+    if (this.held === null) return;
+    clearTimeout(this.held);
+    this.held = null;
+    this.board.say(null);
+  }
+
   private stopTrip() {
     this.stopAuto();
+    this.releaseHeld();
     this.board.clearFx();
   }
 
@@ -1277,11 +1305,9 @@ export class App {
     if (!job) {
       return h('div', { class: 'run-controls' },
         h('div', { class: 'row' },
-          h('button', { class: 'primary', onclick: o.all }, 'Do ', h('span', { class: 'n-add' }, String(o.total)), ` ${o.what}s`)),
-        h('div', { class: 'row' },
-          h('span', { class: 'muted' }, 'Or watch:'),
           h('button', { onclick: () => o.watch(1, 'slow'), title: `One ${o.what}, slowly` }, `One ${o.what}`),
           h('button', { onclick: () => o.watch(o.total, 'normal'), title }, `Watch ${o.what}s`),
+          h('button', { class: 'primary', onclick: o.all, title: `Do all ${o.what}s quickly, without watching` }, 'Jump to ', h('span', { class: 'n-add' }, String(o.total)), ` ${o.what}s`),
           this.q(o.watchCard)));
     }
     const watching = this.watching;

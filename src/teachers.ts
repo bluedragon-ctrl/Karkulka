@@ -216,6 +216,8 @@ export function walkLesson(f: Forest, teacher: Teacher, cost: Float64Array, star
     return null;
   };
   let goal: Float64Array | null = null;
+  // The way round a walking wolf, kept once planned: the forest with his tiles closed, and the cost to the goal in it.
+  let detour: { g: Forest; cost: Float64Array } | null = null;
   let doneSoFar = -1;
   let pos = start;
   let eaten = false;
@@ -225,7 +227,7 @@ export function walkLesson(f: Forest, teacher: Teacher, cost: Float64Array, star
     const crow = teacher === 'crow' ? crowMoves(f, pos) : null;
     // A new errand after each pickup or new den (the magpie looks for the next treasure, the huntsman for the next den; Grandma heads home).
     const done = teacher === 'huntsman' ? seen.size : trip.picked.length;
-    if (doneSoFar !== done) { goal = errand(f, cost); doneSoFar = done; }
+    if (doneSoFar !== done) { goal = errand(f, cost); doneSoFar = done; detour = null; }
     // A walking wolf near: everyone but the crow (who flies) and the wolf at his den keeps away from the
     // ones in sight, planning round them, or just getting away when there is no way round.
     const near = wolves.filter((w) => w.here && closeness(f, pos, w.pos) <= FLEE_RANGE).map((w) => w.pos);
@@ -235,9 +237,18 @@ export function walkLesson(f: Forest, teacher: Teacher, cost: Float64Array, star
     else if (near.length) {
       const g = forestAroundWolves(f, near);
       const home = costToHome(g, teacher);
-      opts = teacherMoves(g, errand(g, home) ?? home, teacher, pos);
+      const way = errand(g, home) ?? home;
+      opts = teacherMoves(g, way, teacher, pos);
+      // A whole new road, not one step aside: she keeps to it after the wolf is out of sight, so she does not walk back to him.
+      detour = opts.length ? { g, cost: way } : null;
       if (!opts.length) opts = fleeMoves(f, pos, near);
-    } else opts = teacherMoves(f, goal ?? cost, teacher, pos);
+    } else if (detour && wolves.some((w) => w.here)) {
+      opts = teacherMoves(detour.g, detour.cost, teacher, pos);
+      if (!opts.length) { detour = null; opts = teacherMoves(f, goal ?? cost, teacher, pos); }
+    } else {
+      detour = null;
+      opts = teacherMoves(f, goal ?? cost, teacher, pos);
+    }
     if (!opts.length) break;
     const m = pick(rng, opts);
     const stepped = step(f, pos, m, trip);
