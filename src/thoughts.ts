@@ -87,6 +87,9 @@ export class Thoughts {
   private readonly densSaid = new Set<number>();
   private readonly lastPick = new Map<readonly Line[], number>();
 
+  /** Whether the last thought was about the move itself ("Let's go north."), which she says before making it. */
+  planned = false;
+
   /** Forest events that just happened, waiting for a thought (each with the step it happened at). */
   private events: { lines: readonly string[]; t: number }[] = [];
 
@@ -98,6 +101,7 @@ export class Thoughts {
    */
   after(w: TripState, events: readonly (readonly string[])[] = []): string[] | null {
     for (const lines of events) this.events.push({ lines, t: w.t });
+    this.planned = false;
     const lines = this.think(w);
     if (lines) this.lastAt = w.t;
     return lines;
@@ -143,6 +147,7 @@ export class Thoughts {
     if (dens.length && gap >= GAP.event) {
       const d = dens.find((d) => d.dx === DX[m] && d.dy === DY[m]) ?? dens.find((d) => sameWay(m, d.dx, d.dy)) ?? dens[0];
       for (const x of densAround(f, from)) this.densSaid.add(x.i);
+      this.planned = true;
       return [this.wolfLine(m, d.dx, d.dy), decision()];
     }
 
@@ -169,8 +174,8 @@ export class Thoughts {
     if (gap < GAP.chatter) return null;
     const sector = w.history.sectors[t - 1];
     const towardCake = sector !== undefined && Math.min((sector - MOVE_SECTOR[m] + 8) % 8, (MOVE_SECTOR[m] - sector + 8) % 8) <= 1;
-    if (this.hint && towardCake && chance(0.12)) return [this.say(CAKE_LINES), decision()];
-    if (chance(0.2)) return [decision()];
+    if (this.hint && towardCake && chance(0.12)) { this.planned = true; return [this.say(CAKE_LINES), decision()]; }
+    if (chance(0.2)) { this.planned = true; return [decision()]; }
     return null;
   }
 
