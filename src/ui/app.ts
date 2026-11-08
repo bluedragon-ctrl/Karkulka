@@ -121,17 +121,12 @@ const CATCH_UP = [30, 100, 300];
 /** Walk through: time between her moves, still slow enough to follow her on the board. */
 const WALK_STEP_MS = 430;
 
-/** How long her thought bubble stays: enough to read it, at least 1.8 s. */
+/** How long her thought bubble stays (and Walk through waits): enough to read it, at least 1.8 s. */
 function readMs(lines: string[]): number {
   const chars = lines.join(' ').length;
   return Math.min(4500, Math.max(1800, 900 + chars * 55));
 }
 
-/** Walk through: the small extra pause after she says something, before she walks on. */
-function thoughtPauseMs(lines: string[]): number {
-  const chars = lines.join(' ').length;
-  return Math.min(1400, 600 + chars * 15);
-}
 
 type WatchSpeed = 'slow' | 'quick' | 'fast';
 /** Time per step when watching lessons. Below `ANIMATE_MS` she jumps instead of gliding. */
@@ -812,9 +807,12 @@ export class App {
     this.afterTripSteps(w);
   }
 
-  /** Her thought bubble: long enough to read while walking; the last one stays when the trip ends. */
+  /**
+   * Her thought bubble, about the move she just took. Her next move takes it away, so a
+   * "Definitely north." never shows while she walks east. The last one stays when the trip ends.
+   */
   private sayThought(w: Walker, thought: string[] | null): string[] | null {
-    if (!thought || !this.settings.thoughts) return null;
+    if (!thought || !this.settings.thoughts) { this.board.say(null); return null; }
     this.board.say(thought, { ms: w.done ? undefined : readMs(thought), below: w.outcome === 'lost' });
     return thought;
   }
@@ -878,11 +876,11 @@ export class App {
   private toggleAuto() {
     if (this.auto) { this.stopAuto(); this.renderPanel(); return; }
     if (!this.walker || !this.tripLive(this.walker)) return;
-    // One move at a time, with a small pause after a thought; the bubble stays a little longer.
+    // One move at a time; after a thought she waits until it is read, since her next move takes it away.
     const tick = () => {
       const thought = this.stepTrip();
       if (!this.auto) return;
-      this.auto = window.setTimeout(tick, WALK_STEP_MS + (thought ? thoughtPauseMs(thought) : 0));
+      this.auto = window.setTimeout(tick, thought ? readMs(thought) : WALK_STEP_MS);
     };
     this.auto = window.setTimeout(tick, WALK_STEP_MS);
     this.renderPanel();
