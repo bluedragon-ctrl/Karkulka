@@ -1,6 +1,6 @@
 /** Tokens and the context window: how her trip is turned into numbers. */
 import type { History } from './teachers';
-import { Forest, Tile, TILE_KINDS, isWalkable, viewAt } from './world';
+import { Basket, Forest, Tile, TILE_KINDS, isWalkable, viewAt } from './world';
 
 export type MemorySize = 'short' | 'medium' | 'long';
 export const MEMORY_PAIRS: Record<MemorySize, number> = { short: 1, medium: 3, long: 6 };
@@ -16,11 +16,20 @@ export interface ModelConfig {
 export const VIEW_FEATS = 8 * TILE_KINDS; // 8 tiles, one-hot over the tile kinds
 export const MOVE_FEATS = 4;
 export const HINT_FEATS = 8;
+/** Pinned basket tokens: cake yes / no, flowers 0 / 1 / 2+, treasure 0 / 1 / 2+ (one-hot each). */
+export const BASKET_FEATS = 2 + 3 + 3;
 /** One remembered pair: a "present" flag, the view, and the move. */
 export const SLOT_FEATS = 1 + VIEW_FEATS + MOVE_FEATS;
 
 export const inputSize = (cfg: Pick<ModelConfig, 'memory' | 'hint'>): number =>
-  VIEW_FEATS + (cfg.hint ? HINT_FEATS : 0) + cfg.memory * SLOT_FEATS;
+  BASKET_FEATS + VIEW_FEATS + (cfg.hint ? HINT_FEATS : 0) + cfg.memory * SLOT_FEATS;
+
+/** The three pinned basket tokens as one-hot positions: [cake, flowers, treasure]. */
+export const basketTokens = (b: Basket): [number, number, number] =>
+  [b.cake ? 1 : 0, Math.min(2, b.flowers), Math.min(2, b.treasure)];
+
+/** Copy of a basket, for histories (the trip's own basket keeps changing). */
+export const snapBasket = (b: Basket): Basket => ({ cake: b.cake, flowers: b.flowers, treasure: b.treasure });
 
 export const viewKey = (view: readonly Tile[]): string => view.join('');
 
@@ -30,12 +39,18 @@ function encodeView(out: Float32Array, offset: number, view: readonly Tile[]) {
 
 /**
  * The context for the decision at step t:
- * [view t-m][move t-m] … [view t-1][move t-1][view t] → next move?
+ * [cake][flowers][treasure] | [view t-m][move t-m] … [view t-1][move t-1][view t] → next move?
+ * The basket tokens are pinned: they describe her basket now and never scroll out.
  */
 export function encodeContext(cfg: ModelConfig, h: History, t: number): Float32Array {
   const x = new Float32Array(inputSize(cfg));
-  encodeView(x, 0, h.views[t]);
-  let off = VIEW_FEATS;
+  const [cake, flowers, treasure] = basketTokens(h.baskets[t]);
+  x[cake] = 1;
+  x[2 + flowers] = 1;
+  x[5 + treasure] = 1;
+  let off = BASKET_FEATS;
+  encodeView(x, off, h.views[t]);
+  off += VIEW_FEATS;
   if (cfg.hint) {
     x[off + h.sectors[t]] = 1;
     off += HINT_FEATS;

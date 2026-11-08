@@ -5,16 +5,32 @@ export const TREE = 1;
 export const WOLF = 2;
 export const HOME = 3;
 export const SWAMP = 4;
-export type Tile = 0 | 1 | 2 | 3 | 4;
-export const TILE_KINDS = 5;
-export const TILE_NAMES = ['path', 'tree', 'wolf den', "grandma's house", 'swamp'] as const;
+export const FLOWERS = 5;
+export const TREASURE = 6;
+export type Tile = 0 | 1 | 2 | 3 | 4 | 5 | 6;
+export const TILE_KINDS = 7;
+export const TILE_NAMES = ['path', 'tree', 'wolf den', "grandma's house", 'swamp', 'flowers', 'treasure'] as const;
+
+/** Tiles she picks something up from (once per trip each). */
+export const isItem = (t: Tile): boolean => t === FLOWERS || t === TREASURE;
 
 /** Energy one step costs when she walks onto a tile (a blocked move costs 1). */
 export const SWAMP_COST = 3;
 export const stepCost = (t: Tile): number => (t === SWAMP ? SWAMP_COST : 1);
 
 /** Tiles she can stand on during a trip (home and dens end it). */
-export const isWalkable = (t: Tile): boolean => t === PATH || t === SWAMP;
+export const isWalkable = (t: Tile): boolean => t === PATH || t === SWAMP || t === FLOWERS || t === TREASURE;
+
+/**
+ * Her basket: the cake she sets out with, and what she picked up on the way.
+ * It is shown to the model as pinned tokens (see `tokens.ts`).
+ */
+export interface Basket { cake: boolean; flowers: number; treasure: number }
+export const fullBasket = (): Basket => ({ cake: true, flowers: 0, treasure: 0 });
+
+/** The basket during a trip, with the item tiles already picked (each counts once). */
+export interface TripState { basket: Basket; picked: number[] }
+export const newTrip = (): TripState => ({ basket: fullBasket(), picked: [] });
 
 /** Moves are the output tokens: up, right, down, left. */
 export type Move = 0 | 1 | 2 | 3;
@@ -77,19 +93,36 @@ export function neighbor(f: Forest, pos: number, m: Move): number {
   return y * f.size + x;
 }
 
-export type StepResult = 'moved' | 'blocked' | 'home' | 'eaten';
+/** `grabbed`: the wolf took the cake and she ran on; `flowers`, `treasure`: she picked some up. */
+export type StepResult = 'moved' | 'blocked' | 'home' | 'eaten' | 'grabbed' | 'flowers' | 'treasure';
 
 /**
  * One step and the energy it costs. A move into a tree (or off the map) is
  * blocked: she stays put and it still costs 1. Wading into a swamp costs more.
+ * With a trip state, the basket counts: the first den she steps onto takes the
+ * cake instead of her (she stands on the den and runs on), and item tiles fill
+ * the basket once each. Without one, every den eats her.
  */
-export function step(f: Forest, pos: number, m: Move): { pos: number; result: StepResult; cost: number } {
+export function step(f: Forest, pos: number, m: Move, trip?: TripState): { pos: number; result: StepResult; cost: number } {
   const n = neighbor(f, pos, m);
   if (n < 0) return { pos, result: 'blocked', cost: 1 };
   const t = f.tiles[n];
   if (t === TREE) return { pos, result: 'blocked', cost: 1 };
-  if (t === WOLF) return { pos: n, result: 'eaten', cost: 1 };
+  if (t === WOLF) {
+    if (trip?.basket.cake) {
+      trip.basket.cake = false;
+      return { pos: n, result: 'grabbed', cost: 1 };
+    }
+    if (trip) trip.basket = { cake: false, flowers: 0, treasure: 0 };
+    return { pos: n, result: 'eaten', cost: 1 };
+  }
   if (t === HOME) return { pos: n, result: 'home', cost: 1 };
+  if (trip && isItem(t) && !trip.picked.includes(n)) {
+    trip.picked.push(n);
+    if (t === FLOWERS) trip.basket.flowers++;
+    else trip.basket.treasure++;
+    return { pos: n, result: t === FLOWERS ? 'flowers' : 'treasure', cost: 1 };
+  }
   return { pos: n, result: 'moved', cost: stepCost(t) };
 }
 
@@ -158,8 +191,21 @@ export function cheapestTo(f: Forest, targets: readonly number[], enterCost: (i:
 /** Cheapest cost home from every tile; see `cheapestTo`. */
 export const cheapestToHome = (f: Forest, enterCost: (i: number) => number): Float64Array => cheapestTo(f, [f.home], enterCost);
 
-/** Energy needed to walk home from each tile along the cheapest route (swamps cost more). Infinity = unreachable. */
-export const energyToHome = (f: Forest): Float64Array => cheapestToHome(f, (i) => stepCost(f.tiles[i]));
+/**
+ * Energy needed to walk home from each tile along the cheapest route (swamps cost more). Infinity = unreachable.
+ * A den tile (where she stands after the wolf took the cake) counts from its cheapest neighbour.
+ */
+export function energyToHome(f: Forest): Float64Array {
+  const e = cheapestToHome(f, (i) => stepCost(f.tiles[i]));
+  f.tiles.forEach((t, i) => {
+    if (t !== WOLF) return;
+    for (const m of MOVES) {
+      const v = neighbor(f, i, m);
+      if (v >= 0 && e[v] + 1 < e[i]) e[i] = e[v] + 1;
+    }
+  });
+  return e;
+}
 
 /** Indices of the tiles that pass a test. */
 export function tilesWhere(f: Forest, test: (t: Tile, i: number) => boolean): number[] {

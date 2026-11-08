@@ -1,10 +1,10 @@
 import { describe, expect, it } from 'vitest';
-import { disagreement, generateForest } from '../src/forest';
+import { SHORTCUT_MIN_SAVING, disagreement, generateForest, parentRouteTiles, shortcutSaving } from '../src/forest';
 import { packTiles, unpackTiles } from '../src/storage';
 import { costToHome, teacherMoves, walkLesson } from '../src/teachers';
 import { mulberry32 } from '../src/rng';
 import {
-  HOME, PATH, SWAMP, SWAMP_COST, TREE, WOLF, cheapestToHome, energyToHome, forestFromTiles, homeIndex, moveHome, stepCost, loopCount, walkableTiles, homeSector, neighbor, pathTiles, step, tileAt, unreachableTiles, viewAt, walkingDistances,
+  FLOWERS, HOME, PATH, SWAMP, TREASURE, isItem, newTrip, SWAMP_COST, TREE, WOLF, cheapestToHome, energyToHome, forestFromTiles, homeIndex, moveHome, stepCost, loopCount, walkableTiles, homeSector, neighbor, pathTiles, step, tileAt, unreachableTiles, viewAt, walkingDistances,
 } from '../src/world';
 
 describe('forest generator', () => {
@@ -134,10 +134,80 @@ describe('parents', () => {
   });
 });
 
+describe('her basket', () => {
+  // A corridor: path, den, path, den, flowers, treasure, then home at the generator's spot is irrelevant here.
+  const size = 9;
+  const tiles = new Array(size * size).fill(TREE);
+  const at = (x: number, y: number) => y * size + x;
+  for (let x = 1; x < 8; x++) tiles[at(x, 4)] = PATH;
+  tiles[at(2, 4)] = WOLF;
+  tiles[at(4, 4)] = WOLF;
+  tiles[at(5, 4)] = FLOWERS;
+  tiles[at(6, 4)] = TREASURE;
+  const f = forestFromTiles('BASKET', size, tiles);
+
+  it('the first den takes the cake, the next one eats her', () => {
+    const trip = newTrip();
+    const a = step(f, at(1, 4), 1, trip);
+    expect(a.result).toBe('grabbed');
+    expect(a.pos).toBe(at(2, 4)); // she stands on the den and runs on
+    expect(trip.basket.cake).toBe(false);
+    // Off the den and back onto the same one: eaten, and the basket is lost.
+    trip.basket.flowers = 1;
+    expect(step(f, at(3, 4), 3, trip).result).toBe('eaten');
+    expect(trip.basket).toEqual({ cake: false, flowers: 0, treasure: 0 });
+    // Without a trip state every den eats her, as before the basket.
+    expect(step(f, at(1, 4), 1).result).toBe('eaten');
+  });
+
+  it('flowers and treasure count once per trip each', () => {
+    const trip = newTrip();
+    expect(step(f, at(4, 4), 1, trip).result).toBe('flowers');
+    expect(step(f, at(5, 4), 1, trip).result).toBe('treasure');
+    expect(step(f, at(6, 4), 3, trip).result).toBe('moved'); // back onto the picked flowers
+    expect(trip.basket).toEqual({ cake: true, flowers: 1, treasure: 1 });
+    expect(f.tiles[at(5, 4)]).toBe(FLOWERS); // tiles never change during a trip
+  });
+
+  it.each(['KARKULKA', 'ABCDEF', 'ZZ9922', 'Q1', 'WOLF'])('the generator places 2–3 of each item off both parents\' routes (%s)', (code) => {
+    const g = generateForest(code);
+    const flowers = g.tiles.filter((t) => t === FLOWERS).length;
+    const treasure = g.tiles.filter((t) => t === TREASURE).length;
+    expect(flowers).toBeGreaterThanOrEqual(2);
+    expect(flowers).toBeLessThanOrEqual(3);
+    expect(treasure).toBeGreaterThanOrEqual(2);
+    expect(treasure).toBeLessThanOrEqual(3);
+    const used = parentRouteTiles(g);
+    g.tiles.forEach((t, i) => { if (isItem(t)) expect(used.has(i)).toBe(false); });
+    // The parents still walk home from every walkable tile without picking anything up.
+    for (const teacher of ['mother', 'father'] as const) {
+      const cost = costToHome(g, teacher);
+      for (const i of walkableTiles(g)) {
+        if (isItem(g.tiles[i])) continue;
+        const walk = walkLesson(g, teacher, cost, i, mulberry32(1));
+        expect(walk.positions.at(-1)).toBe(g.home);
+        expect(walk.positions.some((p) => isItem(g.tiles[p]) || g.tiles[p] === WOLF)).toBe(false);
+      }
+    }
+  });
+
+  it('most forests have a wolf den that is a real shortcut', () => {
+    const codes = ['KARKULKA', 'ABCDEF', 'ZZ9922', 'Q1', 'WOLF', 'A', 'B', 'C'];
+    const withShortcut = codes.filter((c) => {
+      const g = generateForest(c);
+      const d = walkingDistances(g);
+      return g.tiles.some((t, i) => t === WOLF && shortcutSaving(g, i, d) >= SHORTCUT_MIN_SAVING);
+    });
+    expect(withShortcut.length).toBeGreaterThanOrEqual(6);
+  });
+});
+
 describe('forest links', () => {
-  it('pack and unpack edited tiles, swamps included', () => {
+  it('pack and unpack edited tiles, swamps and items included', () => {
     const f = generateForest('LINK');
     expect(f.tiles).toContain(SWAMP);
+    expect(f.tiles).toContain(FLOWERS);
+    expect(f.tiles).toContain(TREASURE);
     expect(unpackTiles(packTiles(f.tiles), f.tiles.length)).toEqual(f.tiles);
     expect(unpackTiles('!!', 4)).toBeNull();
   });
@@ -175,7 +245,12 @@ describe('shared helpers', () => {
 
   it('finds the energy home with the shared cheapest-route search', () => {
     const f = generateForest('KARKULKA');
-    expect(energyToHome(f)).toEqual(cheapestToHome(f, (i) => stepCost(f.tiles[i])));
+    const e = energyToHome(f);
+    const plain = cheapestToHome(f, (i) => stepCost(f.tiles[i]));
+    f.tiles.forEach((t, i) => { if (t !== WOLF) expect(e[i]).toBe(plain[i]); });
+    // A den (where she stands once the wolf took the cake) counts from its cheapest neighbour.
+    const den = f.tiles.findIndex((t, i) => t === WOLF && Number.isFinite(e[i]));
+    expect(den).toBeGreaterThanOrEqual(0);
     // With every step costing 1 it agrees with the plain walking distance.
     const steps = cheapestToHome(f, () => 1);
     const d = walkingDistances(f);

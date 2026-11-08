@@ -7,7 +7,7 @@
  */
 import type { Rng } from './rng';
 import type { Outcome } from './sim';
-import { DX, DY, Forest, HOME, Move, SWAMP, VIEW_OFFSETS, WOLF, tileAt, xyOf } from './world';
+import { DX, DY, Forest, HOME, Move, StepResult, SWAMP, VIEW_OFFSETS, WOLF, tileAt, xyOf } from './world';
 
 /** What a thought needs to know about the trip so far (a `Walker` fits). */
 export interface TripState {
@@ -15,6 +15,8 @@ export interface TripState {
   readonly positions: readonly number[];
   readonly history: { readonly moves: readonly Move[]; readonly sectors: readonly number[] };
   readonly blocked: readonly boolean[];
+  /** What each step did (the wolf grabbed the cake, flowers picked…); optional. */
+  readonly results?: readonly StepResult[];
   readonly decisions: readonly { readonly tempered: ArrayLike<number> }[];
   readonly energy: number;
   readonly energyLeft: number;
@@ -53,6 +55,9 @@ export const CAKE_LINES: readonly Line[] = ['Mmm, I smell cake!', 'Cake! This wa
 export const HOME_LINES: readonly Line[] = ['Finally!', 'Hello, Grandma!', 'Made it!', 'Home at last!'];
 export const LOST_LINES: readonly Line[] = ['I need a nap…', "I'll just sit here a bit.", 'Too tired to walk on…', 'Zzz…'];
 export const EATEN_LINES: readonly Line[] = ['Uh-oh…', 'Oh no!'];
+export const GRABBED_LINES: readonly Line[] = ['The wolf grabbed the cake! I ran away.', 'Eek! He took the cake. Run!', 'My cake! At least I got away.'];
+export const FLOWER_LINES: readonly Line[] = ['Flowers for Grandma!', 'Pretty flowers!', 'Grandma will love these.'];
+export const TREASURE_LINES: readonly Line[] = ['Ooh, treasure!', 'Shiny! Mine now.', 'A treasure! Lucky me.'];
 
 /** Compass name of each move (up the screen is north), in move order: up, right, down, left. */
 export const COMPASS = ['north', 'east', 'south', 'west'] as const;
@@ -105,6 +110,15 @@ export class Thoughts {
     if (w.outcome === 'eaten') {
       return chance(0.75) ? [this.wolfLine(m, DX[m], DY[m]), decision()] : [this.say(EATEN_LINES)];
     }
+
+    // The basket: always worth a thought.
+    const res = w.results?.[t - 1];
+    if (res === 'grabbed') {
+      for (const x of densAround(f, w.pos)) this.densSaid.add(x.i);
+      return [this.say(GRABBED_LINES)];
+    }
+    if (res === 'flowers') return [this.say(FLOWER_LINES)];
+    if (res === 'treasure') return [this.say(TREASURE_LINES)];
 
     if (w.blocked[t - 1] && gap >= GAP.event && chance(0.7)) {
       return chance(0.35) ? [decision(), this.say(BUMP_LINES)] : [this.say(BUMP_LINES)];

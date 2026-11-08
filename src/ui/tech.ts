@@ -3,7 +3,7 @@ import type { CardKey } from '../explain';
 import { Model, N_OUT, parameterCount, softmax } from '../model';
 import type { Walker } from '../sim';
 import { FIXED, TrainStats } from '../train';
-import { HINT_FEATS, SLOT_FEATS, VIEW_FEATS, ViewToken, buildVocabulary } from '../tokens';
+import { BASKET_FEATS, HINT_FEATS, SLOT_FEATS, VIEW_FEATS, ViewToken, buildVocabulary } from '../tokens';
 import { Forest, MOVE_ARROWS, MOVE_NAMES, MOVES, SWAMP_COST, TILE_KINDS } from '../world';
 import { SWAMP_PENALTY, WOLF_PENALTY, Teacher } from '../teachers';
 import {
@@ -78,8 +78,8 @@ function currentInput(ctx: TechContext): HTMLElement {
     // Each decision keeps the numbers the model produced at the time, so nothing is recomputed.
     const d = k < n ? walker.decisions[k] : walker.decide();
     const x = d.input;
-    const rows: HTMLElement[] = [vectorRow('current view', x, 0, VIEW_FEATS)];
-    let off = VIEW_FEATS;
+    const rows: HTMLElement[] = [vectorRow('basket (pinned)', x, 0, BASKET_FEATS), vectorRow('current view', x, BASKET_FEATS, VIEW_FEATS)];
+    let off = BASKET_FEATS + VIEW_FEATS;
     if (model.cfg.hint) { rows.push(vectorRow('home hint', x, off, HINT_FEATS)); off += HINT_FEATS; }
     for (let s = 1; s <= model.cfg.memory; s++, off += SLOT_FEATS) {
       rows.push(vectorRow(`${s} step${s === 1 ? '' : 's'} back`, x, off, SLOT_FEATS));
@@ -101,7 +101,7 @@ function currentInput(ctx: TechContext): HTMLElement {
     draw(v);
   } });
   draw(k0);
-  return section('Current input', ctx.hint('oneHot'), `The context window at one step of her latest trip, encoded as ${model.nIn} numbers. Each view is 8 tiles × ${TILE_KINDS} tile kinds (one-hot); each remembered step adds a "present" flag, a view and a move (${SLOT_FEATS} numbers).`,
+  return section('Current input', ctx.hint('oneHot'), `The context window at one step of her latest trip, encoded as ${model.nIn} numbers. First the pinned basket (${BASKET_FEATS} numbers: cake yes or no, flowers 0, 1 or 2+, treasure 0, 1 or 2+), which never scrolls out. Each view is 8 tiles × ${TILE_KINDS} tile kinds (one-hot); each remembered step adds a "present" flag, a view and a move (${SLOT_FEATS} numbers).`,
     h('label', { class: 'row' }, 'Step ', slider, counter), body);
 }
 
@@ -235,7 +235,8 @@ export function renderTech(el: HTMLElement, ctx: TechContext) {
     ['Practice learning rate (gradient descent, clipped)', String(FIXED.practiceLearningRate)],
     ['Reward: home / eaten', `${FIXED.rewardHome} / ${FIXED.rewardEaten}`],
     ['Score when lost', `−${FIXED.lostPenalty}, plus up to ${FIXED.partialCreditWeight} for ending closer (energy still needed to get home)`],
-    ['Judges', `Grandma: the scores above. Father: also −${FIXED.fatherStepCost} per step. Mother: also −${FIXED.motherSwampPenalty} per swamp step, −${FIXED.motherWolfPenalty} per step with a den in sight. Crow: ±${FIXED.crowHeading} per step towards or away from home in a straight line, +${FIXED.crowHomeBonus} home, ${FIXED.rewardEaten} eaten, 0 lost. Wolf: +${FIXED.wolfDen} eaten, ${FIXED.wolfHome} home, 0 lost`],
+    ['Judges', `Grandma: the scores above. Father: also −${FIXED.fatherStepCost} per step. Mother: also −${FIXED.motherSwampPenalty} per swamp step, −${FIXED.motherWolfPenalty} per step with a den in sight. Crow: ±${FIXED.crowHeading} per step towards or away from home in a straight line, +${FIXED.crowHomeBonus} home, ${FIXED.rewardEaten} eaten, 0 lost. Magpie: +${FIXED.magpieTreasure} per treasure at pickup, +${FIXED.magpieHome} home, ${FIXED.rewardEaten} eaten, 0 lost. Wolf: +${FIXED.wolfDen} per step into a den (cake grabbed or eaten), ${FIXED.wolfHome} home, 0 lost`],
+    ['Basket points', `Grandma and mother: −${FIXED.cakeLost} when the wolf grabs the cake. Grandma: +${FIXED.grandmaFlowers} per bunch of flowers brought home. Father: +${FIXED.fatherTreasure} per treasure at pickup. Being eaten takes back all basket points`],
     ['Wolf in disguise (teacher)', `Walks the father's route until a den is in her view, then takes the quickest way into it. "Mother, and sometimes the wolf": ${FIXED.wolfLessonShare * 100}% of lessons are the wolf's`],
     ['Practice credit', 'Reward to go: each move is credited with the points from that move to the end of the run, minus a running average (baseline), clipped to ±1'],
     ['Energy per step', `1 on path, ${SWAMP_COST} in a swamp, 1 for bumping into a tree`],

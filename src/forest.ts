@@ -2,8 +2,8 @@
 import { randInt, rngFrom, shuffle } from './rng';
 import { costToHome, teacherMoves } from './teachers';
 import {
-  DEFAULT_SIZE, DX, DY, Forest, HOME, MOVES, PATH, SWAMP, TREE, Tile, WOLF,
-  allReachable, homeIndex, loopCount, neighbor, pathTiles, tileAt, walkingDistances, xyOf,
+  DEFAULT_SIZE, DX, DY, FLOWERS, Forest, HOME, MOVES, PATH, SWAMP, TREASURE, TREE, Tile, WOLF,
+  allReachable, homeIndex, isWalkable, loopCount, nearWolf, neighbor, pathTiles, tileAt, walkingDistances, xyOf,
 } from './world';
 
 /** How much the den placement values keeping a route open, against parent disagreement. */
@@ -117,7 +117,113 @@ export function generateForest(code: string, size = DEFAULT_SIZE): Forest {
     if (bestTile < 0) break;
     tiles[bestTile] = WOLF;
   }
+
+  placeBasketTiles(forest);
   return forest;
+}
+
+/** Shortcut dens per forest, and how many steps one must save at least. */
+export const SHORTCUT_DENS = 3;
+export const SHORTCUT_MIN_SAVING = 4;
+
+/**
+ * Steps saved by walking through tile i instead of around: for a tile between two
+ * walkable tiles on opposite sides, the difference in their walking distances home,
+ * less the two steps through. 0 when it is no shortcut.
+ */
+export function shortcutSaving(f: Forest, i: number, dist = walkingDistances(f)): number {
+  let best = 0;
+  for (const [a, b] of [[0, 2], [1, 3]] as const) {
+    const u = neighbor(f, i, a);
+    const v = neighbor(f, i, b);
+    if (u < 0 || v < 0 || dist[u] < 0 || dist[v] < 0) continue;
+    best = Math.max(best, Math.abs(dist[u] - dist[v]) - 2);
+  }
+  return best;
+}
+
+/** How many path tiles the careful mother's route home from wades through a swamp. */
+export function motherWades(f: Forest): number {
+  const cost = costToHome(f, 'mother');
+  let n = 0;
+  for (const start of pathTiles(f)) {
+    let pos = start;
+    for (let guard = 0; guard < f.tiles.length && pos !== f.home; guard++) {
+      const m = teacherMoves(f, cost, 'mother', pos)[0];
+      if (m === undefined) break;
+      pos = neighbor(f, pos, m);
+      if (f.tiles[pos] === SWAMP) { n++; break; }
+    }
+  }
+  return n;
+}
+
+/**
+ * Every tile some parent steps onto on the way home from another tile. Tiles not in
+ * this set are off both parents' routes (dead ends, side loops nobody needs).
+ */
+export function parentRouteTiles(f: Forest): Set<number> {
+  const used = new Set<number>();
+  for (const teacher of ['mother', 'father'] as const) {
+    const cost = costToHome(f, teacher);
+    f.tiles.forEach((t, i) => {
+      if (!isWalkable(t)) return;
+      for (const m of teacherMoves(f, cost, teacher, i)) used.add(neighbor(f, i, m));
+    });
+  }
+  return used;
+}
+
+/**
+ * Her basket's part of the forest, placed after the rest from its own seeded stream:
+ * a few wolf dens in gaps between two paths, where walking through saves steps (a
+ * shortcut only the cake makes survivable), then 2–3 flower patches and 2–3 treasures
+ * off both parents' routes, one of them near a den. Tiles that were trees become
+ * dens, so every path and swamp can still reach home without crossing a den.
+ */
+function placeBasketTiles(f: Forest) {
+  const rng = rngFrom(`basket:${f.code}:${f.size}`);
+  const { tiles, size } = f;
+  const touchesDen = (i: number) => MOVES.some((m) => { const n = neighbor(f, i, m); return n >= 0 && tiles[n] === WOLF; });
+  const touchesHome = (i: number) => MOVES.some((m) => neighbor(f, i, m) === f.home);
+
+  // Shortcut dens: the gaps that save the most steps.
+  const dist = walkingDistances(f);
+  const gaps = shuffle(rng, tiles.map((_, i) => i).filter((i) => {
+    const [x, y] = xyOf(f, i);
+    return tiles[i] === TREE && x > 0 && y > 0 && x < size - 1 && y < size - 1 && !touchesHome(i);
+  })).map((i) => ({ i, saving: shortcutSaving(f, i, dist) }))
+    .filter((g) => g.saving >= SHORTCUT_MIN_SAVING)
+    .sort((a, b) => b.saving - a.saving);
+  // A den in sight makes the careful mother detour; a shortcut den must not send her through
+  // more swamps, or the two parents would walk too much alike.
+  let wades = motherWades(f);
+  let dens = 0;
+  for (const g of gaps) {
+    if (dens >= SHORTCUT_DENS) break;
+    if (touchesDen(g.i)) continue;
+    tiles[g.i] = WOLF;
+    const after = motherWades(f);
+    if (after > wades) { tiles[g.i] = TREE; continue; }
+    wades = after;
+    dens++;
+  }
+
+  // Flowers and treasure, off both parents' routes, never side by side.
+  const fromHome = walkingDistances(f);
+  const used = parentRouteTiles(f);
+  const touchesItem = (i: number) => MOVES.some((m) => { const n = neighbor(f, i, m); return n >= 0 && (tiles[n] === FLOWERS || tiles[n] === TREASURE); });
+  const spots = () => shuffle(rng, pathTiles(f).filter((i) => !used.has(i) && fromHome[i] >= 3 && !touchesHome(i) && !touchesItem(i)));
+  const want: Tile[] = [];
+  for (let k = 2 + randInt(rng, 2); k > 0; k--) want.push(TREASURE);
+  for (let k = 2 + randInt(rng, 2); k > 0; k--) want.push(FLOWERS);
+  want.forEach((kind, k) => {
+    const options = spots();
+    // The first item goes near a den when it can, so taking it is a real risk.
+    const near = k === 0 ? options.filter((i) => nearWolf(f, i)) : [];
+    const i = (near.length ? near : options)[0];
+    if (i !== undefined) tiles[i] = kind;
+  });
 }
 
 

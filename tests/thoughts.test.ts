@@ -127,3 +127,16 @@ describe('her thoughts on a trip alone', () => {
     expect(seen.size).toBeGreaterThan(6);
   });
 });
+
+describe('basket thoughts', () => {
+  it('always says something when the wolf grabs the cake or she picks something up', async () => {
+    const { GRABBED_LINES, FLOWER_LINES, TREASURE_LINES } = await import('../src/thoughts');
+    const f = forest([[3, 6, WOLF]]);
+    for (const [res, lines] of [['grabbed', GRABBED_LINES], ['flowers', FLOWER_LINES], ['treasure', TREASURE_LINES]] as const) {
+      const state = { ...trip(f, at(1, 6), [1, 1]), results: ['moved', res] as const };
+      const said = new Thoughts(never).after(state);
+      expect(said).not.toBeNull();
+      expect(fill(lines, '')).toContain(said![0]);
+    }
+  });
+});
