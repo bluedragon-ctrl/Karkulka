@@ -582,7 +582,7 @@ This is the game's clearest hallucination lesson. The storyteller is like a chat
 | 50 | Moss | Corridor | Step | The moss was so soft that she walked on it on tiptoe. / She sat on a mossy stone for a moment, and it was warm. | Soft moss! |
 | 51 | Hunting horn | Anywhere | Hear | A hunting horn sounded far away, and then there was quiet. / Somewhere a horn blew two notes. | Toot-toot! |
 
-Fantasy sentences (from boldness 1.2): "A dragon asked her the way to the sea." / "She rode a goose over the treetops for a while." / "A talking mushroom told her a joke." / "The trees bowed to let her pass." / "She found a door in a tree, and behind it the mice were having a tea party." / "The moon came out at noon to say hello." Each event also has one or two thought lines in her voice ("Who's there? Just an owl.", "A hut! Nobody home.").
+Fantasy sentences (from boldness 1.2): "A dragon asked her the way to the sea." / "She rode a goose over the treetops for a while." / "A talking mushroom told her a joke." / "The trees bowed to let her pass." / "She found a door in a tree, and behind it the mice were having a tea party." / "The moon came out at noon to say hello." / "A tiny dragon sneezed and warmed her hands like a stove." / "She crossed a bridge made of rainbow, and it tickled her feet." / "A cloud came down to ask if she wanted a lift." / "The river sang her a song and gave her a pebble as a present." / "A wise old turtle taught her a magic word, but she forgot it right away." Each event also has one or two thought lines in her voice ("Who's there? Just an owl.", "A hut! Nobody home.").
 
 **Code**
 
