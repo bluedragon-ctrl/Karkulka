@@ -317,28 +317,28 @@
     "The moon came out at noon to say hello."
   ],
   "openings": {
-    "swamp": ["Red Riding Hood set out by a muddy swamp.", "She started her walk at the edge of a swamp."],
-    "deadEnd": ["Red Riding Hood set out from a quiet dead end.", "She started her walk in a quiet corner of the forest."],
-    "den": ["Red Riding Hood set out not far from a wolf den.", "She started her walk a little too close to a wolf den."],
-    "home": ["Red Riding Hood set out not far from Grandma's house.", "She started her walk quite close to Grandma's house."],
-    "open": ["Red Riding Hood set out from a sunny meadow.", "She started her walk in an open, sunny spot."],
-    "corridor": ["Red Riding Hood set out along a long, straight path.", "She started her walk on a narrow path between the trees."],
-    "crossing": ["Red Riding Hood set out from a crossing of forest paths.", "She started her walk where several paths meet."],
-    "anywhere": ["Red Riding Hood set out along a forest path.", "One day, Red Riding Hood set off through the forest."]
+    "swamp": ["Red Riding Hood set out by a muddy swamp.", "She started her walk at the edge of a swamp.", "She set out with her basket by a swamp full of croaking.", "Red Riding Hood began her walk where the ground was soft and wet."],
+    "deadEnd": ["Red Riding Hood set out from a quiet dead end.", "She started her walk in a quiet corner of the forest.", "Red Riding Hood set out from a still, hidden corner.", "She began her walk in a tucked-away spot, far from any crowd."],
+    "den": ["Red Riding Hood set out not far from a wolf den.", "She started her walk a little too close to a wolf den.", "Red Riding Hood set out where the wolf's tracks were fresh.", "She began her walk close to where a wolf liked to hide."],
+    "home": ["Red Riding Hood set out not far from Grandma's house.", "She started her walk quite close to Grandma's house.", "Red Riding Hood set out almost in sight of Grandma's chimney.", "She began her walk so near to Grandma's that she could smell the soup."],
+    "open": ["Red Riding Hood set out from a sunny meadow.", "She started her walk in an open, sunny spot.", "Red Riding Hood set out in the open, with the sky wide above her.", "She began her walk in a bright clearing full of flowers."],
+    "corridor": ["Red Riding Hood set out along a long, straight path.", "She started her walk on a narrow path between the trees.", "Red Riding Hood set out down a path with trees on both sides.", "She began her walk in a long green tunnel of branches."],
+    "crossing": ["Red Riding Hood set out from a crossing of forest paths.", "She started her walk where several paths meet.", "Red Riding Hood set out where the paths split in many directions.", "She began her walk at a busy junction and had to choose."],
+    "anywhere": ["Red Riding Hood set out along a forest path.", "One day, Red Riding Hood set off through the forest.", "Red Riding Hood set off into the forest with her basket.", "Once upon a time, Red Riding Hood went walking in the woods."]
   },
   "basket": {
-    "grabbed": ["The wolf jumped out and grabbed the cake, but she ran away.", "A wolf snatched the cake from her basket, and she ran for it."],
-    "flowers": ["She picked a bunch of flowers for Grandma.", "She found pretty flowers and put them in her basket."],
-    "treasure": ["She found a shiny treasure and took it along.", "Something glittered on the path: a treasure!"]
+    "grabbed": ["The wolf jumped out and grabbed the cake, but she ran away.", "A wolf snatched the cake from her basket, and she ran for it.", "A wolf pounced on her basket and took the cake, but she got away.", "The wolf snapped up the cake, and she ran off without it."],
+    "flowers": ["She picked a bunch of flowers for Grandma.", "She found pretty flowers and put them in her basket.", "She gathered some flowers on the way for Grandma.", "Pretty flowers grew by the path, so she picked a few."],
+    "treasure": ["She found a shiny treasure and took it along.", "Something glittered on the path: a treasure!", "She spotted something shiny and tucked it into her basket.", "Hidden in the grass lay a little treasure, and she took it."]
   },
-  "swamp": ["Her socks got soaked in the swamp.", "She waded through a swamp, squelch, squelch.", "Her boots got muddy in a swamp."],
-  "bumps": ["She bumped into a tree.", "She walked right into a tree. Ouch!", "A tree got in her way, and she bumped her nose."],
+  "swamp": ["Her socks got soaked in the swamp.", "She waded through a swamp, squelch, squelch.", "Her boots got muddy in a swamp.", "She set out with her basket by a swamp full of croaking.", "Red Riding Hood began her walk where the ground was soft and wet."],
+  "bumps": ["She bumped into a tree.", "She walked right into a tree. Ouch!", "A tree got in her way, and she bumped her nose.", "She did not see the tree in time and bonked into it.", "Thump! A tree stood exactly where she wanted to go."],
   "endings": {
-    "home": ["And at last she knocked on Grandma's door.", "And at last she reached Grandma's house, and Grandma hugged her."],
-    "homeNoCake": ["And at last she knocked on Grandma's door, with no cake but a big story.", "And at last she reached Grandma's house, without the cake."],
-    "eaten": ["But then she walked right into the wolf's den, and that was the end of her trip.", "But the wolf was waiting at his den, and the trip ended there."],
-    "lost": ["And then she was so tired that she sat down under a tree for a long nap.", "And then, far from Grandma's house, she sat down for a long nap."],
-    "stopped": ["And there the story stops, somewhere in the forest.", "And that is where we left her, still in the forest."]
+    "home": ["And at last she knocked on Grandma's door.", "And at last she reached Grandma's house, and Grandma hugged her.", "Red Riding Hood set out almost in sight of Grandma's chimney.", "She began her walk so near to Grandma's that she could smell the soup."],
+    "homeNoCake": ["And at last she knocked on Grandma's door, with no cake but a big story.", "And at last she reached Grandma's house, without the cake.", "And at last she arrived, with no cake but a happy heart.", "And at last she knocked, hungry and cakeless, and Grandma laughed."],
+    "eaten": ["But then she walked right into the wolf's den, and that was the end of her trip.", "But the wolf was waiting at his den, and the trip ended there.", "But then the wolf at his den was too quick, and her trip ended there.", "But she walked too close to the wolf's den, and that was it for this trip."],
+    "lost": ["And then she was so tired that she sat down under a tree for a long nap.", "And then, far from Grandma's house, she sat down for a long nap.", "And then her legs gave out, and she curled up for a long rest.", "And then she ran out of steps and fell asleep in the middle of the forest."],
+    "stopped": ["And there the story stops, somewhere in the forest.", "And that is where we left her, still in the forest.", "And that is as far as she got this time.", "And the story ends here, with her still on the path."]
   },
   "shapedBy": {
     "teacher": {
