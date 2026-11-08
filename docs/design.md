@@ -2,7 +2,7 @@
 
 This file is the source of truth for the game's design. Update it in the same pull request as any change to how the game behaves. It started as a design spec written on claude.ai, which is now kept only as a historical reference.
 
-**Status:** version 1, her basket, and the [forest events and her story](#forest-events-and-her-story) are built and live at https://bluedragon-ctrl.github.io/Karkulka/. The [Later](#later) list and the [Open questions](#open-questions) at the end are what's next.
+**Status:** version 1, her basket, and the [forest events and her story](#forest-events-and-her-story) are built and live at https://bluedragon-ctrl.github.io/Karkulka/. The planned [events that change her basket](#next-events-that-change-her-basket-planned), the [Later](#later) list and the [Open questions](#open-questions) at the end are what's next.
 
 ## Purpose and audience
 
@@ -512,11 +512,70 @@ Fantasy sentences (from boldness 1.2): "A dragon asked her the way to the sea." 
 - `src/thoughts.ts`: says an event's thought line. `src/explain.ts`: the events, story and "Tell it again" cards. `src/ui/app.ts`: the checkbox, the "Show events" button, the pop-up words and the story box; `src/ui/board.ts`: the event numbers layer; `src/ui/symbols.ts`: the footprint and cloud marks.
 - Settings: `events: true` by default. "Show events" is not saved.
 
+### Next: events that change her basket (planned)
+
+Not built yet. This is the plan; move each part into [Forest events and her story](#forest-events-and-her-story) and the sections above when it is built, and replace the proposed numbers with measured ones.
+
+**Idea.** A few new forest events do something to her basket: a fox snatches the cake, Grandma's neighbour gives her flowers, a magpie drops a treasure. Every event so far stays harmless. The two kinds side by side make one lesson from both ends: the owl is not in her input, so her walk does not change; the fox changes what is pinned in her memory (the basket tokens), so her next steps change. After Grandma's lessons, flowers from the neighbour make her turn for home as if she had done the errand herself; without the cake, the next den is the end.
+
+This is a chatbot reading whatever lands in its context: a search result, a pasted text, a tool's answer. It acts on it, true or not, and a planted instruction (prompt injection) steers it the same way.
+
+**Events stay optional.** Basket events are forest events, so the same Forest tab checkbox, "Things happen in the forest", turns them off with all the others; there is no second switch. With it off a trip alone is exactly as before: no spots, no pop-ups, no effects, and the story tells only her own trip. Lessons, practice and the test trips never have events, whether the checkbox is on or off, so the charts and every measured number stay comparable.
+
+**Rules**
+
+- **Trip alone only.** Effects never happen in lessons (the teachers would have to react to events she cannot see), in practice (the judges would score luck: flowers from the neighbour would earn Grandma's points, and a cake taken by the fox would cost −0.5 blamed on her own moves) or on test trips. So she never trained on them: a stolen cake in mid-forest is new to her, like a model meeting something its training never showed.
+- **The effect belongs to the kind, not the version.** The fox always takes the cake; only the wording varies. Whether an event happens depends only on where she walks, so the walk stays reproducible from the walk's own randomness; the story's randomness still picks only the wording.
+- **Effects the code knows** (a new data-file field, `effect`, like places and triggers):
+  - `takeCake`: the cake is gone (the basket's cake token turns to no), exactly as when the wolf grabs it, so the next den eats her. Without the cake there is nothing to take: the event still happens, told with one of its `quiet` versions ("The fox sniffed her empty basket and trotted off."), and nothing changes.
+  - `giveFlowers`: one bunch of flowers into her basket (the flowers token counts up, 0 / 1 / 2+), as if she had picked a patch.
+  - `giveTreasure`: one treasure into her basket.
+- **When it takes effect.** Right after the step that sets it off, before her next move: the basket she reads at the next step already shows it (in the memory strip's pinned squares too).
+- **Placement.** The same spots and the same rules as the other events: the new kinds only change which events sit on some spots, never the spots themselves. Adding them changes the events of existing forest codes; say so in the pull request.
+- **No save-version bump.** No new tile kind and no new model input: the cake, flowers and treasure tokens already exist.
+
+**The new kinds (draft, for review).** The next free kind numbers.
+
+| # | Event | Fits | Set off | Effect | Versions (story sentence) | Quiet versions | Pop-up |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| 19 | Sly fox | Within 2 steps of a den | Step | `takeCake` | A sly fox pretended to be lost, and while she showed it the way, it ran off with the cake. / A fox snatched the cake from her basket and vanished into the bushes. | The fox sniffed her empty basket and trotted off. | A fox! |
+| 20 | Grandma's neighbour | Within 4 steps of home | Step | `giveFlowers` | Grandma's neighbour waved from her garden and gave her a bunch of flowers. / A kind old neighbour picked some flowers for Grandma and put them in her basket. | | Flowers! |
+| 21 | Magpie's gift | Open ground | Step | `giveTreasure` | A magpie dropped something shiny into her basket: a treasure! / A magpie gave her a glittering stone, then flew away laughing. | | Shiny! |
+
+Thoughts in her voice: "Hey! My cake!", "Thank you! Flowers for Grandma.", "Ooh, shiny!".
+
+**What it changes elsewhere**
+
+- **Her basket on a trip.** `Walker` gets the event effects applied after each step (a small hook it calls with the step's positions), and records them as `effects` (step and effect), so the trip record, the status line ("no cake: the next den is the end!" also after the fox), the trip report and the memory strip all show them. The trip report's basket row names the source: "the fox took the cake at step 7", "picked 1 of 3 flower patches, plus a bunch from Grandma's neighbour". The "picked … of …" counts stay pickups from tiles only.
+- **Why did she do that?** When she is eaten after the fox took the cake: "The fox took the cake at step 7, so the next wolf den was the end." When she heads home right after the neighbour's flowers after Grandma's lessons: a note that the flowers in her basket told her the errand was done.
+- **Her story.** An effect event she met is always told (like the basket and the wolf), in the version that happened, and stands in for a basket sentence. A made-up part is never an effect event: a borrowed "the fox stole her cake" would contradict how she arrived, and made-up parts never change the basket or the ending.
+- **Pop-ups and thoughts** as for the other events; the cake pop-up uses the crossed-out cake icon, the gifts the flower and gem icons.
+- **Tests change.** "A trip walks the same with events on and off" holds for the harmless events only. New tests: an effect kind changes the basket at the right step and only once; `takeCake` without the cake changes nothing; a trip with effect events is reproducible from the same walk randomness and spots; with events off nothing differs from before; lessons, practice and test trips never apply effects; a made-up sentence is never an effect event.
+
+**Mapping row (to add when built)**
+
+| In the game | In a language model |
+| --- | --- |
+| A fox takes the cake, a neighbour gives flowers: events that change her pinned basket, so her next steps change | Text that lands in a chatbot's context (a search result, a tool's answer, a prompt injection) steers what it writes, true or not |
+
+**LM corner card (draft, under 300 characters).** *Basket events* (by "Things happen in the forest" too, and on the status line or story after one; pulses at the first basket event in a session): "The owl doesn't change her walk, but the fox does: it changed her basket, which she reads at every step. A chatbot is the same: whatever lands in its context, a search result or a planted instruction, steers what it writes, true or not."
+
+**Numbers to measure** (32 forest codes, 100 lessons from the mother, from the father and from Grandma, default energy and boldness): how often each new kind is placed and met per trip; home, home without the cake and eaten with events on against off (the fox's cost); after Grandma's lessons, how often she turns for home within 3 steps of the neighbour's flowers, against a trip where she has picked them herself. Put the numbers in the pull request.
+
+**Build order** (each step its own commit; the design doc updated as parts are built)
+
+1. Data and effects: the `effect` field and `quiet` versions in the data file and its test, the three kinds, the effect hook in `Walker` and `effects` on the trip, and the tests above.
+2. Trip alone: pop-ups, thoughts, the status line, the trip report's basket row, "Why did she do that?", and the basket-events card.
+3. The story: effect events always told, never borrowed.
+4. Measure, then move the finished parts into [Forest events and her story](#forest-events-and-her-story) and the sections above.
+
+**Not in this plan.** Events that change her energy (a snack, a stumble): energy is not in her input, so she cannot react to them, and on short trips ±5 energy rarely changes how a trip ends. They fit better with the berry bush below, once energy is a pinned token she can sense.
+
 ### Later
 
 - A simple "inside her head" network picture on the main screens
 - Two models side by side for comparison
-- Berry bush that restores energy (+15, once per trip), with her energy level as an extra pinned token in her basket (a "how tired am I" sense, like a model knowing its remaining output budget); it would be the 8th and last tile kind the link format fits. Parents never teach the detour, so only practice can discover it: fine-tuning learning behaviour that was never in the training examples
+- Berry bush that restores energy (+15, once per trip), with her energy level as an extra pinned token in her basket (a "how tired am I" sense, like a model knowing its remaining output budget); it would be the 8th and last tile kind the link format fits. Parents never teach the detour, so only practice can discover it: fine-tuning learning behaviour that was never in the training examples. With energy pinned, forest events that change her energy (a snack, a stumble) would also become worth adding, since she could then sense them
 - Phone layout
 - A pickup action: a fifth output, "pick up", instead of picking items up just by stepping on them. It is like a chatbot choosing to call a tool instead of writing the next word, and each pickup becomes a choice a judge can reward on its own. Costs: the model's outputs, vocabulary and save files change (a save-version bump), and it needs an energy cost per pickup, a decision whether the parents ever demonstrate it, and the judges' basket points measured again
 
