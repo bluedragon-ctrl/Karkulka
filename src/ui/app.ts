@@ -14,7 +14,7 @@ import { EvalPoint, FIXED, JUDGES, Judge, PRACTICE_STARTS, PracticeStarts, Train
 import { WorkerRequest, runTraining } from '../workerTypes';
 import {
   DEFAULT_SIZE, FLOWERS, Forest, HOME, MOVES, MOVE_ARROWS, MOVE_NAMES, PATH, SECTOR_WORDS, SWAMP, TREASURE, TREE, Tile, WOLF, copyForest,
-  forestFromTiles, homeSector, isItem, moveHome, neighbor, unreachableTiles, walkingDistances,
+  forestFromTiles, homeSector, isItem, isWalkable, moveHome, neighbor, unreachableTiles, walkingDistances,
 } from '../world';
 import { Board } from './board';
 import { changeChart, outcomeChart } from './charts';
@@ -52,6 +52,8 @@ interface Settings {
   /** Events placed afresh for every trip alone instead of fixed per forest code (missing in older saves: off). */
   newPlaces: boolean;
   heat: boolean;
+  /** The four arrows around her on a trip alone (missing in older saves: on). */
+  arrows: boolean;
   brush: Tile;
 }
 
@@ -60,7 +62,7 @@ const crossedCake = () => s('g', {}, s('g', { opacity: 0.6 }, cake(0, 0, 9)), s(
 
 const DEFAULTS: Settings = {
   memory: 'medium', hint: false, teacher: 'mother', lessons: 100, practice: 1000, judge: 'grandma', practiceStarts: 'near',
-  energy: 80, boldness: 0.7, fog: false, thoughts: true, events: true, newPlaces: false, heat: true, brush: TREE,
+  energy: 80, boldness: 0.7, fog: false, thoughts: true, events: true, newPlaces: false, heat: true, arrows: true, brush: TREE,
 };
 
 const TEACHERS: { id: TeacherChoice; name: string; text: string }[] = [
@@ -282,12 +284,14 @@ export class App {
     return null;
   }
 
-  /** The "Show events" button, shown while events are on (on the Forest tab only with fixed places). */
-  private showEventsButton(): HTMLElement | null {
+  /** The "Show events" checkbox on the Forest tab, shown while events are on. */
+  private showEventsCheck(): HTMLElement | null {
     if (!this.settings.events) return null;
-    if (this.tab === 'forest' && this.settings.newPlaces) return h('p', { class: 'muted' }, 'The events move to new places on every trip.');
-    return h('button', { class: 'subtle', 'aria-pressed': String(this.showEvents), title: 'For testing: show where the hidden events are, with their numbers',
-      onclick: () => { this.showEvents = !this.showEvents; this.renderBoard(); this.renderPanel(); } }, this.showEvents ? 'Hide events' : 'Show events');
+    return h('label', { class: 'check', title: 'For testing: show where the hidden events are, with their numbers' },
+      h('input', { type: 'checkbox', checked: this.showEvents, onchange: (e: Event) => {
+        this.showEvents = (e.target as HTMLInputElement).checked; this.renderBoard(); this.renderPanel();
+      } }),
+      h('span', {}, 'Show events (for testing)', this.showEvents && this.settings.newPlaces ? h('small', { class: 'muted' }, ' — they move every trip, so they show on the Trip alone tab once she starts') : null));
   }
 
   private markTrained() { this.modelTiles = store.packTiles(this.forest.tiles); }
@@ -704,7 +708,7 @@ export class App {
 
   private chooseStart(i: number) {
     if (!this.model || !this.trained) return;
-    if (this.forest.tiles[i] !== PATH) return;
+    if (!isWalkable(this.forest.tiles[i])) return;
     this.stopTrip();
     this.walker = new Walker(this.forest, this.model, i, this.settings.energy, this.settings.boldness, this.rng);
     this.tripStopped = false;
@@ -1107,7 +1111,7 @@ export class App {
       b.setTrace(w.positions);
       b.setPicked(w.trip.picked);
       b.setRed(w.pos, { energy: w.energyLeft / w.energy, sitting: w.outcome === 'lost', animate: w.t > 0 });
-      if (this.tripLive(w)) b.setArrows(w.pos, w.tempered(), this.tints(w.pos));
+      if (this.tripLive(w) && this.settings.arrows) b.setArrows(w.pos, w.tempered(), this.tints(w.pos));
       if (this.settings.fog && this.tripLive(w)) b.setFog(w.pos);
     }
     if (this.tab === 'practice') {
@@ -1325,7 +1329,7 @@ export class App {
             this.saveSoon(); this.showCard('newPlaces'); this.renderBoard(); this.renderPanel();
           } }),
           h('span', {}, this.hq('New places every trip', 'newPlaces'))) : null,
-        this.showEventsButton()),
+        this.showEventsCheck()),
       this.next('Next: Lessons', 'lessons'),
     );
   }
@@ -1409,8 +1413,8 @@ export class App {
     add(body,
       h('h2', {}, this.hq('Trip alone', 'view')),
       h('p', {}, this.hq(
-        w ? 'Click a path tile to pick where she starts, then let her walk to grandma\'s house alone. The same tile again gives a different walk.'
-          : 'Click a path tile to pick where she starts, then let her walk to grandma\'s house alone.', 'sampling')),
+        w ? 'Click a tile to pick where she starts (a path, swamp, flowers or treasure), then let her walk to grandma\'s house alone. The same tile again gives a different walk.'
+          : 'Click a tile to pick where she starts (a path, swamp, flowers or treasure), then let her walk to grandma\'s house alone.', 'sampling')),
       h('div', { class: 'row' },
         h('button', { onclick: () => this.stepTrip(), disabled: !walking || !!this.auto, title: 'One move, then wait' }, 'Next step'),
         h('button', { class: 'primary', onclick: () => this.toggleAuto(), disabled: !walking, title: 'Walk on step by step until the trip ends' }, this.auto ? 'Pause' : 'Walk through'),
@@ -1435,7 +1439,9 @@ export class App {
       h('label', { class: 'check' }, h('input', { type: 'checkbox', checked: this.settings.thoughts, onchange: (e: Event) => {
         this.settings.thoughts = (e.target as HTMLInputElement).checked; this.saveSoon(); if (!this.settings.thoughts) this.board.say(null); this.showCard('thoughts');
       } }), h('span', {}, this.hq('Her thoughts (just for fun)', 'thoughts'))),
-      this.showEventsButton()),
+      h('label', { class: 'check' }, h('input', { type: 'checkbox', checked: this.settings.arrows, onchange: (e: Event) => {
+        this.settings.arrows = (e.target as HTMLInputElement).checked; this.saveSoon(); this.renderBoard(); this.showCard('arrows');
+      } }), h('span', {}, this.hq('Arrows around her', 'arrows')))),
       h('div', { class: 'row' }, this.next('Practice', 'practice'), this.next('Inside the model', 'inside')),
     );
   }

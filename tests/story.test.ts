@@ -6,6 +6,7 @@ import { Walker } from '../src/sim';
 import { MAX_SENTENCES, TripRecord, fantasyShare, madeUpExpected, shapedBy, storyCount, tellStory } from '../src/story';
 import { CAST, EventTracker, STORY, eventKind, eventSpotTiles, metText, placeOf, placeStoryEvents } from '../src/storyEvents';
 import { FIXED, newStats, trainLessons } from '../src/train';
+import { FLOWERS } from '../src/world';
 
 /** Some real trips in one forest, with the events they met (basket events included). */
 function trips(n = 30): TripRecord[] {
@@ -26,6 +27,15 @@ function trips(n = 30): TripRecord[] {
 
 describe('her story', () => {
   const recs = trips();
+
+  it('tells about flowers or treasure she started on', () => {
+    const f = generateForest('KARKULKA');
+    const start = f.tiles.indexOf(FLOWERS);
+    const rec: TripRecord = { forest: f, start, positions: [start], results: [], outcome: null, met: [], placed: [], shapedBy: null };
+    const story = tellStory(rec, 0.1, mulberry32(1));
+    expect(story[1].part).toBe('basket');
+    expect(STORY.basket.flowers).toContain(story[1].text);
+  });
 
   it('has trips with a basket event she met, told as it turned out', () => {
     const withEffect = recs.filter((rec) => rec.met.some((e) => eventKind(e.kind)!.effect));

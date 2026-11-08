@@ -71,6 +71,13 @@ export class Walker {
   ) {
     this.pos = start;
     this.positions = [start];
+    // Starting on flowers or treasure, she picks them up before her first move.
+    const st = forest.tiles[start];
+    if (st === FLOWERS || st === TREASURE) {
+      this.trip.picked.push(start);
+      if (st === FLOWERS) this.trip.basket.flowers++;
+      else this.trip.basket.treasure++;
+    }
     this.history = { views: [viewAt(forest, start)], moves: [], sectors: [homeSector(forest, start)], baskets: [snapBasket(this.trip.basket)] };
     this.baskets = [snapBasket(this.trip.basket)];
     this.energyLeft = energy;

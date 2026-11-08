@@ -9,7 +9,7 @@
 import type { Rng } from './rng';
 import type { Outcome } from './sim';
 import { CAST, EventMet, STORY, eventKind, metText, placeOf } from './storyEvents';
-import { Forest, StepResult, SWAMP } from './world';
+import { FLOWERS, Forest, StepResult, SWAMP, TREASURE } from './world';
 
 /** What really happened on a trip (a `Walker` plus the events it met). */
 export interface TripRecord {
@@ -83,6 +83,9 @@ export function tellStory(rec: TripRecord, boldness: number, rng: Rng): StorySen
 
   // The middle, in the order it happened.
   const middle: Happening[] = [];
+  // Starting on flowers or treasure, she picked them up before her first move.
+  const startTile = f.tiles[rec.start];
+  if (startTile === FLOWERS || startTile === TREASURE) middle.push({ t: 0, s: truth(pickFrom(rng, STORY.basket[startTile === FLOWERS ? 'flowers' : 'treasure']), 'basket'), keep: true });
   rec.results.forEach((r, k) => {
     if (r === 'grabbed' || r === 'flowers' || r === 'treasure') middle.push({ t: k + 1, s: truth(pickFrom(rng, STORY.basket[r]), 'basket'), keep: true });
   });

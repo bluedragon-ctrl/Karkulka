@@ -7,7 +7,7 @@ import { Walker } from '../src/sim';
 import { costToHome, endsAtDen, walkLesson } from '../src/teachers';
 import { BASKET_FEATS, MEMORY_PAIRS, SLOT_FEATS, VIEW_FEATS, encodeContext, inputSize, buildVocabulary } from '../src/tokens';
 import { FIXED, JUDGES, Run, chooseTeacher, evalEvery, guessesRight, headsHome, judgeMaps, learnFromRun, practiceSetup, practiceStartTiles, practiceWalker, startTiles, judgeRewards, judgeScore, homeShare, newStats, runOf, trainLessons, trainPractice } from '../src/train';
-import { Forest, HOME, Move, PATH, StepResult, SWAMP, TREE, Tile, WOLF, allReachable, forestFromTiles, neighbor, pathTiles, walkableTiles } from '../src/world';
+import { FLOWERS, Forest, HOME, Move, PATH, StepResult, SWAMP, TREASURE, TREE, Tile, WOLF, allReachable, forestFromTiles, neighbor, pathTiles, walkableTiles } from '../src/world';
 
 const cfg = { memory: MEMORY_PAIRS.medium, hint: false, hidden: 16 };
 
@@ -307,6 +307,22 @@ describe('judges', () => {
       expect(w.t).toBeLessThanOrEqual(15);
       if (outcome === 'lost') expect(w.energyLeft).toBe(0);
       expect(w.energy - w.energyLeft).toBeGreaterThanOrEqual(w.t); // swamp steps cost more than 1
+    }
+  });
+
+  it('starting on flowers or treasure picks them up before the first move', () => {
+    const f = generateForest('KARKULKA');
+    const m = createModel(cfg, mulberry32(9));
+    for (const t of [FLOWERS, TREASURE]) {
+      const start = f.tiles.indexOf(t as Tile);
+      expect(start).toBeGreaterThanOrEqual(0);
+      const w = new Walker(f, m, start, 30, 1, mulberry32(3));
+      expect(w.basket[t === FLOWERS ? 'flowers' : 'treasure']).toBe(1);
+      expect(w.history.baskets[0]).toEqual(w.baskets[0]);
+      w.run();
+      // Never picked twice, even if she walks back over it.
+      expect(w.pickups[t === FLOWERS ? 'flowers' : 'treasure']).toBeGreaterThanOrEqual(1);
+      expect(w.trip.picked.filter((i) => i === start)).toHaveLength(1);
     }
   });
 });

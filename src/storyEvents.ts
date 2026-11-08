@@ -18,7 +18,7 @@ export const TRIGGERS = ['step', 'hear'] as const;
 export type Trigger = typeof TRIGGERS[number];
 
 export interface EventKind {
-  /** The kind number: permanent, never reused (the "Show events" button draws it). */
+  /** The kind number: permanent, never reused ("Show events" draws it). */
   id: number;
   name: string;
   fits: Place;
