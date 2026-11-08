@@ -51,6 +51,8 @@ export interface TestTrip {
   sureMoves: number;
   /** Event kinds she met. */
   events: number[];
+  /** Times a walking wolf met her (0 when none are out). */
+  wolfMet: number;
 }
 
 export interface TestReport {
@@ -75,6 +77,8 @@ export interface TestReport {
   /** How often the wolf grabbed the cake and the fox took it (trips). */
   cakeByWolf: number;
   cakeByFox: number;
+  /** Trips in which a walking wolf met her. */
+  walkingWolf: number;
   /** Event kinds by how many trips met them, most first. */
   topEvents: { kind: number; name: string; trips: number }[];
   /** How many different walks the trips made (two walks are the same when every step is). */
@@ -134,6 +138,7 @@ function tripOf(f: Forest, w: Walker, shortest: number, tracker: EventTracker | 
     circles: [...visits.values()].some((v) => v >= CIRCLE_VISITS),
     sureMoves: w.decisions.filter((d, t) => d.tempered[w.history.moves[t]] >= SURE_FROM).length,
     events: tracker?.met.map((e) => e.kind) ?? [],
+    wolfMet: w.wolfMet.length,
   };
 }
 
@@ -169,6 +174,7 @@ export function summarize(f: Forest, list: TestTrip[]): TestReport {
     sure: moves ? list.reduce((a, t) => a + t.sureMoves, 0) / moves : 0,
     cakeByWolf: list.filter((t) => t.cakeBy === 'wolf').length,
     cakeByFox: list.filter((t) => t.cakeBy === 'fox').length,
+    walkingWolf: list.filter((t) => (t.wolfMet ?? 0) > 0).length,
     topEvents,
     distinctWalks: new Set(list.map((t) => t.positions.join(','))).size,
     trips: list,
@@ -201,6 +207,13 @@ export function factoids(f: Forest, r: TestReport): string[] {
     if (exact) out.push(`In ${trips(exact)} she found the shortest way home exactly.`);
     else out.push(`Her quickest trip home took ${quick.steps} steps.`);
     if (long.steps - long.shortest >= 10) out.push(`Her longest way round: ${long.steps} steps to get home, where ${long.shortest} would have done.`);
+  }
+
+  if (f.wolves) {
+    const one = f.wolves === 1;
+    out.push(r.walkingWolf
+      ? `${one ? 'The walking wolf' : 'A walking wolf'} caught up with her in ${trips(r.walkingWolf)} of ${list.length}.`
+      : `${one ? 'The walking wolf never' : 'No walking wolf ever'} caught up with her in ${list.length} trips.`);
   }
 
   const wolfHome = list.filter((t) => t.cakeBy === 'wolf' && t.outcome === 'home').length;

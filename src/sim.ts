@@ -2,8 +2,9 @@
 import { Model, forward, softmax } from './model';
 import type { Rng } from './rng';
 import type { History } from './teachers';
+import { WalkingWolf, viewWithWolves, wolvesAfter, wolvesFor } from './prowler';
 import { encodeContext, snapBasket } from './tokens';
-import { Basket, Effect, FLOWERS, Forest, Move, StepResult, TREASURE, BasketState, homeSector, newBasketState, pickUpAtStart, step, viewAt } from './world';
+import { Basket, Effect, FLOWERS, Forest, Move, StepResult, TREASURE, BasketState, homeSector, newBasketState, pickUpAtStart, step } from './world';
 
 export type Outcome = 'home' | 'eaten' | 'lost';
 
@@ -55,6 +56,10 @@ export class Walker {
   events: StepEvents | null = null;
   /** Basket changes made by forest events, in order. */
   readonly effects: EffectDone[] = [];
+  /** The walking wolves the forest has out (`Forest.wolves`); none by default. */
+  readonly wolves: WalkingWolf[];
+  /** The steps (0-based move index) at which a walking wolf met her. */
+  readonly wolfMet: number[] = [];
   energyLeft: number;
   outcome: Outcome | null = null;
   private pending: Decision | null = null;
@@ -72,7 +77,9 @@ export class Walker {
     this.pos = start;
     this.positions = [start];
     pickUpAtStart(forest, start, this.trip);
-    this.history = { views: [viewAt(forest, start)], moves: [], sectors: [homeSector(forest, start)], baskets: [snapBasket(this.trip.basket)] };
+    // Without walking wolves, no randomness is used here, so trips are as before.
+    this.wolves = wolvesFor(forest, start, rng);
+    this.history = { views: [viewWithWolves(forest, start, this.wolves)], moves: [], sectors: [homeSector(forest, start)], baskets: [snapBasket(this.trip.basket)] };
     this.baskets = [snapBasket(this.trip.basket)];
     this.energyLeft = energy;
     const all = (t: number) => forest.tiles.filter((x) => x === t).length;
@@ -121,6 +128,10 @@ export class Walker {
     this.decisions.push({ ...d, tempered, temperature: this.temperature });
     this.pending = null;
     const r = step(this.forest, this.pos, m, this.trip);
+    if (this.wolves.length) {
+      const met = wolvesAfter(this.wolves, r.pos, r.result, this.trip);
+      if (met !== r.result) { r.result = met; this.wolfMet.push(this.t); }
+    }
     this.history.moves.push(m);
     this.blocked.push(r.result === 'blocked');
     this.results.push(r.result);
@@ -135,7 +146,7 @@ export class Walker {
     if (r.result === 'home') this.outcome = 'home';
     else if (r.result === 'eaten') this.outcome = 'eaten';
     else {
-      this.history.views.push(viewAt(this.forest, r.pos));
+      this.history.views.push(viewWithWolves(this.forest, r.pos, this.wolves));
       this.history.sectors.push(homeSector(this.forest, r.pos));
       this.history.baskets.push(snapBasket(this.trip.basket));
       if (this.energyLeft <= 0) this.outcome = 'lost';

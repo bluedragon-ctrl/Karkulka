@@ -286,6 +286,18 @@ export function wolfHead(S: number): SVGGElement {
   );
 }
 
+/**
+ * The walking wolf on the board, centred on (0, 0): the wolf's head with paws, inside the den's
+ * dashed red edge (round here), because to her he is just a wolf den that moves.
+ */
+export function walkingWolf(S: number): SVGGElement {
+  const paw = (x: number) => s('ellipse', { cx: x, cy: S * 0.33, rx: S * 0.09, ry: S * 0.06, fill: '#6d6d74', stroke: COLORS.ink, 'stroke-width': S * 0.015 });
+  return s('g', { class: 'walking-wolf' },
+    s('circle', { r: S * 0.47, fill: '#ffffffaa', stroke: COLORS.danger, 'stroke-width': S * 0.06, 'stroke-dasharray': `${S * 0.14} ${S * 0.08}` }),
+    paw(-S * 0.2), paw(S * 0.2),
+    s('g', { transform: `translate(0 ${-S * 0.02})` }, wolfHead(S * 0.62)));
+}
+
 /** A small tile for tokens, readable at tiny sizes. */
 function miniTile(t: Tile, x: number, y: number, c: number): SVGElement {
   const g = s('g', { transform: `translate(${x},${y})` });

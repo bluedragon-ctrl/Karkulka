@@ -1,7 +1,7 @@
 /** The forest board: tiles, overlays, figures, arrows and fog, all in one SVG. */
 import { DX, DY, Forest, Move, MOVE_NAMES, Tile, isWalkable, xyOf } from '../world';
 import { clear, s } from './dom';
-import { COLORS, TeacherFigure, arrowPath, heartPath, parentFigure, redFigure, tileSymbol, wolfHead } from './symbols';
+import { COLORS, TeacherFigure, arrowPath, heartPath, parentFigure, redFigure, tileSymbol, walkingWolf, wolfHead } from './symbols';
 
 export const T = 40;
 
@@ -21,6 +21,8 @@ export class Board {
   private energyBar: SVGGElement;
   private parent: SVGGElement | null = null;
   private parentWho: TeacherFigure | null = null;
+  /** The walking wolves (an option): drawn as wolves for the player; to her each is a den. */
+  private wolves: SVGGElement[] = [];
   private painting = false;
   private redPos = -1;
   /** Her thought bubble: follows her, drawn above everything (fog and outcome pictures too). */
@@ -229,6 +231,24 @@ export class Board {
       );
       this.sweat.setAttribute('visibility', e < 0.25 && !opts.sitting ? 'visible' : 'hidden');
     } else this.sweat.setAttribute('visibility', 'hidden');
+  }
+
+  /** The walking wolves on their tiles (-1: gone with the cake); an empty list hides them all. */
+  setWolves(tiles: readonly number[], animate = true) {
+    while (this.wolves.length < tiles.length) {
+      const el = s('g', { class: 'actor wolf', visibility: 'hidden' }, walkingWolf(T * 0.95), s('title', {}, 'A walking wolf: to her he looks like a wolf den'));
+      this.red.before(el);
+      this.wolves.push(el);
+    }
+    this.wolves.forEach((el, k) => {
+      const i = tiles[k] ?? -1;
+      if (i < 0) { el.setAttribute('visibility', 'hidden'); return; }
+      const [cx, cy] = this.center(i);
+      // One that was hidden appears in place instead of sliding in from where it was last.
+      el.classList.toggle('no-anim', !animate || el.getAttribute('visibility') === 'hidden');
+      el.style.transform = `translate(${cx}px, ${cy}px)`;
+      el.setAttribute('visibility', 'visible');
+    });
   }
 
   setParent(i: number | null, who: TeacherFigure = 'mother') {
