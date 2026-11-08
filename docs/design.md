@@ -2,7 +2,7 @@
 
 This file is the source of truth for the game's design. Update it in the same pull request as any change to how the game behaves. It started as a design spec written on claude.ai, which is now kept only as a historical reference.
 
-**Status:** version 1 and her basket are built and live at https://bluedragon-ctrl.github.io/Karkulka/. The [Later](#later) list and the [Open questions](#open-questions) at the end are what's next.
+**Status:** version 1 and her basket are built and live at https://bluedragon-ctrl.github.io/Karkulka/. The planned [trip story and forest events](#next-trip-story-and-forest-events-planned), the [Later](#later) list and the [Open questions](#open-questions) at the end are what's next.
 
 ## Purpose and audience
 
@@ -417,9 +417,115 @@ Three kinds of judge problem sit side by side, each with its own card: the **cro
 
 **Not measured again with the basket:** the curriculum numbers and the share of the wolf's lessons that end at a den.
 
+### Next: trip story and forest events (planned)
+
+Not built yet. This is the plan; move each part into the sections above (rules, mapping table, "?" table, user flow, visuals) when it is built, and replace the proposed numbers with measured ones.
+
+**Idea.** The forest is full of little events she cannot see: an owl, a frog, an empty hut. They are hidden, they never change her walk or any judge's points, and walking through one makes it happen. After every trip alone a short **trip story** retells what happened, from her trip record and the events she met, mixed with bits the storyteller **makes up**. True parts and made-up parts carry different marks, and the bolder she is, the more is made up.
+
+This turns the story into the game's clearest hallucination lesson. The storyteller is like a chatbot answering from what it was given: the trip record is the facts in its input, and where it fills in from imagination it says things that sound just as true. At medium boldness it borrows events from this forest that she never reached (believable lies, the hardest to spot, like real hallucinations, which are built from things the model knows); at high boldness it adds pure fantasy (temperature). A second lesson sits with the events themselves: she cannot see them and nobody scores them, so they never change what she does, just as only a model's input and what its training rewarded steer what it writes.
+
+**Rules**
+
+- **Placement.** Each forest gets about 12 event spots (proposed; tuned so an average trip meets 2–4 events). The number of spots does not grow with the cast: as more kinds are added, each forest gets a different mix of them, so forests feel more different from each other. Spots come from their own seeded stream, `story:` + code + size, worked out from the current tiles: the same forest code always has the same events in the same spots, so a class can compare ("did yours meet the owl?"). Forest codes, the tiles, saves and links do not change. Editing or changing the forest works the placement out again from the new tiles, so a spot whose tile is no longer walkable drops out and other spots may move.
+- **Spots first, then kinds.** Placement first picks the spots from the tiles alone (shuffled walkable tiles, taken one by one while they keep their distance), then gives each spot a kind that fits its place and is not used yet in this forest, from a second seeded stream. So adding or removing kinds in the data file never moves the spots, only changes which events sit on some of them. It still changes the events of existing forest codes; say so in the pull request that changes the cast. A spot where no unused kind fits stays empty; "Anywhere" kinds keep that rare.
+- **Where they go.** On path or swamp tiles only, never on a den, home, flowers or treasure; at most one spot of each kind per forest; no two spots within each other's 3 × 3 view. Each kind has a place it fits (below), so stories hang together: a frog by a swamp, paw prints near a den, a hut at a dead end, Grandma's cat near the house.
+- **What sets one off.** Most events happen when she steps onto the spot. A few sound events (marked *hear* in the cast) happen when the spot first comes into her 3 × 3 view. Each spot happens at most once per trip; starting on a spot does not set it off.
+- **Same spot, varying outcome.** How an event turns out is picked when it happens, from 2–3 versions (the owl asks a riddle, or is fast asleep), using the story's own randomness. Like her thoughts, events and the story never use the walk's randomness, so they never change her walk.
+- **No effect on anything else.** `step()`, her views, the vocabulary, lessons, practice and every judge's points stay as they are. Events happen on a trip alone only; lessons and practice (watched or not) ignore them.
+- **Events on or off.** A checkbox in the Forest tab's options, "Things happen in the forest", on by default, kept in the browser save with the other settings (not in links; no save-version bump, a missing setting means on). With it off there are no event spots, pop-ups or event thoughts, and the story tells only her own trip (start, basket, wolf, swamps, bumps, ending) and its made-up parts.
+- **"Show events" button (for testing).** On the Forest tab and the Trip alone tab, shown while events are on. It toggles each spot's kind number (from the cast list below) on its tile, in a small white circle with a dark border, drawn above the fog. It is off by default and not saved. Event spots are otherwise never drawn on the board. It may be removed or hidden once the events are well tested.
+
+**During the trip** (Next step and Walk through; Instant run skips both, but the story still has the events)
+
+- A short pop-up word over her when an event happens ("Hoo-hoo!", "Ribbit!"), like "Flowers!", gone within a second.
+- A thought line, treated like a basket event (always worth a thought, still keeping the 2-step gap): "Who's there? Just an owl."
+
+**The story after the trip**
+
+- A "Her story" box after "How was the trip for her?", with a "?" for the story card, on every trip end (home, eaten, lost, or Stop).
+- Built from the trip record, in order: an opening (where she set out: "by a swamp", "at a quiet dead end"), one sentence for each event she met, her basket (flowers, treasure, the wolf grabbing the cake), at most one sentence each about swamps and bumps, made-up sentences in between, and the ending ("…and at last she knocked on Grandma's door.", "…and sat down under a tree for a long nap.", or the wolf, nothing graphic). It closes with one line naming who shaped her: her practice judge if she had practice, otherwise her teacher ("The magpie had taught her that shiny things matter most.").
+- About 4–7 sentences. When there is more to tell, the sound events, swamps and bumps go first; the ending, the basket, the wolf and the events she stepped on always stay.
+- **Marks.** Each true sentence starts with a small brown footprint, each made-up one with a grey dashed cloud and is set in italics (shape plus colour, plus the type). A line under the story counts them ("4 true, 1 made up").
+- **What may be made up.** Only extra happenings in the middle. The start, the basket, the wolf and the ending always come from the record, so a made-up part never changes how the trip ended.
+- **How much is made up (proposed, to be tuned).** Boldness 0.1–2.5, 0.7 by default:
+  - below 0.5: nothing;
+  - 0.5 up to 1.2: borrowed events, one made-up sentence in about every other story at the default, about one per story at 1.0. A borrowed event is a kind placed in this forest that she did not meet on this trip (with events off, any kind from the cast);
+  - from 1.2: borrowed events and pure fantasy, more of both as boldness rises, up to about half the sentences at 2.5.
+- **Tell it again.** A button under the story tells the same trip again: the true parts and their order stay, the wording and the made-up parts are new. Walking again from the same tile makes a different trip, so a different story.
+
+**The event data file.** The cast will grow, so it lives in its own data file, `src/data/storyEvents.json`, not in code: adding an event means adding an entry there, with no code change, as long as it uses a place and a trigger the code already knows. The code imports it (Vite reads JSON directly; `tsconfig.json` gets `resolveJsonModule`), so it is built into the page and the game still needs no server.
+
+- Each entry: `id` (the kind number), `name`, `fits` (one of the places below), `trigger` (`step` or `hear`), `versions` (2 or more story sentences), `thoughts` (1 or more lines in her voice), `popup` (one short word or two). The file also holds the `fantasy` sentences and the story's opening and ending lines, so all story wording is in one place.
+- Places the code knows: `anywhere`, `swamp` (a swamp, or a path next to one), `den` (within 2 steps of a den), `home` (within 4 steps of home), `deadEnd` (one way out), `corridor` (two ways out, straight), `crossing` (3–4 ways out), `open` (a crossing or meadow, 3–4 ways out). A new place needs a few lines of code and a line here.
+- **Kind numbers are permanent.** A new event takes the next free number; numbers are never reused or renumbered, so the number the "Show events" button draws always means the same event. A removed event leaves a gap.
+- A test checks the file: unique ids, a known place and trigger for each, at least 2 versions and 1 thought, short pop-ups (16 characters at most), no empty strings. A wrong entry fails `npm test`, not the game.
+- Later, if it ever helps: a `weight` for rare events, and events that only some versions of the forest offer.
+
+**The cast (draft, for review).** Numbers are the kind numbers the "Show events" button draws.
+
+| # | Event | Fits | Set off | Versions (story sentence) | Pop-up |
+| --- | --- | --- | --- | --- | --- |
+| 1 | Owl | Anywhere | Hear | An owl hooted "Who-who?" from high in a tree. / An owl asked her a riddle, and she got it right. / An owl was fast asleep and snored softly. | Hoo-hoo! |
+| 2 | Frog | Swamp, or path next to one | Step | A frog on a lily pad croaked hello. / A frog sang her a bubbly song. / A frog jumped right over her boots. | Ribbit! |
+| 3 | Empty hut | Dead end (one way out) | Step | She found a tiny empty hut with a mossy roof. / She peeked into a little hut: just a broom and a teapot. / A little hut had a sign on the door: "Back soon". | A hut! |
+| 4 | Paw prints | Within 2 steps of a den | Step | She spotted big paw prints in the mud and walked a bit faster. / She counted the paw prints in the mud: far too many! | Paw prints! |
+| 5 | Growl in the bushes | Within 2 steps of a den | Hear | Something growled in the bushes. / Something growled in the bushes; it was only a grumpy badger. | Grrr… |
+| 6 | Grandma's cat | Within 4 steps of home | Step | Grandma's cat came to meet her, purring. / Grandma's cat walked with her for a while. / Grandma's cat watched her from a stump and yawned. | Meow! |
+| 7 | Squirrel | Anywhere | Step | A squirrel dropped a nut on her hood. / A squirrel raced her along the path and won. | A squirrel! |
+| 8 | Mushroom ring | Open ground (a crossing or meadow, 3–4 ways out) | Step | She found a ring of mushrooms and hopped around it once. / She stood in a ring of mushrooms and made a wish. | Mushrooms! |
+| 9 | Butterflies | Open ground | Step | A cloud of yellow butterflies danced around her. / A butterfly sat on her basket for a ride. | Butterflies! |
+| 10 | Woodcutter | Anywhere | Hear | Far away, someone was chopping wood. / She heard someone chopping wood and whistling a tune. | Chop, chop! |
+| 11 | Lost mitten | Anywhere | Step | She found a lost blue mitten and hung it on a twig for its owner. / She found a tiny mitten, much too small for her. | A mitten! |
+| 12 | Hedgehog | Corridor (two ways out, straight) | Step | A hedgehog crossed the path, very slowly. / A hedgehog rolled into a ball when it saw her. | A hedgehog! |
+| 13 | Deer | Open ground | Step | A deer looked up at her, then bounded away. / A deer and her fawn were nibbling grass. | A deer! |
+| 14 | Fallen log | Corridor | Step | She balanced along a fallen log. / She climbed over a fallen log covered in moss. | Wobble! |
+| 15 | Rain shower | Anywhere | Step | A little rain shower came, and she waited under a big leaf. / A short rain fell, and then a rainbow came out. | Rain! |
+| 16 | Mole | Dead end | Step | A mole popped out of the ground, blinked and went back down. / A mole poked its nose out of a molehill. | A mole! |
+| 17 | Echo | Crossing (3–4 ways out) | Step | She shouted "Hello!" and the forest shouted back. / She sang a song, and the echo sang along. | Hello-o-o! |
+| 18 | Woodpecker | Anywhere | Hear | A woodpecker drummed: knock, knock, knock. / A woodpecker was busy making a new door in a tree. | Knock knock! |
+
+Fantasy sentences (high boldness only, draft): "A dragon asked her the way to the sea." / "She rode a goose over the treetops for a while." / "A talking mushroom told her a joke." / "The trees bowed to let her pass." / "She found a door in a tree, and behind it the mice were having a tea party." / "The moon came out at noon to say hello." Each event's thought line is short and in her voice ("Who's there? Just an owl.", "A hut! Nobody home."); they are written with the code.
+
+**Mapping rows (to add when built)**
+
+| In the game | In a language model |
+| --- | --- |
+| Hidden forest events: things she cannot see and no judge scores | What is not in the input and not rewarded never changes what a model does |
+| The trip story, made after the trip from her trip record | An answer built from the facts in the context |
+| Made-up parts of the story (clouds), more when bold | Hallucination, and temperature making it wilder |
+| Made-up events borrowed from this forest | Believable hallucinations, built from things the model knows |
+| "Tell it again" | Regenerating an answer: the same facts, a new telling |
+
+**LM corner cards (draft, under 300 characters each)**
+
+- *Story* (by "Her story"; pulses at the first story in a session and when a story has a made-up part): "Her story is made after the trip from what really happened (footprints), plus bits the storyteller makes up (clouds). The bolder she is, the more it invents. Chatbots do this too: what rests on facts they were given is reliable, and where they fill gaps they invent things that sound just as true."
+- *Events* (by the Forest tab checkbox): "The forest is full of little events, but she cannot see them and no judge scores them, so they never change her walk. A chatbot is the same: only what is in its input and what its training rewarded steer what it writes."
+- *Tell it again* (by the button): "Tell it again keeps the true parts and the order, but picks new words and new made-up bits. Asking a chatbot to regenerate works the same way: the same facts can come back in a new telling, with new mistakes."
+
+**Code (planned)**
+
+- `src/data/storyEvents.json`: the cast, the fantasy sentences and the story's opening and ending lines (see the data file above).
+- `src/storyEvents.ts`: loads and types the data file, seeded placement (`placeStoryEvents`: spots, then kinds), the place tests, and what a trip set off, worked out from her positions; no DOM.
+- `src/story.ts`: builds the story from the trip record, the events met, the boldness and the story's own randomness, with each sentence marked true or made up; no DOM.
+- `src/thoughts.ts`: says an event's thought line (taken from the data file). `src/explain.ts`: the three cards. `src/ui/`: the checkbox, the "Show events" numbers, the pop-up words and the story box. `src/ui/symbols.ts`: the footprint and cloud marks.
+- Settings: `events: true` by default. "Show events" is not saved.
+
+**Tests and numbers**
+
+- Tests: the data file is valid (see above); the same code gives the same spots, and adding a kind to the cast does not move them; no spot on a den, home or item, and none within another's view; each spot happens once per trip; a trip walks the same and every judge gives the same points with events on and off; at boldness below 0.5 nothing is made up; the start, basket, wolf and ending sentences always match the record.
+- Measure across 32 forest codes after 100 lessons from each parent, default energy and boldness: events met per trip (target 2–4, set the spot count from it), how often each kind is left out for lack of a fitting tile, and the share of made-up sentences at boldness 0.3, 0.7, 1.0, 1.5 and 2.5. Put the numbers in the pull request.
+
+**Build order** (each step its own commit, `npm test` and `npm run build` passing; the design doc updated as parts are built)
+
+1. Data and placement: `src/data/storyEvents.json` with the draft cast, `src/storyEvents.ts` (loading, place tests, `placeStoryEvents`, what a trip set off), the data-file and placement tests, then measure events per trip across 32 codes and set the spot count.
+2. Forest tab: the "Things happen in the forest" checkbox and its card, and the "Show events" numbers on the Forest and Trip alone boards.
+3. During the trip: pop-up words and event thought lines.
+4. The story: `src/story.ts` (true and made-up sentences, boldness levels, the closing line), the "Her story" box with footprint and cloud marks, the count line, "Tell it again", and the two cards; measure the share of made-up sentences at each boldness.
+5. Move the finished parts out of this section into the sections above (rules, mapping table, "?" table, user flow, visuals), and put the measured numbers in the pull request.
+
 ### Later
 
-- A trip story: after a trip alone, a short tale of what happened ("She picked flowers on the way, the wolf grabbed the cake, and then she went for the treasure instead of grandma's house"), with a closing line naming what her judge taught her. Made from the trip's events with seeded sentence templates. Walking again from the same tile tells a different story (sampling), and a bold Red Riding Hood has wilder ones (temperature). Told after the trip, like her thoughts, so it is not how she chose. Works with today's events too; it gains sentences as the basket items arrive
 - A simple "inside her head" network picture on the main screens
 - Two models side by side for comparison
 - Berry bush that restores energy (+15, once per trip), with her energy level as an extra pinned token in her basket (a "how tired am I" sense, like a model knowing its remaining output budget); it would be the 8th and last tile kind the link format fits. Parents never teach the detour, so only practice can discover it: fine-tuning learning behaviour that was never in the training examples
