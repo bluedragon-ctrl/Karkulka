@@ -278,6 +278,25 @@ describe('judges', () => {
     expect(judgeScore('magpie', field, maps, { ...run, outcome: 'lost' })).toBeCloseTo(FIXED.magpieTreasure);
   });
 
+  it('the huntsman pays for a longer walk home and for each den when it first comes in sight', () => {
+    // Longer is better, but only for walks that get home.
+    expect(judgeScore('huntsman', field, maps, straight)).toBeCloseTo(FIXED.rewardHome + 3 * FIXED.huntsmanStep);
+    expect(judgeScore('huntsman', field, maps, detour)).toBeCloseTo(FIXED.rewardHome + 5 * FIXED.huntsmanStep);
+    // The den at (1, 1) comes in sight at (2, 1): paid once, to that move, even when she walks back past it.
+    const look = walk(at(3, 1), [L, R, L, R, R, D, D, R], 'home');
+    const r = judgeRewards('huntsman', field, maps, look);
+    expect(r[0]).toBeCloseTo(FIXED.huntsmanDen);
+    expect(r[2]).toBe(0);
+    expect(judgeScore('huntsman', field, maps, look)).toBeCloseTo(FIXED.rewardHome + FIXED.huntsmanDen + 8 * FIXED.huntsmanStep);
+    // Lost: the den is kept, the steps are not.
+    const lost = { ...look, outcome: 'lost' as const };
+    expect(judgeScore('huntsman', field, maps, lost)).toBeCloseTo(judgeScore('grandma', field, maps, lost) + FIXED.huntsmanDen);
+    // A bump into a tree is not a step walked.
+    const bump = walk(at(5, 4), [D, U], 'home');
+    expect(bump.positions).toEqual([at(5, 4), at(5, 4), field.home]);
+    expect(judgeScore('huntsman', field, maps, bump)).toBeCloseTo(FIXED.rewardHome + FIXED.huntsmanStep);
+  });
+
   it('being eaten takes back every good basket point, but not the lost cake', () => {
     const eaten = withResults(walk(at(2, 3), [D, R, R, U, R], 'eaten'), ['treasure', 'grabbed', 'moved', 'moved', 'eaten'], { cake: false, flowers: 0, treasure: 0 });
     expect(judgeScore('magpie', field, maps, eaten)).toBeCloseTo(FIXED.rewardEaten);

@@ -93,7 +93,7 @@ export function ambiguousTokens(f: Forest, vocab: readonly ViewToken[], teacher:
   return out;
 }
 
-/** The teachers who only walk home along a route (the crow flies straight; Grandma and the magpie run errands first). */
+/** The teachers who only walk home along a route (the crow flies straight; Grandma, the magpie and the huntsman run errands first). */
 type RouteTeacher = 'mother' | 'father' | 'wolf';
 
 /** Ambiguous tokens for every teacher who walks a route home, keyed by token id. */

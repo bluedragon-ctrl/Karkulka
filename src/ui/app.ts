@@ -21,7 +21,7 @@ import { changeChart, outcomeChart } from './charts';
 import { add, clear, h, s } from './dom';
 import { closeHint, hintButton, placeHint } from './hint';
 import { renderStrip } from './strip';
-import { COLORS, cake, cloudMark, crowFigure, footprintMark, gem, grandmaFigure, magpieFigure, parentFigure, tileSymbol, wolfHead } from './symbols';
+import { COLORS, cake, cloudMark, crowFigure, footprintMark, gem, grandmaFigure, huntsmanFigure, magpieFigure, parentFigure, tileSymbol, wolfHead } from './symbols';
 import { renderTech } from './tech';
 
 type TabId = 'forest' | 'lessons' | 'trip' | 'practice' | 'inside';
@@ -74,10 +74,11 @@ const TEACHERS: { id: TeacherChoice; name: string; text: string }[] = [
   { id: 'crow', name: 'Crow', text: 'Flies straight towards home. When a tree is in the way, it flies on over it and leaves her behind.' },
   { id: 'grandma', name: 'Grandma', text: 'First a bunch of flowers, then home the safe way, like the mother.' },
   { id: 'magpie', name: 'Magpie', text: 'Hops from treasure to treasure, and only then heads home.' },
+  { id: 'huntsman', name: 'Huntsman', text: 'Takes the long way round to look at every wolf den, but always gets her home.' },
 ];
 
 /** The LM corner card for a teacher choice. */
-const TEACHER_CARDS: Partial<Record<TeacherChoice, CardKey>> = { wolf: 'wolfTeacher', motherWolf: 'poisonedData', crow: 'crowTeacher', grandma: 'grandmaTeacher', magpie: 'magpieTeacher' };
+const TEACHER_CARDS: Partial<Record<TeacherChoice, CardKey>> = { wolf: 'wolfTeacher', motherWolf: 'poisonedData', crow: 'crowTeacher', grandma: 'grandmaTeacher', magpie: 'magpieTeacher', huntsman: 'huntsmanTeacher' };
 const teacherCard = (t: TeacherChoice): CardKey => TEACHER_CARDS[t] ?? 'teacher';
 
 /** The judges in the panel: a plain line for children. The exact points are in each judge's LM corner card. */
@@ -87,12 +88,13 @@ const JUDGE_INFO: Record<Judge, { name: string; text: string; card: CardKey }> =
   mother: { name: 'Careful mother', text: 'Home with the cake, but stay dry and keep away from wolves.', card: 'judgeMother' },
   crow: { name: 'Crow', text: 'Watches from the sky: any step towards home looks good to it, even into a tree.', card: 'judgeCrow' },
   magpie: { name: 'Magpie', text: 'Loves shiny things: treasure is what counts. Getting home? Not so important.', card: 'judgeMagpie' },
+  huntsman: { name: 'Huntsman', text: 'Loves a long walk and a look at the wolves: the longer the way home and the more dens she sees, the better.', card: 'judgeHuntsman' },
   wolf: { name: 'Wolf', text: 'A sneaky judge: he wants her at his den, not at grandma\'s.', card: 'judgeWolf' },
 };
 
 function judgeIcon(j: Judge): SVGSVGElement {
   const icon = s('svg', { width: 30, height: 30, viewBox: '-20 -24 40 44' });
-  icon.append(j === 'grandma' ? grandmaFigure(40) : j === 'crow' ? crowFigure(40) : j === 'magpie' ? magpieFigure(40) : j === 'wolf' ? s('g', { transform: 'scale(.7)' }, wolfHead(40)) : parentFigure(40, j as 'mother' | 'father'));
+  icon.append(j === 'grandma' ? grandmaFigure(40) : j === 'crow' ? crowFigure(40) : j === 'magpie' ? magpieFigure(40) : j === 'huntsman' ? huntsmanFigure(40) : j === 'wolf' ? s('g', { transform: 'scale(.7)' }, wolfHead(40)) : parentFigure(40, j as 'mother' | 'father'));
   return icon;
 }
 
@@ -103,7 +105,7 @@ interface PracticeSummary {
   evalBefore?: EvalPoint; evalAfter?: EvalPoint;
 }
 
-const TRAIL_COLORS: Record<Outcome | Teacher, string> = { home: '#c99700', eaten: COLORS.danger, lost: COLORS.lost, mother: COLORS.mother, father: COLORS.father, wolf: COLORS.den, crow: COLORS.crow, grandma: COLORS.grandma, magpie: COLORS.magpie };
+const TRAIL_COLORS: Record<Outcome | Teacher, string> = { home: '#c99700', eaten: COLORS.danger, lost: COLORS.lost, mother: COLORS.mother, father: COLORS.father, wolf: COLORS.den, crow: COLORS.crow, grandma: COLORS.grandma, magpie: COLORS.magpie, huntsman: COLORS.huntsman };
 
 /** One point of the "since the forest changed" chart: home on test trips after a change or catch-up. */
 export interface ChangePoint { label: string; home: number }
@@ -698,7 +700,7 @@ export class App {
         if (!done) return;
         if (this.changeLog.length) this.logCheck(`+${done} new lesson${done === 1 ? '' : 's'}`);
         this.watchedEnd = total === 1 ? lastEnd : null;
-        const errand = total === 1 && (lastTeacher === 'grandma' || lastTeacher === 'magpie');
+        const errand = total === 1 && (lastTeacher === 'grandma' || lastTeacher === 'magpie' || lastTeacher === 'huntsman');
         this.showCard(this.watchedEnd === 'den' ? 'wolfTeacher' : this.watchedEnd === 'stuck' ? 'crowTeacher' : errand ? teacherCard(lastTeacher!) : total > 1 ? 'watchMany' : 'exposure');
       },
     }, speed);
@@ -978,6 +980,7 @@ export class App {
     const onlyOther = (judge === 'mother' && tc.mother === 0) || (judge === 'father' && tc.father === 0);
     if (judge === 'wolf') sum.card = 'judgeWolf';
     else if (judge === 'magpie') sum.card = 'judgeMagpie';
+    else if (judge === 'huntsman') sum.card = 'judgeHuntsman';
     else if (judge === 'grandma' && ((tc.wolf ?? 0) > 0 || (this.stats.judgeRuns?.wolf ?? 0) > 0)) sum.card = 'fixBadData';
     else if (sum.scoreAfter > sum.scoreBefore && sum.homeAfter < sum.homeBefore - 0.05) sum.card = 'rewardHacking';
     else if (judge === 'father' && (sum.evalAfter?.noCake ?? 0) > Math.max(0.05, (evalBefore?.noCake ?? 0) + 0.05)) sum.card = 'cakeShield';
@@ -1560,6 +1563,9 @@ export class App {
       : p.judge === 'magpie'
         ? (homeDown ? 'She gets home less often: she goes for the treasure and wanders off. The magpie pays for treasure, not for coming to Grandma.'
           : 'The magpie pays for treasure. Keep practising and watch whether she still comes home.')
+      : p.judge === 'huntsman'
+        ? (homeDown ? 'She gets home less often: her walks got longer, and more of them run out of energy before she is home. The huntsman pays for a long walk, not for a sensible one.'
+          : 'The huntsman pays for a long walk home and for every den she sees. Watch a trip alone: are her walks getting longer?')
       : p.card === 'cakeShield'
         ? 'She now cuts through wolf dens and lets the wolf have the cake: it saves steps, and the father doesn\'t count the cake.'
       : p.judge === 'grandma' && wolfTaught
@@ -1572,7 +1578,7 @@ export class App {
         : p.judge === 'crow'
           ? 'So far she still gets home, because walking towards home mostly helps. But the crow also pays her for bumping into a tree that is towards home. Keep practising and watch whether she gets home less often.'
           : `Watch a trip alone: she should now walk more the way ${the} likes.`;
-    return h('div', { class: `why ${(scoreUp && homeDown) || ((p.judge === 'wolf' || p.judge === 'magpie') && homeDown) ? 'alarm' : ''}` },
+    return h('div', { class: `why ${(scoreUp && homeDown) || ((p.judge === 'wolf' || p.judge === 'magpie' || p.judge === 'huntsman') && homeDown) ? 'alarm' : ''}` },
       h('h3', {}, this.hq(`What ${the} taught her`, p.card, 'summary')),
       h('p', {}, verdict),
       h('p', { class: 'muted' }, `Score from ${the}: ${p.scoreBefore.toFixed(2)} → ${p.scoreAfter.toFixed(2)}. Home on the test trips: ${pct(p.homeBefore)} → ${pct(p.homeAfter)}.`),

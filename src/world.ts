@@ -182,6 +182,14 @@ export function nearWolf(f: Forest, i: number): boolean {
   return VIEW_OFFSETS.some(([dx, dy]) => tileAt(f, x + dx, y + dy) === WOLF);
 }
 
+/** The wolf dens in sight from tile i (in the 8 tiles around it). */
+export function densInSight(f: Forest, i: number): number[] {
+  const [x, y] = xyOf(f, i);
+  const out: number[] = [];
+  for (const [dx, dy] of VIEW_OFFSETS) if (tileAt(f, x + dx, y + dy) === WOLF) out.push((y + dy) * f.size + x + dx);
+  return out;
+}
+
 /** Walking distance home in steps, never through wolf dens (swamps count as one step). -1 = unreachable. */
 export function walkingDistances(f: Forest): Int32Array {
   const dist = new Int32Array(f.tiles.length).fill(-1);

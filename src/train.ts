@@ -4,7 +4,7 @@ import { Rng, mulberry32, pick, rngFrom, shuffle } from './rng';
 import { Outcome, Walker } from './sim';
 import { LessonWalk, Teacher, TeacherChoice, costToDen, costToHome, walkLesson } from './teachers';
 import { encodeContext } from './tokens';
-import { Basket, Forest, Move, PATH, headsHome, isWalkable, StepResult, SWAMP, energyToHome, nearWolf, tilesWhere, walkingDistances } from './world';
+import { Basket, densInSight, Forest, Move, PATH, headsHome, isWalkable, StepResult, SWAMP, energyToHome, nearWolf, tilesWhere, walkingDistances } from './world';
 
 /** Internals the user never sets; shown read-only in the technical tab. */
 export const FIXED = {
@@ -35,6 +35,9 @@ export const FIXED = {
   /** Magpie judge: a lot for each treasure, at pickup; a little for getting home. */
   magpieTreasure: 1,
   magpieHome: 0.2,
+  /** Huntsman judge: points for every step of a walk that gets home (the longer, the better) and for each wolf den she sees, when it comes in sight. */
+  huntsmanStep: 0.02,
+  huntsmanDen: 0.2,
   /** "Mother and the wolf": share of lessons the wolf in disguise slips in. */
   wolfLessonShare: 0.2,
   practiceBoldness: 0.7,
@@ -84,7 +87,7 @@ export const newStats = (f: Forest): TrainStats => ({
   lessons: 0,
   practiceRuns: 0,
   coverage: new Array(f.tiles.length).fill(0),
-  teacherCounts: { mother: 0, father: 0, wolf: 0, crow: 0, grandma: 0, magpie: 0 },
+  teacherCounts: { mother: 0, father: 0, wolf: 0, crow: 0, grandma: 0, magpie: 0, huntsman: 0 },
   lessonLoss: [],
   lessonEval: [],
   practiceScore: [],
@@ -103,8 +106,8 @@ export const teacherCosts = (f: Forest): Teachers => {
   const father = costToHome(f, 'father');
   const mother = costToHome(f, 'mother');
   // The crow needs no route costs (it flies straight towards home); it gets the father's so every teacher has one.
-  // Grandma walks home the mother's way, the magpie the father's (after their errands).
-  return { mother, father, wolf: father, crow: father, grandma: mother, magpie: father, den: costToDen(f) };
+  // Grandma walks home the mother's way, the magpie the father's (after their errands); the huntsman by energy.
+  return { mother, father, wolf: father, crow: father, grandma: mother, magpie: father, huntsman: costToHome(f, 'huntsman'), den: costToDen(f) };
 };
 
 /**
@@ -247,8 +250,8 @@ export function trainLessons(
  * she can game: that is reward hacking. The wolf wants her at his den: a judge
  * with bad aims ruins a model that was doing well.
  */
-export type Judge = 'grandma' | 'father' | 'mother' | 'crow' | 'magpie' | 'wolf';
-export const JUDGES: readonly Judge[] = ['grandma', 'father', 'mother', 'crow', 'magpie', 'wolf'];
+export type Judge = 'grandma' | 'father' | 'mother' | 'crow' | 'magpie' | 'huntsman' | 'wolf';
+export const JUDGES: readonly Judge[] = ['grandma', 'father', 'mother', 'crow', 'magpie', 'huntsman', 'wolf'];
 
 /** Distances the judges measure with; they know the whole forest. */
 export interface JudgeMaps {
@@ -321,6 +324,19 @@ export function judgeRewards(judge: Judge, f: Forest, maps: JudgeMaps, run: Run)
     if (res === 'grabbed' && judge === 'wolf') r[t] += FIXED.wolfDen;
   });
   if (judge === 'grandma' && run.outcome === 'home' && run.basket) give(n - 1, FIXED.grandmaFlowers * run.basket.flowers);
+  // The huntsman pays for each new den she sees, when it comes in sight (not the ones in sight at the start),
+  // and for every step of a walk that gets home: the longer, the better.
+  if (judge === 'huntsman') {
+    const seen = new Set(densInSight(f, run.start));
+    let walked = 0;
+    for (let t = 0; t < n; t++) {
+      if (run.positions[t + 1] !== run.positions[t]) walked++;
+      if (t === n - 1 && run.outcome === 'eaten') continue;
+      for (const d of densInSight(f, run.positions[t + 1])) if (!seen.has(d)) { seen.add(d); give(t, FIXED.huntsmanDen); }
+    }
+    // The length counts only for a walk that ends at home: bumps into trees are not walking.
+    if (run.outcome === 'home') give(n - 1, FIXED.huntsmanStep * walked);
+  }
   if (run.outcome === 'eaten') r[n - 1] -= basketPoints;
   for (let t = 0; t < n; t++) {
     const from = run.positions[t];

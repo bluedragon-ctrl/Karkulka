@@ -2,10 +2,10 @@ import { describe, expect, it } from 'vitest';
 import { SHORTCUT_MIN_SAVING, disagreement, generateForest, parentRouteTiles, shortcutSaving } from '../src/forest';
 import { packTiles, unpackTiles } from '../src/storage';
 import { costToHome, crowMoves, endsStuck, teacherMoves, walkLesson } from '../src/teachers';
-import { startTiles } from '../src/train';
+import { FIXED, startTiles } from '../src/train';
 import { mulberry32 } from '../src/rng';
 import {
-  FLOWERS, HOME, PATH, headsHome, SWAMP, TREASURE, isItem, newBasketState, SWAMP_COST, TREE, WOLF, cheapestToHome, energyToHome, forestFromTiles, homeIndex, moveHome, stepCost, loopCount, walkableTiles, homeSector, neighbor, pathTiles, step, tileAt, unreachableTiles, viewAt, walkingDistances,
+  FLOWERS, HOME, densInSight, PATH, headsHome, SWAMP, TREASURE, isItem, newBasketState, SWAMP_COST, TREE, WOLF, cheapestToHome, energyToHome, forestFromTiles, homeIndex, moveHome, stepCost, loopCount, walkableTiles, homeSector, neighbor, pathTiles, step, tileAt, unreachableTiles, viewAt, walkingDistances,
 } from '../src/world';
 
 describe('forest generator', () => {
@@ -237,6 +237,45 @@ describe('Grandma and the magpie as teachers', () => {
           expect(walk.history.views.length).toBe(walk.history.moves.length);
         }
       }
+    }
+  });
+});
+
+describe('the huntsman as a teacher', () => {
+  it('goes out of his way to see a den, then walks home', () => {
+    const size = 8;
+    const at = (x: number, y: number) => y * size + x;
+    // Home at (1, 1), a path along row 1 to (6, 1); a side path from (5, 1) down to (5, 4), with a den at (6, 5).
+    const tiles = new Array(size * size).fill(TREE);
+    tiles[at(1, 1)] = HOME;
+    for (let x = 2; x <= 6; x++) tiles[at(x, 1)] = PATH;
+    for (let y = 2; y <= 4; y++) tiles[at(5, y)] = PATH;
+    tiles[at(6, 5)] = WOLF;
+    const f = forestFromTiles('HUNT', size, tiles);
+    const walk = walkLesson(f, 'huntsman', costToHome(f, 'huntsman'), at(6, 1), mulberry32(1));
+    expect(walk.positions).toContain(at(5, 4));
+    expect(walk.positions.at(-1)).toBe(f.home);
+    const father = walkLesson(f, 'father', costToHome(f, 'father'), at(6, 1), mulberry32(1));
+    expect(father.positions).not.toContain(at(5, 4));
+  });
+
+  it('in generated forests he sees more dens than the father, gets home on her energy and never steps onto a den', () => {
+    for (const code of ['KARKULKA', 'ABCDEF', 'ZZ9922']) {
+      const f = generateForest(code);
+      let hunter = 0;
+      let father = 0;
+      const dens = (positions: number[]) => new Set(positions.flatMap((p) => densInSight(f, p))).size;
+      for (const start of startTiles(f)) {
+        const walk = walkLesson(f, 'huntsman', costToHome(f, 'huntsman'), start, mulberry32(3));
+        expect(walk.positions.at(-1)).toBe(f.home);
+        expect(walk.positions.some((p) => f.tiles[p] === WOLF)).toBe(false);
+        expect(walk.history.views.length).toBe(walk.history.moves.length);
+        const energy = walk.positions.slice(1).reduce((e, p) => e + stepCost(f.tiles[p]), 0);
+        expect(energy).toBeLessThanOrEqual(FIXED.evalEnergy);
+        hunter += dens(walk.positions);
+        father += dens(walkLesson(f, 'father', costToHome(f, 'father'), start, mulberry32(3)).positions);
+      }
+      expect(hunter).toBeGreaterThan(2 * father);
     }
   });
 });
