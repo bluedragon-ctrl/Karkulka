@@ -23,11 +23,11 @@ Game logic has no DOM dependencies and is tested directly; the UI lives in `src/
 
 | Module | Purpose |
 | --- | --- |
-| `src/world.ts` | Tiles, moves, energy costs, her basket and the step rules (cake shield, pickups, forest events' basket effects), what she sees, distances |
-| `src/forest.ts` | Seeded forest generator: maze, loops, meadows, swamps, wolf dens, then her basket's tiles (shortcut dens, flowers, treasure) |
+| `src/world.ts` | Tiles, moves, energy costs, her basket and the step rules (cake shield, pickups, berries, forest events' basket effects), what she sees, distances |
+| `src/forest.ts` | Seeded forest generator: maze, loops, meadows, swamps, wolf dens, then her basket's tiles (shortcut dens, flowers, treasure), then berry bushes |
 | `src/prowler.ts` | Walking wolves (an option, up to 3): where they start, how they walk and meet her, and her view with them in it (dens to her) |
-| `src/teachers.ts` | The teachers' lesson walks: the two parents' route costs, the wolf in disguise, the crow, Grandma's and the magpie's errands, keeping away from walking wolves |
-| `src/tokens.ts` | Vocabulary and context-window encoding (one-hot views and moves) |
+| `src/teachers.ts` | The teachers' lesson walks: the two parents' route costs, the wolf in disguise, the crow, Grandma's and the magpie's errands, the hedgehog's berry stops, lesson energy, keeping away from walking wolves |
+| `src/tokens.ts` | Vocabulary and context-window encoding (pinned basket and energy, one-hot views and moves) |
 | `src/model.ts` | One-hidden-layer network, softmax with temperature, Adam and SGD |
 | `src/sim.ts` | A trip alone: the `Walker` samples one move at a time |
 | `src/train.ts` | Lessons (imitation), practice (policy gradient), evaluation; fixed internals in `FIXED` |
@@ -55,7 +55,7 @@ Game logic has no DOM dependencies and is tested directly; the UI lives in `src/
 
 - **Changing the tile kinds or the model's inputs breaks old saves.** Views are one-hot over `TILE_KINDS`, so a new tile or input changes the model's input size. When that happens:
   - bump `SAVE_VERSION` in `src/storage.ts` (it sets the save key and the save and model-file versions), and update the "older version" message in `parseFile`;
-  - check the link format (`packTiles` packs two tiles per character, which fits up to 8 tile kinds; there are 7 now, and the edited-tiles link parameter, `map3`, must change when they do);
+  - check the link format (`packTiles` packs two tiles per character, which fits up to 8 tile kinds; there are 8 now, so a 9th tile kind needs a new link format, and the edited-tiles link parameter, `map4`, must change when the tiles do);
   - update the tests that check sizes.
 - **Training runs in the worker**, but "Watch one lesson" trains on the main thread through the same `learnFromLesson` function. Keep both paths in sync.
 - **Deployment:** every push to `main` runs `.github/workflows/deploy.yml` (test, build, publish to GitHub Pages). The `github-pages` environment must allow `main` to deploy.

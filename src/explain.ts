@@ -1,17 +1,17 @@
 /** The "Why did she do that?" note after a trip, and the LM corner cards. */
 import type { EffectDone, Walker } from './sim';
 import { FIXED, TrainStats, headsHome } from './train';
-import { buildVocabulary, viewKey } from './tokens';
-import { HUNTSMAN_ENERGY, SWAMP_PENALTY, WOLF_PENALTY } from './teachers';
-import { Forest, MOVE_NAMES, densInSight, SWAMP, SWAMP_COST, VIEW_OFFSETS, WOLF, tileAt, walkingDistances, xyOf } from './world';
+import { ENERGY_LEVELS, ENERGY_NAMES, buildVocabulary, energyLevel, viewKey } from './tokens';
+import { ENERGY_MARGIN, ERRAND_SPARE, HEDGEHOG_ENERGY, HUNTSMAN_ENERGY, LESSON_SPARE, SWAMP_PENALTY, WOLF_PENALTY } from './teachers';
+import { BERRIES, BERRY_ENERGY, Forest, MOVE_NAMES, densInSight, SWAMP, SWAMP_COST, VIEW_OFFSETS, WOLF, tileAt, walkingDistances, xyOf } from './world';
 
 export type CardKey =
   | 'forest' | 'view' | 'memory' | 'memorySize' | 'hint' | 'lessons' | 'teacher' | 'motherTeacher' | 'fatherTeacher' | 'bothTeachers' | 'coverage' | 'arrows'
   | 'boldness' | 'energy' | 'hallucination' | 'repetition' | 'exposure' | 'practice' | 'outdated' | 'home'
   | 'tech' | 'vocabulary' | 'judge' | 'swamp' | 'tree' | 'thoughts' | 'stop'
   | 'tripReport' | 'judgeGrandma' | 'judgeFather' | 'judgeMother' | 'judgeCrow' | 'rewardHacking' | 'teacherVsJudge'
-  | 'wolfTeacher' | 'crowTeacher' | 'grandmaTeacher' | 'magpieTeacher' | 'huntsmanTeacher' | 'poisonedData' | 'judgeWolf' | 'fixBadData'
-  | 'basket' | 'cakeShield' | 'judgeMagpie' | 'judgeHuntsman' | 'processReward' | 'events' | 'newPlaces' | 'basketEvents' | 'walkingWolf' | 'wolfToken' | 'wolfOut' | 'story' | 'retell'
+  | 'wolfTeacher' | 'crowTeacher' | 'grandmaTeacher' | 'magpieTeacher' | 'huntsmanTeacher' | 'hedgehogTeacher' | 'poisonedData' | 'judgeWolf' | 'fixBadData'
+  | 'basket' | 'energyToken' | 'berries' | 'cakeShield' | 'judgeMagpie' | 'judgeHuntsman' | 'processReward' | 'events' | 'newPlaces' | 'basketEvents' | 'walkingWolf' | 'wolfToken' | 'wolfOut' | 'story' | 'retell'
   | 'newWorld' | 'movedHome' | 'catchUp' | 'forestCode' | 'editForest' | 'recipe'
   | 'compute' | 'tokenFreq' | 'ambiguous' | 'uncertainty' | 'bigTest'
   | 'moreData' | 'guess' | 'watchMany' | 'runScore' | 'testTrips' | 'sampling' | 'curriculum' | 'oneHot' | 'weights' | 'loss' | 'hyper' | 'modelFile';
@@ -65,6 +65,7 @@ export const CARDS: Record<CardKey, string> = {
   crowTeacher: "The crow flies over trees on its way home. She can't, so she bumps into them, but she copies the move anyway. A model copies what its examples do, even what it can't do itself: a chatbot that learned from people who looked things up may write as if it had, and make up the details.",
   grandmaTeacher: "Grandma shows the whole errand: first flowers, then home. The flowers in her basket tell her which half she is on. Chatbots learn a task the same way, from example answers that show every step, and the instructions they are given decide what they do next.",
   magpieTeacher: "The magpie leads her from treasure to treasure before it heads home. She copies what it wants along with how it walks, so now she hunts treasure too. A chatbot trained on text written for another aim, like adverts, picks up that aim as well.",
+  hedgehogTeacher: "The hedgehog walks straight home, but stops at a berry bush when she is getting tired. The same view needs a different move depending on her energy, so she learns to read her battery. A chatbot only learns to fit its answer to its room from examples that do that.",
   huntsmanTeacher: "The huntsman goes the long way round to look at every wolf den, then brings her home. She copies the long walks, and sometimes her energy runs out before she is home. A chatbot that learned from long-winded answers rambles too, and can run out of room before it gets to the point.",
   poisonedData: "Only a few of her lessons came from the wolf, yet she now walks into dens much more often. That is called data poisoning: a few bad pages hidden among billions of good ones can teach a chatbot a bad habit.",
   judgeWolf: "The wolf gives points only when she comes to his den. Practice makes her better at whatever the judge rewards, so a bad judge can ruin a model that was doing well. That is why chatbot makers guard who can retrain their chatbots.",
@@ -81,6 +82,8 @@ export const CARDS: Record<CardKey, string> = {
   loss: "The loss is how surprised she is by the teacher's move. Training means making this number go down, one example at a time. Chatbot builders watch the same kind of number fall during months of training.",
   hyper: "These numbers are chosen by the builders, not learned in lessons. They are called hyperparameters. Chatbot builders often pick them after trying many small test versions first.",
   modelFile: "The file holds her weights: the trained model itself. Some companies share their chatbot's weights the same way, as a file anyone can load and run; others keep them secret.",
+  energyToken: "The battery at the front of her memory tells her how much energy she has left. It is pinned like her basket and never scrolls out. Some chatbots are told the same thing: how much room is left for the answer, so they can finish in time instead of being cut off.",
+  berries: "A berry bush gives her energy back, once per trip. Going there costs steps now but can save the walk later, if she knows she is getting tired. A chatbot that knows how much room it has left can plan the same way: a short detour, or straight to the point.",
   basket: "Her basket sits at the front of her memory and never scrolls out, unlike her steps. A chatbot has the same: the instructions its makers give it (the system prompt) and facts its app puts back in every turn stay, while the oldest parts of a long chat drop out.",
   cakeShield: "The first wolf den only takes the cake. The hurried father doesn't count the cake, so his practice teaches her to cut through dens and let the wolf have it. What a judge doesn't measure, the model gives up. A chatbot rated only on speed may drop care the same way.",
   judgeMagpie: "The magpie pays a lot for treasure and little for getting home, so practice teaches her to grab treasure and wander off. A judge can measure right and still want the wrong thing most: a chatbot rewarded mostly for a side goal drops the real task.",
@@ -130,18 +133,36 @@ export const CARD_DETAILS: Partial<Record<CardKey, { title: string; lines: () =>
     'First to the nearest flower patch, the careful way (like the mother)',
     'After the flowers are in the basket, home the mother\'s way',
     'With no flowers she can reach, straight home the mother\'s way',
+    `Only if she has the energy for the flowers and the way home, with ${ENERGY_MARGIN} to spare; otherwise straight home`,
     'The flowers in her pinned basket are the only thing that tells the two halves apart',
   ] },
   magpieTeacher: { title: 'How the magpie walks', lines: () => [
     'To the nearest treasure not yet picked, in the fewest steps (like the father), then the next',
+    `Only to a treasure she has the energy for, and the way home, with ${ENERGY_MARGIN} to spare`,
     'When no treasure is left that it can reach, home the father\'s way',
     'It never steps onto a wolf den',
   ] },
   huntsmanTeacher: { title: 'How the huntsman walks', lines: () => [
     'To the nearest spot where a wolf den he has not seen yet comes in sight, in the fewest steps (like the father), then the next',
-    `He only goes on to a den if he can still get her home from there on ${HUNTSMAN_ENERGY} energy`,
+    `He only goes on to a den if he can still get her home from there on the energy she has left (his lessons start with ${HUNTSMAN_ENERGY})`,
     'Then home the father\'s way',
     'He never steps onto a wolf den',
+  ] },
+  hedgehogTeacher: { title: 'How the hedgehog walks', lines: () => [
+    'Home by the way that takes the least energy (a swamp step counts 3)',
+    `Half his lessons start with ${Math.round(HEDGEHOG_ENERGY[0] * 100)}–${Math.round(HEDGEHOG_ENERGY[1] * 100)}% of the energy she needs to get home; the other half with that plus 0 to ${LESSON_SPARE}`,
+    `When she has less than the energy home plus ${ENERGY_MARGIN}, he first walks to the nearest berry bush that leaves her enough, then home`,
+    'With plenty of energy he walks past the bushes. He never steps onto a wolf den',
+  ] },
+  energyToken: { title: 'Her energy token', lines: () => [
+    ...ENERGY_NAMES.map((name, k) => `${name[0].toUpperCase()}${name.slice(1)}: ${k === 0 ? `below ${ENERGY_LEVELS[0]}` : k === ENERGY_LEVELS.length ? `${ENERGY_LEVELS[k - 1]} or more` : `${ENERGY_LEVELS[k - 1]}–${ENERGY_LEVELS[k] - 1}`}`),
+    `Lessons have energy too: what the teacher's walk takes plus 0 to ${LESSON_SPARE} spare (Grandma and the magpie: 0 to ${ERRAND_SPARE} more than the way home)`,
+  ] },
+  berries: { title: 'Berry bushes', lines: () => [
+    `+${BERRY_ENERGY} energy, once per bush and trip, never above her starting energy`,
+    'An eaten bush looks like path to her',
+    'Every forest has 2 or 3, off the parents\' routes',
+    'The parents never go there; only the hedgehog stops, when she is tired',
   ] },
   poisonedData: { title: 'The numbers', lines: () => [
     `About 1 lesson in ${Math.round(1 / FIXED.wolfLessonShare)} (${Math.round(FIXED.wolfLessonShare * 100)}%) comes from the wolf; the rest from the careful mother`,
@@ -318,9 +339,10 @@ export function effectWords(e: EffectDone): string {
  * "Picked 1 of 3 flowers and 0 of 2 treasures": always both counts, out of how many the
  * forest has, so the end of a trip says plainly what she found.
  */
-export function pickupLine(p: { flowers: number; treasure: number; flowersInForest: number; treasureInForest: number }): string {
+export function pickupLine(p: { flowers: number; treasure: number; flowersInForest: number; treasureInForest: number; berries?: number; berriesInForest?: number }): string {
   const one = (n: number, of: number, word: string, words: string) => `${n} of ${of} ${of === 1 ? word : words}`;
-  return `Picked ${one(p.flowers, p.flowersInForest, 'flower patch', 'flower patches')} and ${one(p.treasure, p.treasureInForest, 'treasure', 'treasures')}.`;
+  const ate = p.berries ? `, and ate the berries of ${one(p.berries, p.berriesInForest ?? p.berries, 'bush', 'bushes')}` : '';
+  return `Picked ${one(p.flowers, p.flowersInForest, 'flower patch', 'flower patches')} and ${one(p.treasure, p.treasureInForest, 'treasure', 'treasures')}${ate}.`;
 }
 
 /**
@@ -379,6 +401,19 @@ function basketNote(w: Walker, stats: TrainStats | null, dist: ArrayLike<number>
       text: `She got home in ${n} steps, but without the cake: at step ${w.cakeLostAt + 1} she walked onto a wolf den and the wolf grabbed it.${brought}` +
         (father ? ' The hurried father only counts steps, not the cake, so his practice taught her this shortcut.' : ''),
       card: 'cakeShield',
+    };
+  }
+  const ate = w.results.indexOf('berries');
+  if (ate >= 0) {
+    const before = energyLevel(w.history.energy[ate]);
+    const tired = before < ENERGY_NAMES.length - 1;
+    const hedgehog = (stats?.teacherCounts.hedgehog ?? 0) > 0;
+    return {
+      title: 'Why did she do that?',
+      text: `She got home in ${n} steps ${w.basket.cake ? 'with' : 'without'} the cake.${brought} At step ${ate + 1} she ate berries${tired ? `, with ${ENERGY_NAMES[before]} energy left` : ''}.` +
+        (hedgehog ? (tired ? ' The hedgehog\'s lessons stop for berries when she is getting tired, so she did too.' : ' She had plenty of energy, so the hedgehog would have walked past.')
+          : ' None of her teachers ever went for berries; she passed the bush by chance.'),
+      card: hedgehog ? 'hedgehogTeacher' : 'berries',
     };
   }
   const picked = w.pickups;
@@ -537,6 +572,18 @@ export function explainTrip(w: Walker, f: Forest, stats: TrainStats | null, outd
   if (w.outcome === 'lost') {
     const hunt = huntsmanNote(w, f, stats, `She walked ${n} steps, but her energy ran out before she got home.`);
     if (hunt) return { ...hunt, text: hunt.text + cutoff };
+    // A berry bush right next to her while she was tired, and she walked past it.
+    const passed = w.history.views.findIndex((v, t) => energyLevel(w.history.energy[t]) <= 1 && [1, 3, 4, 6].some((k) => v[k] === BERRIES));
+    if (passed >= 0) {
+      const hedgehog = (stats?.teacherCounts.hedgehog ?? 0) > 0;
+      return {
+        title: 'Why did she do that?',
+        text: `She walked ${n} steps, but her energy ran out before she got home. At step ${passed + 1} a berry bush was right next to her, with ${ENERGY_NAMES[energyLevel(w.history.energy[passed])]} energy left, and she walked on.` +
+          (hedgehog ? ' The hedgehog\'s lessons stop at a bush when she is tired, but each move is a gamble, and this time chance picked another.'
+            : ' None of her teachers ever stopped for berries, so she never learned that they help. The hedgehog\'s lessons show it.') + cutoff,
+        card: hedgehog ? 'hedgehogTeacher' : 'berries',
+      };
+    }
   }
 
   const bumpsHome = w.history.moves.filter((m, i) => w.blocked[i] && headsHome(f, w.positions[i], m)).length;

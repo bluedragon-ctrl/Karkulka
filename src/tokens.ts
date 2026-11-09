@@ -28,13 +28,24 @@ export const MOVE_FEATS = 4;
 export const HINT_FEATS = 8;
 /** Pinned basket tokens: cake yes / no, flowers 0 / 1 / 2+, treasure 0 / 1 / 2+ (one-hot each). */
 export const BASKET_FEATS = 2 + 3 + 3;
+/**
+ * The pinned energy token: how much energy she has left, in absolute levels (not a share of her
+ * starting energy, so it means the same on every trip): below 10, 10–19, 20–39, 40 or more.
+ */
+export const ENERGY_LEVELS = [10, 20, 40] as const;
+export const ENERGY_FEATS = ENERGY_LEVELS.length + 1;
+export const ENERGY_NAMES = ['almost none', 'a little', 'some', 'plenty'] as const;
+/** The energy level (0 = almost none … 3 = plenty) for some energy left. */
+export const energyLevel = (energy: number): number => ENERGY_LEVELS.filter((l) => energy >= l).length;
+/** All pinned features: the basket, then the energy. */
+export const PINNED_FEATS = BASKET_FEATS + ENERGY_FEATS;
 /** One remembered pair: a "present" flag, the view, and the move. */
 export const slotFeats = (cfg: Pick<ModelConfig, 'wolfToken'>): number => 1 + viewFeats(cfg) + MOVE_FEATS;
 /** One remembered pair without the walking-wolf token (the default). */
 export const SLOT_FEATS = 1 + VIEW_FEATS + MOVE_FEATS;
 
 export const inputSize = (cfg: Pick<ModelConfig, 'memory' | 'hint' | 'wolfToken'>): number =>
-  BASKET_FEATS + viewFeats(cfg) + (cfg.hint ? HINT_FEATS : 0) + cfg.memory * slotFeats(cfg);
+  PINNED_FEATS + viewFeats(cfg) + (cfg.hint ? HINT_FEATS : 0) + cfg.memory * slotFeats(cfg);
 
 /** A view as the model reads it: without the walking-wolf token, a walking wolf is a den. */
 export const asSeenBy = (cfg: Pick<ModelConfig, 'wolfToken'>, view: readonly Seen[]): Seen[] =>
@@ -56,8 +67,8 @@ function encodeView(out: Float32Array, offset: number, view: readonly Seen[], wo
 
 /**
  * The context for the decision at step t:
- * [cake][flowers][treasure] | [view t-m][move t-m] … [view t-1][move t-1][view t] → next move?
- * The basket tokens are pinned: they describe her basket now and never scroll out.
+ * [cake][flowers][treasure][energy] | [view t-m][move t-m] … [view t-1][move t-1][view t] → next move?
+ * The basket and energy tokens are pinned: they describe her basket and energy now and never scroll out.
  */
 export function encodeContext(cfg: ModelConfig, h: History, t: number): Float32Array {
   const x = new Float32Array(inputSize(cfg));
@@ -65,9 +76,10 @@ export function encodeContext(cfg: ModelConfig, h: History, t: number): Float32A
   x[cake] = 1;
   x[2 + flowers] = 1;
   x[5 + treasure] = 1;
+  x[BASKET_FEATS + energyLevel(h.energy[t])] = 1;
   const wt = !!cfg.wolfToken;
   const vf = viewFeats(cfg);
-  let off = BASKET_FEATS;
+  let off = PINNED_FEATS;
   encodeView(x, off, h.views[t], wt);
   off += vf;
   if (cfg.hint) {

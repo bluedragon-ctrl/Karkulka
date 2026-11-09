@@ -89,7 +89,7 @@ export function tellStory(rec: TripRecord, boldness: number, rng: Rng): StorySen
   // A den with the wolf out is told once: a wolf-taught walk can go in and out of dens many times.
   const firstEmpty = rec.results.indexOf('empty');
   rec.results.forEach((r, k) => {
-    if (r === 'grabbed' || (r === 'empty' && k === firstEmpty) || r === 'flowers' || r === 'treasure') middle.push({ t: k + 1, s: truth(pickFrom(rng, STORY.basket[r]), 'basket'), keep: true });
+    if (r === 'grabbed' || (r === 'empty' && k === firstEmpty) || r === 'flowers' || r === 'treasure' || r === 'berries') middle.push({ t: k + 1, s: truth(pickFrom(rng, STORY.basket[r]), 'basket'), keep: true });
   });
   for (const e of rec.met) {
     const kind = eventKind(e.kind);

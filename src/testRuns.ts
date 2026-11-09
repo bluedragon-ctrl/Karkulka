@@ -44,6 +44,8 @@ export interface TestTrip {
   treasure: number;
   /** Treasure picked up on the trip, kept or not. */
   treasurePicked: number;
+  /** Berry bushes she ate from (missing in older records: none). */
+  berries?: number;
   bumps: number;
   swampSteps: number;
   densSeen: number;
@@ -71,6 +73,8 @@ export interface TestReport {
   energyUsed: number;
   flowersHome: number;
   treasure: number;
+  /** Berry bushes eaten from, per trip. */
+  berries: number;
   bumps: number;
   swampSteps: number;
   densSeen: number;
@@ -139,6 +143,7 @@ function tripOf(f: Forest, w: Walker, shortest: number, tracker: EventTracker | 
     flowers: w.outcome === 'home' ? w.basket.flowers : 0,
     treasure: w.basket.treasure,
     treasurePicked: w.pickups.treasure + w.effects.filter((e) => e.effect === 'giveTreasure').length,
+    berries: w.pickups.berries,
     bumps: w.blocked.filter(Boolean).length,
     swampSteps: w.positions.slice(1).filter((p, i) => !w.blocked[i] && f.tiles[p] === SWAMP).length,
     densSeen: wolvesSeen,
@@ -175,6 +180,7 @@ export function summarize(f: Forest, list: TestTrip[]): TestReport {
     energyUsed: mean(list.map((t) => t.energyUsed)),
     flowersHome: mean(list.map((t) => t.flowers)),
     treasure: mean(list.map((t) => t.treasure)),
+    berries: mean(list.map((t) => t.berries ?? 0)),
     bumps: mean(list.map((t) => t.bumps)),
     swampSteps: mean(list.map((t) => t.swampSteps)),
     densSeen: mean(list.map((t) => t.densSeen)),
@@ -256,6 +262,12 @@ export function factoids(f: Forest, r: TestReport): string[] {
   const picked = list.reduce((a, t) => a + t.treasurePicked, 0);
   const kept = list.reduce((a, t) => a + t.treasure, 0);
   if (picked) out.push(`She picked up ${picked} treasure${picked === 1 ? '' : 's'} in all${picked > kept ? `, and lost ${picked - kept} when a wolf ate her` : ''}.`);
+
+  const ate = list.filter((t) => (t.berries ?? 0) > 0);
+  if (ate.length) {
+    const home = ate.filter((t) => t.outcome === 'home').length;
+    out.push(`She ate berries on ${trips(ate.length)}; ${home === ate.length ? 'all of them' : `${home} of them`} got home.`);
+  }
 
   return out;
 }

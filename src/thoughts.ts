@@ -68,6 +68,7 @@ export const EMPTY_LINES: readonly Line[] = ['Phew, nobody home!', 'The den was 
 export const HOME_AFTER_ALL: readonly Line[] = ['Oh no, he IS home!', 'He was home after all…', 'Uh-oh, not out today…'];
 export const FLOWER_LINES: readonly Line[] = ['Flowers for Grandma!', 'Pretty flowers!', 'Grandma will love these.'];
 export const TREASURE_LINES: readonly Line[] = ['Ooh, treasure!', 'Shiny! Mine now.', 'A treasure! Lucky me.'];
+export const BERRY_LINES: readonly Line[] = ['Berries! Yum!', 'Mmm, berries. I feel better!', 'Juicy berries, just what I needed.'];
 
 /** Compass name of each move (up the screen is north), in move order: up, right, down, left. */
 export const COMPASS = ['north', 'east', 'south', 'west'] as const;
@@ -151,6 +152,7 @@ export class Thoughts {
     }
     if (res === 'flowers') return [this.say(FLOWER_LINES)];
     if (res === 'treasure') return [this.say(TREASURE_LINES)];
+    if (res === 'berries') return [this.say(BERRY_LINES)];
 
     // Forest events: always worth a thought, like the basket, but keeping the gap after the last
     // thought. One waits a few steps for its turn, then it is forgotten.

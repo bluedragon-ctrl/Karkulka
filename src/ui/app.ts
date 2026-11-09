@@ -11,11 +11,11 @@ import { TEST_SIZES, TestReport, runTest } from '../testRuns';
 import { Thoughts } from '../thoughts';
 import * as store from '../storage';
 import { LessonWalk, TEACHER_KINDS, Teacher, TeacherChoice, costToHome, endsAtDen, endsStuck, teacherMoves, walkLesson } from '../teachers';
-import { MEMORY_PAIRS, MemorySize, ModelConfig } from '../tokens';
+import { ENERGY_NAMES, MEMORY_PAIRS, MemorySize, ModelConfig, energyLevel } from '../tokens';
 import { EvalPoint, FIXED, JUDGES, Judge, PRACTICE_STARTS, PracticeStarts, TrainStats, chooseTeacher, guessesRight, homeShare, learnFromLesson, learnFromRun, newStats, practiceSetup, practiceWalker, recordLessonBatch, recordPracticeBatch, practiceStartTiles, startTiles, teacherCosts } from '../train';
 import { WorkerRequest, runTraining } from '../workerTypes';
 import {
-  DEFAULT_SIZE, FLOWERS, Forest, HOME, MOVES, MOVE_ARROWS, MOVE_NAMES, PATH, SECTOR_WORDS, SWAMP, TREASURE, TREE, Tile, WOLF, copyForest,
+  BERRIES, DEFAULT_SIZE, FLOWERS, Forest, HOME, MOVES, MOVE_ARROWS, MOVE_NAMES, PATH, SECTOR_WORDS, SWAMP, TREASURE, TREE, Tile, WOLF, copyForest,
   forestFromTiles, homeSector, isItem, isWalkable, moveHome, neighbor, unreachableTiles, walkingDistances,
 } from '../world';
 import { Board } from './board';
@@ -23,7 +23,7 @@ import { changeChart, outcomeChart } from './charts';
 import { add, clear, h, s } from './dom';
 import { closeHint, hintButton, placeHint } from './hint';
 import { renderStrip } from './strip';
-import { COLORS, cake, cloudMark, crowFigure, footprintMark, gem, grandmaFigure, huntsmanFigure, magpieFigure, parentFigure, tileSymbol, wolfHead } from './symbols';
+import { COLORS, bush, cake, cloudMark, crowFigure, footprintMark, gem, grandmaFigure, huntsmanFigure, magpieFigure, parentFigure, tileSymbol, wolfHead } from './symbols';
 import { renderTech } from './tech';
 
 type TabId = 'forest' | 'lessons' | 'trip' | 'practice' | 'test' | 'inside' | 'settings';
@@ -85,10 +85,11 @@ const TEACHERS: { id: TeacherChoice; name: string; text: string }[] = [
   { id: 'grandma', name: 'Grandma', text: 'First a bunch of flowers, then home the safe way, like the mother.' },
   { id: 'magpie', name: 'Magpie', text: 'Hops from treasure to treasure, and only then heads home.' },
   { id: 'huntsman', name: 'Huntsman', text: 'Takes the long way round to look at every wolf den, but always gets her home.' },
+  { id: 'hedgehog', name: 'Hedgehog', text: 'Goes straight home, but when she is getting tired, he stops at a berry bush on the way.' },
 ];
 
 /** The LM corner card for a teacher choice. */
-const TEACHER_CARDS: Partial<Record<TeacherChoice, CardKey>> = { mother: 'motherTeacher', father: 'fatherTeacher', both: 'bothTeachers', wolf: 'wolfTeacher', motherWolf: 'poisonedData', crow: 'crowTeacher', grandma: 'grandmaTeacher', magpie: 'magpieTeacher', huntsman: 'huntsmanTeacher' };
+const TEACHER_CARDS: Partial<Record<TeacherChoice, CardKey>> = { mother: 'motherTeacher', father: 'fatherTeacher', both: 'bothTeachers', wolf: 'wolfTeacher', motherWolf: 'poisonedData', crow: 'crowTeacher', grandma: 'grandmaTeacher', magpie: 'magpieTeacher', huntsman: 'huntsmanTeacher', hedgehog: 'hedgehogTeacher' };
 const teacherCard = (t: TeacherChoice): CardKey => TEACHER_CARDS[t] ?? 'teacher';
 
 /** The judges in the panel: a plain line for children. The exact points are in each judge's LM corner card. */
@@ -115,7 +116,7 @@ interface PracticeSummary {
   evalBefore?: EvalPoint; evalAfter?: EvalPoint;
 }
 
-const TRAIL_COLORS: Record<Outcome | Teacher, string> = { home: '#c99700', eaten: COLORS.danger, lost: COLORS.lost, mother: COLORS.mother, father: COLORS.father, wolf: COLORS.den, crow: COLORS.crow, grandma: COLORS.grandma, magpie: COLORS.magpie, huntsman: COLORS.huntsman };
+const TRAIL_COLORS: Record<Outcome | Teacher, string> = { home: '#c99700', eaten: COLORS.danger, lost: COLORS.lost, mother: COLORS.mother, father: COLORS.father, wolf: COLORS.den, crow: COLORS.crow, grandma: COLORS.grandma, magpie: COLORS.magpie, huntsman: COLORS.huntsman, hedgehog: COLORS.hedgehog };
 
 /** One point of the "since the forest changed" chart: home on test trips after a change or catch-up. */
 export interface ChangePoint { label: string; home: number }
@@ -542,6 +543,7 @@ export class App {
     if (this.trained) this.showCard(brush === HOME ? 'movedHome' : 'outdated');
     else if (brush === HOME) this.showCard('editForest');
     else if (brush === SWAMP) this.showCard('swamp');
+    else if (brush === BERRIES) this.showCard('berries');
     this.updateLink();
     this.saveSoon();
     this.renderBanner();
@@ -740,7 +742,7 @@ export class App {
         if (!done) return;
         if (this.changeLog.length) this.logCheck(`+${done} new lesson${done === 1 ? '' : 's'}`);
         this.watchedEnd = total === 1 ? lastEnd : null;
-        const errand = total === 1 && (lastTeacher === 'grandma' || lastTeacher === 'magpie' || lastTeacher === 'huntsman');
+        const errand = total === 1 && (lastTeacher === 'grandma' || lastTeacher === 'magpie' || lastTeacher === 'huntsman' || lastTeacher === 'hedgehog');
         this.showCard(this.watchedEnd === 'den' ? 'wolfTeacher' : this.watchedEnd === 'stuck' ? 'crowTeacher' : errand ? teacherCard(lastTeacher!) : total > 1 ? 'watchMany' : 'exposure');
       },
     }, speed);
@@ -811,8 +813,9 @@ export class App {
     else if (res === 'empty') this.board.showPop(w.pos, 'Nobody home!');
     else if (res === 'flowers') this.board.showPop(w.pos, 'Flowers!');
     else if (res === 'treasure') this.board.showPop(w.pos, 'Treasure!', gem(0, 0, 8));
+    else if (res === 'berries') this.board.showPop(w.pos, 'Berries! Yum!', bush(0, 0, 8));
     // Forest events pop up their word too, above a basket word if there is one.
-    const basketPop = res === 'grabbed' || res === 'empty' || res === 'flowers' || res === 'treasure';
+    const basketPop = res === 'grabbed' || res === 'empty' || res === 'flowers' || res === 'treasure' || res === 'berries';
     // An event that changed her basket shows what it did: the crossed-out cake, the gem.
     const effectIcon = (e: EventMet) => (e.effect === 'takeCake' ? crossedCake() : e.effect === 'giveTreasure' ? gem(0, 0, 8) : undefined);
     this.lastMet.forEach((e, k) => this.board.showPop(w.pos, eventKind(e.kind)?.popup ?? '', effectIcon(e), k + (basketPop ? 2 : 0)));
@@ -1122,11 +1125,11 @@ export class App {
     if (this.watch) {
       const { walk, k } = this.watch;
       const t = Math.min(k, walk.history.views.length - 1);
-      renderStrip(this.stripEl, walk.history, t, mem, k < walk.history.moves.length ? walk.history.moves[k] : null, this.q('memory', 'strip'), this.q('basket', 'basket'), wt);
+      renderStrip(this.stripEl, walk.history, t, mem, k < walk.history.moves.length ? walk.history.moves[k] : null, this.q('memory', 'strip'), this.q('basket', 'basket'), wt, this.q('energyToken', 'energyToken'));
     } else if ((this.tab === 'trip' && this.walker) || (this.tab === 'practice' && this.runWatch)) {
       const w = (this.tab === 'trip' ? this.walker : this.runWatch) as Walker;
-      renderStrip(this.stripEl, w.history, Math.min(w.t, w.history.views.length - 1), mem, w.done ? w.history.moves[w.t - 1] : null, this.q('memory', 'strip'), this.q('basket', 'basket'), wt);
-    } else renderStrip(this.stripEl, null, 0, mem, undefined, this.q('memory', 'strip'), this.q('basket', 'basket'), wt);
+      renderStrip(this.stripEl, w.history, Math.min(w.t, w.history.views.length - 1), mem, w.done ? w.history.moves[w.t - 1] : null, this.q('memory', 'strip'), this.q('basket', 'basket'), wt, this.q('energyToken', 'energyToken'));
+    } else renderStrip(this.stripEl, null, 0, mem, undefined, this.q('memory', 'strip'), this.q('basket', 'basket'), wt, this.q('energyToken', 'energyToken'));
   }
 
   private renderTechNow() {
@@ -1378,7 +1381,7 @@ export class App {
       h('div', { class: 'group' },
         h('h3', {}, this.hq('Edit the forest', 'editForest')),
         h('p', { class: 'muted' }, 'Pick a brush, then click or drag on the map.'),
-        h('div', { class: 'row brushes' }, brushBtn(PATH, 'Path'), brushBtn(TREE, 'Tree'), brushBtn(SWAMP, 'Swamp'), brushBtn(WOLF, 'Wolf den'), brushBtn(FLOWERS, 'Flowers'), brushBtn(TREASURE, 'Treasure'), brushBtn(HOME, "Grandma's house")),
+        h('div', { class: 'row brushes' }, brushBtn(PATH, 'Path'), brushBtn(TREE, 'Tree'), brushBtn(SWAMP, 'Swamp'), brushBtn(WOLF, 'Wolf den'), brushBtn(FLOWERS, 'Flowers'), brushBtn(TREASURE, 'Treasure'), brushBtn(BERRIES, 'Berry bush'), brushBtn(HOME, "Grandma's house")),
         unreachable ? h('p', { class: 'warn' }, `${unreachable} path tile${unreachable === 1 ? '' : 's'} can't reach home without crossing a wolf den. Her parents never start lessons there.`) : null,
         this.edited ? h('button', { onclick: () => this.undoEdits() }, 'Undo all edits') : null),
       this.changeBox('forest'),
@@ -1526,17 +1529,18 @@ export class App {
         : w.done
         ? [{ home: `Home after ${w.t} steps${w.basket.cake ? '' : ', without the cake'}!`, eaten: `Eaten by a wolf at step ${w.t}.`, lost: `Lost: out of energy after ${w.t} steps.` }[w.outcome!], h('br'), pickupLine(w.pickups)]
         : [
-          `Step ${w.t + 1} · energy ${w.energyLeft} / ${w.energy}`,
+          h('span', {}, `Step ${w.t + 1} · `, this.hq(`energy ${w.energyLeft} / ${w.energy} (she feels: ${ENERGY_NAMES[energyLevel(w.energyLeft)]})`, 'energyToken', 'status')),
+          w.t > 0 && w.results[w.t - 1] === 'berries' ? h('span', { class: 'nowrap' }, this.hq(' · berries, energy back!', 'berries', 'status')) : null,
           !w.basket.cake ? h('span', { class: 'nowrap' }, this.hq((this.forest.wolfOut ?? 0) > 0 ? ' · no cake: a den with the wolf home is the end!' : ' · no cake: the next den is the end!', w.effects.some((e) => e.effect === 'takeCake') ? 'basketEvents' : 'cakeShield', 'status')) : null,
           w.t > 0 && w.blocked[w.t - 1] ? h('span', { class: 'nowrap' }, this.hq(' · ouch, a tree!', 'tree', 'status')) : null,
           this.forest.tiles[w.pos] === SWAMP ? h('span', { class: 'nowrap' }, this.hq(' · in a swamp, tiring!', 'swamp', 'status')) : null,
           this.settings.hint ? h('span', { class: 'nowrap' }, this.hq(` · smells cake to the ${SECTOR_WORDS[homeSector(this.forest, w.pos)]}`, 'hint')) : null,
-        ].filter((x): x is string | HTMLElement => !!x);
+        ].filter((x): x is HTMLSpanElement => !!x);
     add(body,
       h('h2', {}, this.hq('Trip alone', 'view')),
       h('p', {}, this.hq(
-        w ? 'Click a tile to pick where she starts (a path, swamp, flowers or treasure), then let her walk to grandma\'s house alone. The same tile again gives a different walk.'
-          : 'Click a tile to pick where she starts (a path, swamp, flowers or treasure), then let her walk to grandma\'s house alone.', 'sampling')),
+        w ? 'Click a tile to pick where she starts (a path, swamp, flowers, treasure or a berry bush), then let her walk to grandma\'s house alone. The same tile again gives a different walk.'
+          : 'Click a tile to pick where she starts (a path, swamp, flowers, treasure or a berry bush), then let her walk to grandma\'s house alone.', 'sampling')),
       h('div', { class: 'row' },
         h('button', { onclick: () => this.stepTrip(), disabled: !walking || !!this.auto, title: 'One move, then wait' }, 'Next step'),
         h('button', { class: 'primary', onclick: () => this.toggleAuto(), disabled: !walking, title: 'Walk on step by step until the trip ends' }, this.auto ? 'Pause' : 'Walk through'),
@@ -1654,6 +1658,7 @@ export class App {
         (this.forest.wolfOut ?? 0) > 0 || r.emptyDens ? line('Through a den while the wolf was out', `${times(r.emptyDens ?? 0)} (in ${r.emptyDenTrips ?? 0} trips)`) : null,
         line('Flowers brought home', String(total(r.flowersHome))),
         line('Treasure kept', String(total(r.treasure))),
+        r.berries || this.forest.tiles.includes(BERRIES) ? line('Berry bushes eaten from', String(total(r.berries))) : null,
         r.topEvents.length ? line('Events met most', r.topEvents.slice(0, 3).map((e) => `${e.name} (${e.trips})`).join(', ')) : null),
       r.facts.length ? h('h3', {}, this.hq('Did you know?', 'sampling', 'facts')) : null,
       r.facts.length ? h('ul', { class: 'facts' }, ...r.facts.slice(0, 6).map((f) => h('li', {}, f))) : null,
@@ -1681,7 +1686,7 @@ export class App {
     const times = (k: number, one: string, many: string) => (k === 1 && one === 'time' ? 'once' : `${k} ${k === 1 ? one : many}`);
     return h('div', { class: 'report' },
       h('h4', {}, this.hq('How was the trip for her?', 'tripReport')),
-      row(tiredIcon, 'Tired', r.tired, `used ${r.energyUsed} of ${r.energy} energy`),
+      row(tiredIcon, 'Tired', r.tired, `used ${r.energyUsed} of ${r.energy} energy${w.pickups.berries ? `, counting what ${w.pickups.berries === 1 ? 'a berry bush' : `${w.pickups.berries} berry bushes`} gave back` : ''}`),
       row(wetIcon, 'Wet', r.wet, r.swampSteps ? `waded through swamp ${times(r.swampSteps, 'time', 'times')}` : 'never stepped into a swamp'),
       row(scaredIcon, 'Scared', r.scared, r.wolvesSeen ? `saw ${times(r.wolvesSeen, 'wolf', 'wolves')} on the way` : 'saw no wolves'),
       row(bumpIcon, 'Bumped', r.bumped, r.treeHits ? `walked into a tree ${times(r.treeHits, 'time', 'times')}, wasting ${r.treeHits} energy` : 'never walked into a tree'),

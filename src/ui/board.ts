@@ -13,7 +13,7 @@ export class Board {
   private readonly layers = {} as Record<Layer, SVGGElement>;
   private forest!: Forest;
   private tileEls: SVGGElement[] = [];
-  /** Flower and treasure tiles already picked on the trip shown: drawn faded. */
+  /** Flower and treasure tiles already picked and berry bushes already eaten on the trip shown: drawn faded. */
   private picked = new Set<number>();
   private red: SVGGElement;
   private redInner: SVGGElement;
@@ -114,7 +114,7 @@ export class Board {
   }
 
   /**
-   * Fade the flower and treasure tiles she already picked on this trip: they stay on the
+   * Fade the flower and treasure tiles she already picked on this trip (and berry bushes she ate, which she now sees as path): they stay on the
    * board (she still sees them), but stepping there again adds nothing to her basket.
    */
   setPicked(tiles: readonly number[] | null) {

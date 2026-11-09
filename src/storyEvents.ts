@@ -42,7 +42,7 @@ export interface StoryData {
   events: EventKind[];
   fantasy: string[];
   openings: Record<Place, string[]>;
-  basket: { grabbed: string[]; empty: string[]; flowers: string[]; treasure: string[] };
+  basket: { grabbed: string[]; empty: string[]; flowers: string[]; treasure: string[]; berries: string[] };
   swamp: string[];
   bumps: string[];
   endings: { home: string[]; homeNoCake: string[]; eaten: string[]; lost: string[]; stopped: string[] };

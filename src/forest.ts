@@ -2,7 +2,7 @@
 import { randInt, rngFrom, shuffle } from './rng';
 import { costToHome, teacherMoves } from './teachers';
 import {
-  DEFAULT_SIZE, DX, DY, FLOWERS, Forest, HOME, MOVES, PATH, SWAMP, TREASURE, TREE, Tile, WOLF,
+  BERRIES, DEFAULT_SIZE, DX, DY, FLOWERS, Forest, HOME, MOVES, PATH, SWAMP, TREASURE, TREE, Tile, WOLF,
   allReachable, homeIndex, isWalkable, loopCount, nearWolf, neighbor, pathTiles, tileAt, walkingDistances, xyOf,
 } from './world';
 
@@ -119,7 +119,60 @@ export function generateForest(code: string, size = DEFAULT_SIZE): Forest {
   }
 
   placeBasketTiles(forest);
+  placeBerryBushes(forest);
   return forest;
+}
+
+/** Berry bushes per forest: 2 or 3, at least this many steps from home (where she gets tired). */
+export const BERRY_BUSHES = [2, 3] as const;
+export const BERRY_MIN_DIST = 5;
+
+/**
+ * Berry bushes, placed last from their own seeded stream, so the rest of each forest stays as it
+ * was: 2–3, off both parents' routes (a detour, never on their way), away from home, never next
+ * to an item, home or another bush. A bush goes on a path tile nobody's route uses, or, when
+ * there are too few, on a tree next to a path (never on the border) where no parent's route
+ * then goes through it. Some mazes have too few such spots: then fewer, but always at least one
+ * (as a last resort on a parent's route). The farther half of the spots from home is preferred:
+ * far from home is where she runs low.
+ */
+function placeBerryBushes(f: Forest) {
+  const rng = rngFrom(`berries:${f.code}:${f.size}`);
+  const { tiles, size } = f;
+  const fromHome = walkingDistances(f);
+  const around = (i: number) => MOVES.map((m) => neighbor(f, i, m)).filter((n) => n >= 0);
+  const crowded = (i: number) => around(i).some((n) => n === f.home || tiles[n] === FLOWERS || tiles[n] === TREASURE || tiles[n] === BERRIES);
+  // How far from home a spot is: a path tile's own distance, a tree's through its nearest open neighbour.
+  const far = (i: number) => (tiles[i] === TREE ? 1 + Math.min(...around(i).map((n) => (fromHome[n] >= 0 ? fromHome[n] : Infinity))) : fromHome[i]);
+  const inside = (i: number) => { const [x, y] = xyOf(f, i); return x > 0 && y > 0 && x < size - 1 && y < size - 1; };
+  const preferFar = (options: number[]) => {
+    options.sort((a, b) => far(b) - far(a) || a - b);
+    return shuffle(rng, options.slice(0, Math.max(1, Math.ceil(options.length / 2))));
+  };
+  const [lo, hi] = BERRY_BUSHES;
+  for (let k = lo + randInt(rng, hi - lo + 1); k > 0; k--) {
+    const ok = (i: number) => Number.isFinite(far(i)) && far(i) >= BERRY_MIN_DIST && !crowded(i);
+    const used = parentRouteTiles(f);
+    const paths = pathTiles(f).filter((i) => !used.has(i) && ok(i));
+    if (paths.length) { tiles[preferFar(paths)[0]] = BERRIES; continue; }
+    // A tree by the path: kept only if it stays off the parents' routes (it must not open a shortcut).
+    // Nooks first (a tree with one open neighbour: it can't open a shortcut), then the rest.
+    const open = (i: number) => around(i).filter((n) => tiles[n] !== TREE).length;
+    const trees = preferFar(tiles.map((_, i) => i).filter((i) => tiles[i] === TREE && inside(i) && ok(i)))
+      .sort((a, b) => Number(open(a) > 1) - Number(open(b) > 1));
+    let placed = false;
+    for (const i of trees.slice(0, 40)) {
+      tiles[i] = BERRIES;
+      if (!parentRouteTiles(f).has(i)) { placed = true; break; }
+      tiles[i] = TREE;
+    }
+    if (!placed) break;
+  }
+  // Every forest gets at least one: as a last resort on a path tile a parent's route crosses.
+  if (!tiles.includes(BERRIES)) {
+    const any = pathTiles(f).filter((i) => Number.isFinite(far(i)) && far(i) >= BERRY_MIN_DIST && !crowded(i));
+    if (any.length) tiles[preferFar(any)[0]] = BERRIES;
+  }
 }
 
 /** Shortcut dens per forest, and how many steps one must save at least. */
