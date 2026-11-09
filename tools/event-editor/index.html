@@ -1,0 +1,89 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><title>Karkulka event editor</title>
+<style>
+body{font:15px system-ui,sans-serif;margin:0;display:flex;height:100vh;color:#222}
+#side{width:260px;border-right:1px solid #ccc;display:flex;flex-direction:column}
+#side input{margin:8px;padding:6px}
+#items{overflow:auto;flex:1}
+#items div{padding:6px 10px;cursor:pointer;border-bottom:1px solid #eee}
+#items div.sel{background:#fde8e8}
+#items small{color:#888}
+#main{flex:1;overflow:auto;padding:16px 24px}
+label{display:block;margin:10px 0 2px;font-weight:600}
+input,select,textarea{font:inherit;padding:5px;box-sizing:border-box}
+textarea{width:100%;height:7em}
+.row{display:flex;gap:12px;flex-wrap:wrap}
+.row>div{flex:1;min-width:120px}.row input,.row select{width:100%}
+button{font:inherit;padding:6px 12px;margin:4px 4px 4px 0;cursor:pointer}
+#save{background:#b3261e;color:#fff;border:0;border-radius:4px}
+#msg{white-space:pre-wrap;margin-top:12px}.err{color:#b3261e}
+.hint{color:#666;font-size:13px}
+</style></head><body>
+<div id="side"><input id="find" placeholder="Search events…"><div id="items"></div>
+<div style="padding:8px"><button id="add">+ New event</button></div></div>
+<div id="main">
+ <div id="form"></div>
+ <hr>
+ <label>Pull request title</label><input id="title" style="width:100%" value="Edit forest events">
+ <label>Description (optional)</label><textarea id="body" style="height:4em"></textarea>
+ <button id="save">Save and open PR</button> <span class="hint" id="count"></span>
+ <div id="msg"></div>
+</div>
+<script>
+let events=[],meta={},cur=0;
+const $=(id)=>document.getElementById(id);
+const lines=(s)=>s.split('\n').map(x=>x.trim()).filter(Boolean);
+async function load(){const r=await (await fetch('/api/events')).json();events=r.events;meta=r;original=JSON.stringify(events);render();}
+let original='';
+function render(){
+  const f=$('find').value.toLowerCase();
+  $('items').innerHTML='';
+  events.forEach((k,i)=>{ if(f&&!(k.name+' '+k.fits).toLowerCase().includes(f))return;
+    const d=document.createElement('div');d.className=i===cur?'sel':'';
+    d.innerHTML=`${k.id}. ${esc(k.name)} <small>${k.fits}${k.chance?' · '+Math.round(k.chance*100)+'%':''}</small>`;
+    d.onclick=()=>{cur=i;render();};$('items').append(d);});
+  form();
+  $('count').textContent=JSON.stringify(events)===original?'No changes':'Unsaved changes';
+}
+const esc=(s)=>String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+function form(){
+  const k=events[cur]; if(!k){$('form').innerHTML='';return;}
+  const opts=(a,v)=>a.map(x=>`<option ${x===v?'selected':''}>${x}</option>`).join('');
+  $('form').innerHTML=`
+  <div class="row">
+   <div><label>Id</label><input id="f_id" type="number" value="${k.id}"></div>
+   <div><label>Name</label><input id="f_name" value="${esc(k.name)}"></div>
+   <div><label>Pop-up word (max 16)</label><input id="f_popup" maxlength="16" value="${esc(k.popup)}"></div>
+  </div><div class="row">
+   <div><label>Fits (place)</label><select id="f_fits">${opts(meta.places,k.fits)}</select></div>
+   <div><label>Trigger</label><select id="f_trigger">${opts(meta.triggers,k.trigger)}</select></div>
+   <div><label>Chance % (empty = always)</label><input id="f_chance" type="number" min="1" max="100" value="${k.chance?Math.round(k.chance*100):''}"></div>
+   <div><label>Basket effect</label><select id="f_effect"><option value="">none</option>${opts(meta.effects,k.effect)}</select></div>
+  </div>
+  <label>Story versions (one per line, at least 2)</label><textarea id="f_versions">${esc(k.versions.join('\n'))}</textarea>
+  <label>Quiet versions (only the sly fox: when her basket has no cake)</label><textarea id="f_quiet" style="height:4em">${esc((k.quiet||[]).join('\n'))}</textarea>
+  <label>Her thoughts (one per line)</label><textarea id="f_thoughts" style="height:5em">${esc(k.thoughts.join('\n'))}</textarea>
+  <button id="del">Delete this event</button>
+  <p class="hint">Ids are permanent: never reuse a deleted one.</p>`;
+  const bind=(id,fn)=>{$(id).oninput=()=>{fn($(id).value);$('count').textContent=JSON.stringify(events)===original?'No changes':'Unsaved changes';};};
+  bind('f_id',v=>k.id=Number(v));bind('f_name',v=>k.name=v);bind('f_popup',v=>k.popup=v);
+  bind('f_fits',v=>k.fits=v);bind('f_trigger',v=>k.trigger=v);
+  bind('f_chance',v=>{if(v==='')delete k.chance;else k.chance=Math.min(100,Math.max(1,Number(v)))/100;});
+  bind('f_effect',v=>{if(v)k.effect=v;else delete k.effect;});
+  bind('f_versions',v=>k.versions=lines(v));bind('f_thoughts',v=>k.thoughts=lines(v));
+  bind('f_quiet',v=>{const l=lines(v);if(l.length)k.quiet=l;else delete k.quiet;});
+  $('del').onclick=()=>{if(confirm('Delete '+k.name+'?')){events.splice(cur,1);cur=Math.max(0,cur-1);render();}};
+}
+$('find').oninput=render;
+$('add').onclick=()=>{const id=Math.max(0,...events.map(e=>e.id))+1;
+  events.push({id,name:'New event',fits:'anywhere',trigger:'step',versions:['First version.','Second version.'],thoughts:['A thought.'],popup:'Look!'});cur=events.length-1;render();};
+$('save').onclick=async()=>{
+  const m=$('msg');m.className='';m.textContent='Saving… (runs the story tests, pushes, opens the PR)';$('save').disabled=true;
+  try{const r=await fetch('/api/save',{method:'POST',body:JSON.stringify({events,title:$('title').value,body:$('body').value})});
+    const j=await r.json();
+    if(!r.ok){m.className='err';m.textContent=j.error;}
+    else{m.innerHTML=`Pull request opened: <a href="${esc(j.url)}" target="_blank">${esc(j.url)}</a>`;original=JSON.stringify(events);$('count').textContent='No changes';}
+  }catch(e){m.className='err';m.textContent=String(e);}
+  $('save').disabled=false;};
+load();
+</script></body></html>

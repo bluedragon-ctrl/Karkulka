@@ -670,3 +670,7 @@ Wolves who leave their dens and walk about the forest; the rules below are for o
 - Exact default grid size and the three memory-size values, to be tuned once it runs.
 - Pacing of the outcome animations.
 - Whether a teacher's guide (one page of lesson flow for presenters) belongs in the repo.
+
+## Event editor (tool)
+
+`npm run events:edit` starts a local page (http://localhost:5174, `tools/event-editor/`) for editing the forest events in `src/data/storyEvents.json`: name, place, trigger, chance, basket effect, story versions, thoughts and pop-up word. "Save and open PR" checks the data, then in a temporary git worktree from `origin/main` writes the file (the rest of the file and its layout stay as they were), runs the story tests, commits to a new `events-edit-…` branch, pushes it and opens a PR with `gh`. It needs `git` and a logged-in `gh` on your machine; your own checkout is never touched. It is not part of the game or the build.

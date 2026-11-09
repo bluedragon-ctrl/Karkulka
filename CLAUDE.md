@@ -12,6 +12,7 @@ npm run dev        # local dev server
 npm test           # vitest unit tests (fast, ~2 s)
 npm run typecheck  # tsc --noEmit
 npm run build      # typecheck + production build to dist/
+npm run events:edit  # local event editor (http://localhost:5174); Save opens a PR (needs git and a logged-in gh)
 ```
 
 Run `npm test` and `npm run build` before every commit.
