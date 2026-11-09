@@ -1519,6 +1519,9 @@ export class App {
         h('button', { class: 'primary', onclick: () => this.toggleAuto(), disabled: !walking, title: 'Walk on step by step until the trip ends' }, this.auto ? 'Pause' : 'Walk through'),
         h('button', { onclick: () => this.instantTrip(), disabled: !walking, title: 'Finish the whole trip at once' }, 'Instant run'),
         h('button', { onclick: () => this.stopWalk(), disabled: !walking, title: 'End this trip now, for example when she walks in circles or keeps bumping into trees' }, 'Stop')),
+      walking ? null : h('p', { class: 'pick-hint' }, w
+        ? 'The trip is over. Click a tile on the board to start a new one.'
+        : 'The buttons are waiting for you: click a tile on the board to choose where she starts.'),
       status.length ? h('p', { class: 'status' }, ...status) : null,
       walking ? h('h3', {}, this.hq('Her next move', 'arrows')) : null,
       probsBox,
