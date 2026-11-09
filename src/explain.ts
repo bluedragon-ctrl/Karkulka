@@ -210,7 +210,7 @@ export const CARD_DETAILS: Partial<Record<CardKey, { title: string; lines: () =>
   ] },
 };
 
-/** How the trip went for her: tired (energy used), wet (swamp steps), scared (wolf dens seen) and bumped (walked into a tree). */
+/** How the trip went for her: tired (energy used), wet (swamp steps), scared (wolves seen: dens and walking wolves) and bumped (walked into a tree). */
 export interface TripReport {
   energyUsed: number;
   energy: number;
@@ -224,7 +224,22 @@ export interface TripReport {
   bumped: string;
 }
 
-export function tripReport(w: Pick<Walker, 'energy' | 'energyLeft' | 'positions' | 'blocked' | 'outcome'>, f: Forest): TripReport {
+/** How many walking wolves came into her 3 × 3 view at any place she stood (each counted once). */
+export function walkingWolvesSeen(f: Forest, positions: readonly number[], wolves: readonly { path: readonly number[] }[], stoodCount: number): number {
+  let n = 0;
+  for (const wolf of wolves) {
+    for (let i = 0; i < stoodCount && i < wolf.path.length; i++) {
+      const wp = wolf.path[i];
+      if (wp < 0) continue;
+      const [x, y] = xyOf(f, positions[i]);
+      const [wx, wy] = xyOf(f, wp);
+      if (VIEW_OFFSETS.some(([dx, dy]) => x + dx === wx && y + dy === wy)) { n++; break; }
+    }
+  }
+  return n;
+}
+
+export function tripReport(w: Pick<Walker, 'energy' | 'energyLeft' | 'positions' | 'blocked' | 'outcome'> & { wolves?: readonly { path: readonly number[] }[] }, f: Forest): TripReport {
   const energyUsed = w.energy - w.energyLeft;
   const swampSteps = w.positions.slice(1).filter((p, i) => !w.blocked[i] && f.tiles[p] === SWAMP).length;
   // Dens in her 3 × 3 view at any place she stood (not the den or house that ended the trip).
@@ -236,7 +251,8 @@ export function tripReport(w: Pick<Walker, 'energy' | 'energyLeft' | 'positions'
   }
   const treeHits = w.blocked.filter(Boolean).length;
   const used = w.energy > 0 ? energyUsed / w.energy : 0;
-  const n = dens.size;
+  // Wolves she saw: wolf dens and walking wolves together.
+  const n = dens.size + walkingWolvesSeen(f, w.positions, w.wolves ?? [], stood.length);
   return {
     energyUsed, energy: w.energy, swampSteps, wolvesSeen: n, treeHits,
     tired: w.outcome === 'lost' ? 'worn out' : used < 0.34 ? 'still fresh' : used < 0.67 ? 'a bit tired' : 'very tired',

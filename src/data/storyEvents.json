@@ -25,7 +25,7 @@
       "popup": "Paw prints!"
     },
     {
-      "id": 5, "name": "Growl in the bushes", "fits": "den", "trigger": "hear",
+      "id": 5, "name": "Growl in the bushes", "fits": "den", "trigger": "hear", "chance": 0.7,
       "versions": ["Something growled in the bushes.", "Something growled in the bushes; it was only a grumpy badger."],
       "thoughts": ["What was that growl?", "Eek! Something growled."],
       "popup": "Grrr…"
@@ -55,13 +55,13 @@
       "popup": "Butterflies!"
     },
     {
-      "id": 10, "name": "Woodcutter", "fits": "anywhere", "trigger": "hear",
+      "id": 10, "name": "Woodcutter", "fits": "anywhere", "trigger": "hear", "chance": 0.6,
       "versions": ["Far away, someone was chopping wood.", "She heard someone chopping wood and whistling a tune."],
       "thoughts": ["Someone is chopping wood.", "Chop, chop… a woodcutter?"],
       "popup": "Chop, chop!"
     },
     {
-      "id": 11, "name": "Lost mitten", "fits": "anywhere", "trigger": "step",
+      "id": 11, "name": "Lost mitten", "fits": "anywhere", "trigger": "step", "chance": 0.6,
       "versions": ["She found a lost blue mitten and hung it on a twig for its owner.", "She found a tiny mitten, much too small for her."],
       "thoughts": ["Someone lost a mitten.", "A mitten! Whose is it?"],
       "popup": "A mitten!"
@@ -73,7 +73,7 @@
       "popup": "A hedgehog!"
     },
     {
-      "id": 13, "name": "Deer", "fits": "open", "trigger": "step",
+      "id": 13, "name": "Deer", "fits": "open", "trigger": "step", "chance": 0.5,
       "versions": ["A deer looked up at her, then bounded away.", "A deer and her fawn were nibbling grass."],
       "thoughts": ["A deer! Shh…", "Oh, a deer!"],
       "popup": "A deer!"
@@ -85,7 +85,7 @@
       "popup": "Wobble!"
     },
     {
-      "id": 15, "name": "Rain shower", "fits": "anywhere", "trigger": "step",
+      "id": 15, "name": "Rain shower", "fits": "anywhere", "trigger": "step", "chance": 0.6,
       "versions": ["A little rain shower came, and she waited under a big leaf.", "A short rain fell, and then a rainbow came out."],
       "thoughts": ["Rain! Where's a big leaf?", "Drip, drop. Rain!"],
       "popup": "Rain!"
@@ -97,7 +97,7 @@
       "popup": "A mole!"
     },
     {
-      "id": 17, "name": "Echo", "fits": "crossing", "trigger": "step",
+      "id": 17, "name": "Echo", "fits": "crossing", "trigger": "step", "chance": 0.6,
       "versions": ["She shouted \"Hello!\" and the forest shouted back.", "She sang a song, and the echo sang along."],
       "thoughts": ["Hello-o-o!", "Is anybody there-ere-ere?"],
       "popup": "Hello-o-o!"
@@ -109,20 +109,20 @@
       "popup": "Knock knock!"
     },
     {
-      "id": 19, "name": "Sly fox", "fits": "den", "trigger": "step", "effect": "takeCake",
+      "id": 19, "name": "Sly fox", "fits": "den", "trigger": "step", "chance": 0.5, "effect": "takeCake",
       "versions": ["A sly fox pretended to be lost, and while she showed it the way, it ran off with the cake.", "A fox snatched the cake from her basket and vanished into the bushes."],
       "quiet": ["The fox sniffed her empty basket and trotted off.", "A fox peeked into her basket, found no cake and slunk away."],
       "thoughts": ["Hey! My cake!", "That sly fox took my cake!"],
       "popup": "A fox!"
     },
     {
-      "id": 20, "name": "Grandma's neighbour", "fits": "home", "trigger": "step", "effect": "giveFlowers",
+      "id": 20, "name": "Grandma's neighbour", "fits": "home", "trigger": "step", "chance": 0.5, "effect": "giveFlowers",
       "versions": ["Grandma's neighbour waved from her garden and gave her a bunch of flowers.", "A kind old neighbour picked some flowers for Grandma and put them in her basket."],
       "thoughts": ["Thank you! Flowers for Grandma.", "Flowers from the neighbour!"],
       "popup": "Flowers!"
     },
     {
-      "id": 21, "name": "Magpie's gift", "fits": "open", "trigger": "step", "effect": "giveTreasure",
+      "id": 21, "name": "Magpie's gift", "fits": "open", "trigger": "step", "chance": 0.4, "effect": "giveTreasure",
       "versions": ["A magpie dropped something shiny into her basket: a treasure!", "A magpie gave her a glittering stone, then flew away laughing."],
       "thoughts": ["Ooh, shiny!", "A present from a magpie!"],
       "popup": "Shiny!"
@@ -164,7 +164,7 @@
       "popup": "A stream!"
     },
     {
-      "id": 28, "name": "Rainbow", "fits": "open", "trigger": "step",
+      "id": 28, "name": "Rainbow", "fits": "open", "trigger": "step", "chance": 0.3,
       "versions": ["A small rainbow hung over the trees for a moment.", "She saw a rainbow, and it ended right behind a bush."],
       "thoughts": ["A rainbow! Wow.", "Where does it end?"],
       "popup": "A rainbow!"
@@ -188,7 +188,7 @@
       "popup": "A dragonfly!"
     },
     {
-      "id": 32, "name": "Beaver", "fits": "swamp", "trigger": "step",
+      "id": 32, "name": "Beaver", "fits": "swamp", "trigger": "step", "chance": 0.5,
       "versions": ["A beaver slapped its tail on the water, splash!", "She saw a beaver building a little dam."],
       "thoughts": ["A busy beaver!", "Splash! That was loud."],
       "popup": "A beaver!"
@@ -206,13 +206,13 @@
       "popup": "Acorns!"
     },
     {
-      "id": 35, "name": "Fairy door", "fits": "deadEnd", "trigger": "step",
+      "id": 35, "name": "Fairy door", "fits": "deadEnd", "trigger": "step", "chance": 0.5,
       "versions": ["She found a tiny door at the foot of a tree, no bigger than a thimble.", "A tiny door in a tree stump had a tiny welcome mat."],
       "thoughts": ["A door! For someone very small.", "Knock, knock. Nobody home."],
       "popup": "A tiny door!"
     },
     {
-      "id": 36, "name": "Old well", "fits": "deadEnd", "trigger": "step",
+      "id": 36, "name": "Old well", "fits": "deadEnd", "trigger": "step", "chance": 0.5,
       "versions": ["She found an old stone well, and the echo said hello from deep down.", "An old well stood in the grass, with a bucket and no rope."],
       "thoughts": ["A well! Hello-o-o down there.", "No water today, only echoes."],
       "popup": "An old well!"
@@ -224,7 +224,7 @@
       "popup": "A nest!"
     },
     {
-      "id": 38, "name": "Stork", "fits": "open", "trigger": "step",
+      "id": 38, "name": "Stork", "fits": "open", "trigger": "step", "chance": 0.4,
       "versions": ["A tall stork stood on one leg and stared at her.", "A stork clacked its beak, and she clacked back."],
       "thoughts": ["A stork! So tall.", "Clack, clack, hello!"],
       "popup": "A stork!"
@@ -254,13 +254,13 @@
       "popup": "Ducklings!"
     },
     {
-      "id": 43, "name": "Badger", "fits": "den", "trigger": "step",
+      "id": 43, "name": "Badger", "fits": "den", "trigger": "step", "chance": 0.5,
       "versions": ["A sleepy badger looked up, yawned and went back to sleep.", "A badger was digging a hole and covered her boots with soil."],
       "thoughts": ["Just a badger. Phew.", "Shh, don't wake the badger."],
       "popup": "A badger!"
     },
     {
-      "id": 44, "name": "Bat", "fits": "den", "trigger": "hear",
+      "id": 44, "name": "Bat", "fits": "den", "trigger": "hear", "chance": 0.5,
       "versions": ["A bat fluttered past, squeaking, and was gone.", "Something squeaked overhead: only a bat out early."],
       "thoughts": ["Eek! A bat.", "Squeak! Just a bat."],
       "popup": "Squeak!"
@@ -272,7 +272,7 @@
       "popup": "A swing!"
     },
     {
-      "id": 46, "name": "Cave", "fits": "deadEnd", "trigger": "step",
+      "id": 46, "name": "Cave", "fits": "deadEnd", "trigger": "step", "chance": 0.5,
       "versions": ["She peeked into a tiny cave, and her own voice came back.", "A little cave was full of glittering stones, and she took none."],
       "thoughts": ["A cave! Hello-o-o.", "Sparkly stones. Look, don't take."],
       "popup": "A cave!"
@@ -302,7 +302,7 @@
       "popup": "Soft moss!"
     },
     {
-      "id": 51, "name": "Hunting horn", "fits": "anywhere", "trigger": "hear",
+      "id": 51, "name": "Hunting horn", "fits": "anywhere", "trigger": "hear", "chance": 0.5,
       "versions": ["A hunting horn sounded far away, and then there was quiet.", "Somewhere a horn blew two notes."],
       "thoughts": ["A horn! Who is that?", "Hmm, somebody is far away."],
       "popup": "Toot-toot!"

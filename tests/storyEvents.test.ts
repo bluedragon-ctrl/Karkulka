@@ -146,7 +146,11 @@ describe('what a trip sets off', () => {
       const w = new Walker(f, model, eventSpotTiles(f, 40)[k], 60, 1.5, mulberry32(k));
       const tr = new EventTracker(f, spots, mulberry32(100 + k));
       while (!w.done) { w.step(); tr.after(w.positions); }
-      expect(tr.met.map(({ version, ...e }) => ({ ...e, version: 0 }))).toEqual(eventsSetOff(f, spots, w.positions));
+      // Events with a chance may stay away; the rest always happen.
+      const could = eventsSetOff(f, spots, w.positions);
+      const got = tr.met.map(({ version, ...e }) => ({ ...e, version: 0 }));
+      expect(could).toEqual(expect.arrayContaining(got));
+      expect(got).toEqual(could.filter((e) => got.some((g) => g.spot === e.spot) || eventKind(e.kind)!.chance === undefined));
       for (const e of tr.met) expect(e.version).toBeLessThan(eventKind(e.kind)!.versions.length);
     }
   });
@@ -197,24 +201,38 @@ describe('events that change her basket', () => {
     expect(b).toEqual({ cake: false, flowers: 1, treasure: 1 });
   });
 
+  it('an event with a chance only happens when the roll is under it, and a missed spot is not rolled again', () => {
+    const f = openForest();
+    const spots = [{ i: at(2, 6), kind: FOX }];
+    expect(eventKind(FOX)!.chance).toBeLessThan(1);
+    const pos = [at(1, 6), at(2, 6), at(3, 6), at(2, 6)];
+    const run = (roll: number) => { const tr = new EventTracker(f, spots, () => roll); for (let t = 1; t <= pos.length; t++) tr.after(pos.slice(0, t)); return tr.met.length; };
+    expect(run(0.99)).toBe(0);
+    expect(run(0)).toBe(1);
+    const rolls: number[] = [];
+    const tr = new EventTracker(f, spots, () => { rolls.push(1); return 0.99; });
+    for (let t = 1; t <= pos.length; t++) tr.after(pos.slice(0, t));
+    expect(rolls.length).toBe(1);
+  });
+
   it('the tracker changes the basket once, and the fox finds an empty basket quietly', () => {
     const f = openForest();
     const spots = [{ i: at(2, 6), kind: FOX }, { i: at(4, 6), kind: NEIGHBOUR }];
     const pos = [at(1, 6), at(2, 6), at(3, 6), at(2, 6), at(3, 6), at(4, 6)];
     const basket = { cake: true, flowers: 0, treasure: 0 };
-    const tr = new EventTracker(f, spots, mulberry32(1));
+    const tr = new EventTracker(f, spots, () => 0);
     for (let t = 1; t <= pos.length; t++) tr.after(pos.slice(0, t), basket);
     expect(basket).toEqual({ cake: false, flowers: 1, treasure: 0 });
     expect(tr.met.map((e) => [e.kind, e.t, e.effect])).toEqual([[FOX, 1, 'takeCake'], [NEIGHBOUR, 5, 'giveFlowers']]);
     const empty = { cake: false, flowers: 0, treasure: 0 };
-    const quiet = new EventTracker(f, spots, mulberry32(1));
+    const quiet = new EventTracker(f, spots, () => 0);
     quiet.after(pos.slice(0, 2), empty);
     expect(empty.cake).toBe(false);
     expect(quiet.met[0]).toMatchObject({ kind: FOX, quiet: true });
     expect(quiet.met[0].effect).toBeUndefined();
     expect(eventKind(FOX)!.quiet).toContain(metText(quiet.met[0]));
     // Without a basket (as in the older tests) nothing is applied.
-    const none = new EventTracker(f, spots, mulberry32(1));
+    const none = new EventTracker(f, spots, () => 0);
     none.after(pos);
     expect(none.met.every((e) => !e.effect && !e.quiet)).toBe(true);
   });
