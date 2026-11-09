@@ -7,6 +7,7 @@ import { mulberry32, pick } from './rng';
 import { Outcome, Walker } from './sim';
 import { CAST, EventSpot, EventTracker, SPOT_COUNT, eventKind, placeStoryEvents, tripSeed } from './storyEvents';
 import { startTiles } from './train';
+import { walkingWolvesSeen } from './explain';
 import { Forest, SWAMP, WOLF, densInSight, walkingDistances } from './world';
 
 export const TEST_SIZES = [100, 500] as const;
@@ -119,6 +120,7 @@ function tripOf(f: Forest, w: Walker, shortest: number, tracker: EventTracker | 
   const stood = w.outcome === 'home' || w.outcome === 'eaten' ? w.positions.slice(0, -1) : w.positions;
   const dens = new Set<number>();
   for (const p of new Set(stood)) for (const d of densInSight(f, p)) dens.add(d);
+  const wolvesSeen = dens.size + walkingWolvesSeen(f, w.positions, w.wolves, stood.length);
   const fox = w.effects.some((e) => e.effect === 'takeCake');
   return {
     start: w.start,
@@ -134,7 +136,7 @@ function tripOf(f: Forest, w: Walker, shortest: number, tracker: EventTracker | 
     treasurePicked: w.pickups.treasure + w.effects.filter((e) => e.effect === 'giveTreasure').length,
     bumps: w.blocked.filter(Boolean).length,
     swampSteps: w.positions.slice(1).filter((p, i) => !w.blocked[i] && f.tiles[p] === SWAMP).length,
-    densSeen: dens.size,
+    densSeen: wolvesSeen,
     circles: [...visits.values()].some((v) => v >= CIRCLE_VISITS),
     sureMoves: w.decisions.filter((d, t) => d.tempered[w.history.moves[t]] >= SURE_FROM).length,
     events: tracker?.met.map((e) => e.kind) ?? [],

@@ -153,7 +153,7 @@ export function placeOf(f: Forest, i: number): Place {
 // ---------- placement ----------
 
 /** Event spots per forest: measured, an average trip meets 2.2 events (32 forest codes, after 100 lessons from either parent). */
-export const SPOT_COUNT = 18;
+export const SPOT_COUNT = 12;
 
 export interface EventSpot { i: number; kind: number }
 

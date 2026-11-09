@@ -1627,7 +1627,7 @@ export class App {
         line('Energy used', `${num(r.energyUsed)} of ${run.energy}`),
         line('Bumps into trees', num(r.bumps)),
         line('Steps in a swamp', num(r.swampSteps)),
-        line('Wolf dens seen', num(r.densSeen)),
+        line('Wolves seen', num(r.densSeen)),
         run.events ? line('Forest events met', num(r.eventsMet)) : null),
       h('h3', {}, `In all ${n} trips`),
       h('div', { class: 'test-lines' },
@@ -1664,7 +1664,7 @@ export class App {
       h('h4', {}, this.hq('How was the trip for her?', 'tripReport')),
       row(tiredIcon, 'Tired', r.tired, `used ${r.energyUsed} of ${r.energy} energy`),
       row(wetIcon, 'Wet', r.wet, r.swampSteps ? `waded through swamp ${times(r.swampSteps, 'time', 'times')}` : 'never stepped into a swamp'),
-      row(scaredIcon, 'Scared', r.scared, r.wolvesSeen ? `saw ${times(r.wolvesSeen, 'wolf den', 'wolf dens')} on the way` : 'saw no wolf dens'),
+      row(scaredIcon, 'Scared', r.scared, r.wolvesSeen ? `saw ${times(r.wolvesSeen, 'wolf', 'wolves')} on the way` : 'saw no wolves'),
       row(bumpIcon, 'Bumped', r.bumped, r.treeHits ? `walked into a tree ${times(r.treeHits, 'time', 'times')}, wasting ${r.treeHits} energy` : 'never walked into a tree'),
       this.basketRow(w, icon),
       // "Why did she do that?" as a small note at the bottom.
