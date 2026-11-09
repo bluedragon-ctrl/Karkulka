@@ -1242,10 +1242,6 @@ export class App {
     placeHint();
   }
 
-  private next(label: string, tab: TabId) {
-    return h('button', { class: 'next', disabled: this.locked(tab) || this.busy, onclick: () => this.goTab(tab) }, `${label} →`);
-  }
-
   private slider(label: string, value: number, min: number, max: number, step: number, fmt: (v: number) => string, onchange: (v: number) => void, hint?: [string, string], card?: CardKey) {
     const out = h('output', {}, fmt(value));
     const input = h('input', {
@@ -1376,7 +1372,6 @@ export class App {
         unreachable ? h('p', { class: 'warn' }, `${unreachable} path tile${unreachable === 1 ? '' : 's'} can't reach home without crossing a wolf den. Her parents never start lessons there.`) : null,
         this.edited ? h('button', { onclick: () => this.undoEdits() }, 'Undo all edits') : null),
       this.changeBox('forest'),
-      this.next('Next: Lessons', 'lessons'),
     );
   }
 
@@ -1485,7 +1480,6 @@ export class App {
       h('h3', {}, this.hq('How she does alone', 'testTrips')),
       outcomeChart(st.lessonEval, 'lessons'),
       h('p', { class: 'muted' }, 'Now and then she walks the same test trips alone, to see how much she has improved.'),
-      this.next('Next: Trip alone', 'trip'),
     );
   }
 
@@ -1531,7 +1525,6 @@ export class App {
       // After every trip, also one cut short with Stop: there was a walk to tell about.
       w && !walking && w.t > 0 ? this.reportBox(w, this.why) : null,
       w && !walking && w.t > 0 ? this.storyBox() : null,
-      h('div', { class: 'row' }, this.next('Practice', 'practice'), this.next('Big test', 'test')),
     );
   }
 
@@ -1589,7 +1582,6 @@ export class App {
       h('div', { class: 'row' }, ...TEST_SIZES.map((n, k) => h('button', { class: k === 0 ? 'primary' : '', disabled: off, onclick: () => this.runBigTest(n) }, `Walk ${n} trips`))),
       this.testing ? h('p', { class: 'status' }, 'She is walking…') : null,
       run ? this.testResults(run, this.testBefore) : this.testBefore ? this.testBeforeLine(this.testBefore, 'Her last test was before her latest training or a change to the forest') : null,
-      this.next('Inside the model', 'inside'),
     );
   }
 
@@ -1725,7 +1717,6 @@ export class App {
       outcomeChart(st.practiceEval, 'lessons + runs'),
       before && after ? h('p', { class: 'compare' }, this.hq(`On the same test trips: after lessons ${pct(before.home)} home, ${pct(before.eaten)} eaten; after practice ${pct(after.home)} home, ${pct(after.eaten)} eaten.`, 'recipe')) : null,
       this.practiceSummary(),
-      h('div', { class: 'row' }, this.next('Back to Trip alone to compare', 'trip'), this.next('Big test', 'test')),
     );
   }
 
