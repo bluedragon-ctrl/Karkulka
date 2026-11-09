@@ -4,7 +4,7 @@ import type { Rng } from './rng';
 import type { History } from './teachers';
 import { WalkingWolf, viewWithWolves, wolvesAfter, wolvesFor } from './prowler';
 import { encodeContext, snapBasket } from './tokens';
-import { Basket, Effect, FLOWERS, Forest, Move, StepResult, TREASURE, BasketState, homeSector, newBasketState, pickUpAtStart, step } from './world';
+import { Basket, Effect, FLOWERS, Forest, Move, StepResult, TREASURE, BasketState, WolfOutRoll, homeSector, newBasketState, pickUpAtStart, step, wolfOutRolls } from './world';
 
 export type Outcome = 'home' | 'eaten' | 'lost';
 
@@ -58,6 +58,8 @@ export class Walker {
   readonly effects: EffectDone[] = [];
   /** The walking wolves the forest has out (`Forest.wolves`); none by default. */
   readonly wolves: WalkingWolf[];
+  /** Whether a den's wolf is out each time she steps onto one (`Forest.wolfOut`); undefined: always home. */
+  private readonly wolfOut: WolfOutRoll | undefined;
   /** The steps (0-based move index) at which a walking wolf met her. */
   readonly wolfMet: number[] = [];
   energyLeft: number;
@@ -79,6 +81,8 @@ export class Walker {
     pickUpAtStart(forest, start, this.trip);
     // Without walking wolves, no randomness is used here, so trips are as before.
     this.wolves = wolvesFor(forest, start, rng);
+    // Likewise: with the wolf always home, nothing is drawn.
+    this.wolfOut = wolfOutRolls(forest, rng);
     this.history = { views: [viewWithWolves(forest, start, this.wolves)], moves: [], sectors: [homeSector(forest, start)], baskets: [snapBasket(this.trip.basket)] };
     this.baskets = [snapBasket(this.trip.basket)];
     this.energyLeft = energy;
@@ -99,6 +103,9 @@ export class Walker {
 
   /** The step at which the wolf grabbed the cake (0-based move index), or -1. */
   get cakeLostAt(): number { return this.results.indexOf('grabbed'); }
+
+  /** How many times she stepped onto a den while its wolf was out. */
+  get emptyDens(): number { return this.results.filter((r) => r === 'empty').length; }
 
   get t(): number { return this.history.moves.length; }
   get done(): boolean { return this.outcome !== null; }
@@ -127,7 +134,7 @@ export class Walker {
     const m = sample(tempered, this.rng);
     this.decisions.push({ ...d, tempered, temperature: this.temperature });
     this.pending = null;
-    const r = step(this.forest, this.pos, m, this.trip);
+    const r = step(this.forest, this.pos, m, this.trip, this.wolfOut);
     if (this.wolves.length) {
       const met = wolvesAfter(this.wolves, r.pos, r.result, this.trip);
       if (met !== r.result) { r.result = met; this.wolfMet.push(this.t); }

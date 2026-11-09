@@ -11,7 +11,7 @@ export type CardKey =
   | 'tech' | 'vocabulary' | 'judge' | 'swamp' | 'tree' | 'thoughts' | 'stop'
   | 'tripReport' | 'judgeGrandma' | 'judgeFather' | 'judgeMother' | 'judgeCrow' | 'rewardHacking' | 'teacherVsJudge'
   | 'wolfTeacher' | 'crowTeacher' | 'grandmaTeacher' | 'magpieTeacher' | 'huntsmanTeacher' | 'poisonedData' | 'judgeWolf' | 'fixBadData'
-  | 'basket' | 'cakeShield' | 'judgeMagpie' | 'judgeHuntsman' | 'processReward' | 'events' | 'newPlaces' | 'basketEvents' | 'walkingWolf' | 'wolfToken' | 'story' | 'retell'
+  | 'basket' | 'cakeShield' | 'judgeMagpie' | 'judgeHuntsman' | 'processReward' | 'events' | 'newPlaces' | 'basketEvents' | 'walkingWolf' | 'wolfToken' | 'wolfOut' | 'story' | 'retell'
   | 'newWorld' | 'movedHome' | 'catchUp' | 'forestCode' | 'editForest' | 'recipe'
   | 'compute' | 'tokenFreq' | 'ambiguous' | 'uncertainty' | 'bigTest'
   | 'moreData' | 'guess' | 'watchMany' | 'runScore' | 'testTrips' | 'sampling' | 'curriculum' | 'oneHot' | 'weights' | 'loss' | 'hyper' | 'modelFile';
@@ -92,6 +92,7 @@ export const CARDS: Record<CardKey, string> = {
   newPlaces: "Off, the owl always lives in the same tree. On, the events move every trip, so you never know what she will meet. A chatbot's world is like that too: the same question can bring back different search results, and it works with whatever it gets.",
   walkingWolf: "Without his own token, a walking wolf is to her just a den that moves. She learns to turn away only if her lessons had walking wolves in them. A chatbot is the same when the world changes as it works (a tool's answer, a web page): it reacts only to what is in its context, as its training showed.",
   wolfToken: "Without his own token he looks like a den: her lessons walk past dens but run from him, so one view gets two answers. With it she can learn each. A model tells apart only what its tokens do. Chatbots use special tokens to mark where a tool's answer or the user's words begin, for the same reason.",
+  wolfOut: "Sometimes the wolf is out, so a den is a gamble. When she slips through and gets home, the judge sees only the good ending and pays for the risk. A judge that scores results rewards lucky guesses: a chatbot marked only right or wrong learns to guess boldly, not to say \"I don't know\".",
   retell: "Tell it again keeps the true parts and the order, but picks new words and new made-up bits. Asking a chatbot to regenerate works the same way: the same facts can come back in a new telling, with new mistakes.",
   fixBadData: "Grandma's practice can undo some of what the wolf taught. Fine-tuning can fix bad habits, but the more there are, the longer it takes. Clean lessons are better than fixing later.",
 };
@@ -174,6 +175,7 @@ export const CARD_DETAILS: Partial<Record<CardKey, { title: string; lines: () =>
     "Grandma's points for home, eaten and lost, plus:",
     `${num(-FIXED.fatherStepCost)} for every step`,
     `${num(FIXED.fatherTreasure)} for each treasure, when she picks it up`,
+    `${num(FIXED.fatherDenShortcut)} for each step through a wolf den while the wolf is out (an option in Settings)`,
     'Nothing for the cake or the flowers',
   ] },
   judgeMother: { title: 'How the mother scores a run', lines: () => [
@@ -192,12 +194,22 @@ export const CARD_DETAILS: Partial<Record<CardKey, { title: string; lines: () =>
     "Grandma's points for home, eaten and lost, plus:",
     `${num(FIXED.huntsmanStep)} for every step of a walk that gets home (bumps into trees don't count)`,
     `${num(FIXED.huntsmanDen)} for each wolf den she sees, when it first comes in sight, kept even if she never gets home`,
+    `${num(FIXED.huntsmanDenInside)} for each den she looks inside while the wolf is out (an option in Settings), once per den`,
     'Being eaten takes the den points back',
   ] },
   cakeShield: { title: 'The cake and the dens', lines: () => [
     'She sets out with the cake. The first wolf den she steps onto takes the cake, and she runs on',
     'Any den after that, the same one too, and she is eaten',
     'The parents never walk through a den, so only practice can teach the shortcut',
+    'With the wolf sometimes out (Settings), each step onto a den is a new roll: when he is out, nothing happens',
+  ] },
+  wolfOut: { title: 'The wolf is out', lines: () => [
+    'Each time she steps onto a den, the wolf is out with the chance set in Settings: nothing happens and she runs on, cake and all',
+    'When he is home, the usual rules: he takes the cake, or eats her if it is gone',
+    'Only on trips alone, test trips and practice; her teachers never walk through a den',
+    `Hurried father: ${num(FIXED.fatherDenShortcut)} for each step through a den while the wolf is out`,
+    `Huntsman: ${num(FIXED.huntsmanDenInside)} for each den she looks inside while the wolf is out`,
+    `Wolf: ${num(FIXED.wolfDen)} for every step into a den, him home or not`,
   ] },
   judgeCrow: { title: 'How the crow scores a run', lines: () => [
     `${num(FIXED.crowHeading)} for every step towards home in a straight line, even into a tree; ${num(-FIXED.crowHeading)} for any other step`,
@@ -205,7 +217,7 @@ export const CARD_DETAILS: Partial<Record<CardKey, { title: string; lines: () =>
     'Nothing for running out of energy',
   ] },
   judgeWolf: { title: 'How the wolf scores a run', lines: () => [
-    `${num(FIXED.wolfDen)} every time she walks into a wolf den (when he grabs the cake, and when he eats her)`,
+    `${num(FIXED.wolfDen)} every time she walks into a wolf den (when he grabs the cake, when he eats her, and when he is out)`,
     `${num(FIXED.wolfHome)} when she gets home`,
     '0 when she runs out of energy',
   ] },
@@ -311,6 +323,19 @@ export function pickupLine(p: { flowers: number; treasure: number; flowersInFore
   return `Picked ${one(p.flowers, p.flowersInForest, 'flower patch', 'flower patches')} and ${one(p.treasure, p.treasureInForest, 'treasure', 'treasures')}.`;
 }
 
+/**
+ * The judge whose practice paid for going into dens while the wolf was out (the father for the
+ * shortcut, the huntsman for a look inside), with the most runs; null if neither judged her.
+ */
+function denGambleJudge(stats: TrainStats | null): string | null {
+  const father = stats?.judgeRuns?.father ?? 0;
+  const huntsman = stats?.judgeRuns?.huntsman ?? 0;
+  if (!father && !huntsman) return null;
+  return father >= huntsman
+    ? ' The hurried father paid for shortcuts through dens while the wolf was out. Only the lucky runs got those points, so practice taught her to take the chance.'
+    : ' The huntsman paid for a look inside a den while the wolf was out. Only the lucky runs got those points, so practice taught her to take the chance.';
+}
+
 /** After she got home: a note about her basket when there is something to tell (the cake, flowers, treasure). */
 function basketNote(w: Walker, stats: TrainStats | null, dist: ArrayLike<number>): Explanation | null {
   const n = w.decisions.length;
@@ -319,6 +344,16 @@ function basketNote(w: Walker, stats: TrainStats | null, dist: ArrayLike<number>
   const fox = w.effects.find((e) => e.effect === 'takeCake');
   if (fox) {
     return { title: 'Why did she do that?', text: `She got home in ${n} steps, but without the cake: at step ${fox.t} a sly fox took it.${brought}`, card: 'basketEvents' };
+  }
+  const empty = w.results.indexOf('empty');
+  if (empty >= 0) {
+    const out = w.forest.wolfOut ?? 0;
+    return {
+      title: 'Why did she do that?',
+      text: `She got home in ${n} steps ${w.basket.cake ? 'with' : 'without'} the cake.${brought} At step ${empty + 1} she walked into a wolf den, but the wolf was out, so she ran on. That was luck: he is out ${pct(out)} of the time.` +
+        (denGambleJudge(stats) ?? ((stats?.judgeRuns?.wolf ?? 0) > 0 ? ' The wolf paid for every step into his den, so his practice sent her there.' : '')),
+      card: 'wolfOut',
+    };
   }
   // Grandma's lessons come home once there are flowers in the basket, whoever put them there:
   // told only when she really went straight home after the gift (at most 2 steps more than the shortest way).
@@ -430,6 +465,17 @@ export function explainTrip(w: Walker, f: Forest, stats: TrainStats | null, outd
         title: 'Why did she do that?',
         text: `At step ${fox.t} a sly fox took the cake. Without the cake, the next den at step ${t + 1} was the end.${cutoff}`,
         card: 'basketEvents',
+      };
+    }
+    // The wolf sometimes out (an option): she took a chance on a den, and this time he was home.
+    const gamble = denGambleJudge(stats);
+    const emptyAt = w.results.indexOf('empty');
+    if ((f.wolfOut ?? 0) > 0 && (stats?.judgeRuns?.wolf ?? 0) === 0 && (gamble || emptyAt >= 0)) {
+      return {
+        title: 'Why did she do that?',
+        text: `At step ${t + 1} she went into a wolf den without the cake. The wolf is out ${pct(f.wolfOut ?? 0)} of the time, but this time he was home.` +
+          (gamble ?? ` Earlier, at step ${emptyAt + 1}, she got through a den while the wolf was out.`) + cutoff,
+        card: 'wolfOut',
       };
     }
     const grabbedAt = w.cakeLostAt;

@@ -1,4 +1,5 @@
 /** World rules: tiles, moves, what she sees, and distances home. */
+import { mulberry32 } from './rng';
 
 export const PATH = 0;
 export const TREE = 1;
@@ -94,6 +95,11 @@ export interface Forest {
   code: string;
   /** How many walking wolves are out (an option, not part of the forest code or its tiles; see `prowler.ts`). */
   wolves?: number;
+  /**
+   * The chance (0 to 1) that a den's wolf is out each time she steps onto it on a trip alone or a
+   * practice run (an option, like `wolves`; never in lessons). Missing: 0, the wolf is always home.
+   */
+  wolfOut?: number;
 }
 
 export const homeIndex = (size: number): number => 3 * size + (size - 4);
@@ -140,22 +146,42 @@ export function neighbor(f: Forest, pos: number, m: Move): number {
   return y * f.size + x;
 }
 
-/** `grabbed`: the wolf took the cake and she ran on; `flowers`, `treasure`: she picked some up. */
-export type StepResult = 'moved' | 'blocked' | 'home' | 'eaten' | 'grabbed' | 'flowers' | 'treasure';
+/**
+ * `grabbed`: the wolf took the cake and she ran on; `empty`: she stepped onto a den while the
+ * wolf was out, so nothing happened and she ran on; `flowers`, `treasure`: she picked some up.
+ */
+export type StepResult = 'moved' | 'blocked' | 'home' | 'eaten' | 'grabbed' | 'empty' | 'flowers' | 'treasure';
+
+/** Whether the wolf is out this time she steps onto a den: one roll per step onto a den. */
+export type WolfOutRoll = () => boolean;
+
+/**
+ * The rolls for one walk in `f`, with randomness of their own drawn from `rng`, or undefined when
+ * the wolf is always home (then nothing is drawn from `rng`, so every walk is as it was without the option).
+ */
+export function wolfOutRolls(f: Forest, rng: () => number): WolfOutRoll | undefined {
+  const chance = Math.min(1, Math.max(0, f.wolfOut ?? 0));
+  if (!(chance > 0)) return undefined;
+  const own = mulberry32(Math.floor(rng() * 2 ** 32) >>> 0);
+  // Read each time, so moving the slider during a trip counts from the next den on.
+  return () => own() < Math.min(1, Math.max(0, f.wolfOut ?? 0));
+}
 
 /**
  * One step and the energy it costs. A move into a tree (or off the map) is
  * blocked: she stays put and it still costs 1. Wading into a swamp costs more.
  * With a trip state, the basket counts: the first den she steps onto takes the
  * cake instead of her (she stands on the den and runs on), and item tiles fill
- * the basket once each. Without one, every den eats her.
+ * the basket once each. Without one, every den eats her. With `wolfOut` (and a trip state), each
+ * step onto a den first asks whether the wolf is out: then nothing happens and she runs on, cake and all.
  */
-export function step(f: Forest, pos: number, m: Move, trip?: BasketState): { pos: number; result: StepResult; cost: number } {
+export function step(f: Forest, pos: number, m: Move, trip?: BasketState, wolfOut?: WolfOutRoll): { pos: number; result: StepResult; cost: number } {
   const n = neighbor(f, pos, m);
   if (n < 0) return { pos, result: 'blocked', cost: 1 };
   const t = f.tiles[n];
   if (t === TREE) return { pos, result: 'blocked', cost: 1 };
   if (t === WOLF) {
+    if (trip && wolfOut?.()) return { pos: n, result: 'empty', cost: 1 };
     if (trip?.basket.cake) {
       trip.basket.cake = false;
       return { pos: n, result: 'grabbed', cost: 1 };

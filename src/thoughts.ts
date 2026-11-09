@@ -62,6 +62,10 @@ export const HOME_LINES: readonly Line[] = ['Finally!', 'Hello, Grandma!', 'Made
 export const LOST_LINES: readonly Line[] = ['I need a nap…', "I'll just sit here a bit.", 'Too tired to walk on…', 'Zzz…'];
 export const EATEN_LINES: readonly Line[] = ['Uh-oh…', 'Oh no!'];
 export const GRABBED_LINES: readonly Line[] = ['The wolf grabbed the cake! I ran away.', 'Eek! He took the cake. Run!', 'My cake! At least I got away.'];
+/** Stepping onto a den with the wolf sometimes out (an option): taking the chance, then how it went. */
+export const RISK_LINES: readonly Line[] = ['Maybe the wolf is out…', "I'll risk it!", 'Is anyone home? Let\'s see…', "A shortcut through the den… let's hope he's out."];
+export const EMPTY_LINES: readonly Line[] = ['Phew, nobody home!', 'The den was empty! Lucky me.', 'No wolf today. Run!', "Shh… he's out. Quick!"];
+export const HOME_AFTER_ALL: readonly Line[] = ['Oh no, he IS home!', 'He was home after all…', 'Uh-oh, not out today…'];
 export const FLOWER_LINES: readonly Line[] = ['Flowers for Grandma!', 'Pretty flowers!', 'Grandma will love these.'];
 export const TREASURE_LINES: readonly Line[] = ['Ooh, treasure!', 'Shiny! Mine now.', 'A treasure! Lucky me.'];
 
@@ -129,6 +133,8 @@ export class Thoughts {
     if (w.outcome === 'home') return [this.say(HOME_LINES)];
     if (w.outcome === 'lost') return [this.say(LOST_LINES)];
     if (w.outcome === 'eaten') {
+      // A den when the wolf is sometimes out: she took the chance, and he was home.
+      if ((f.wolfOut ?? 0) > 0 && f.tiles[w.pos] === WOLF && chance(0.6)) return [this.say(RISK_LINES), this.say(HOME_AFTER_ALL)];
       return chance(0.75) ? [this.wolfLine(m, DX[m], DY[m]), decision()] : [this.say(EATEN_LINES)];
     }
 
@@ -137,6 +143,11 @@ export class Thoughts {
     if (res === 'grabbed') {
       for (const x of densAround(f, w.pos)) this.densSaid.add(x.i);
       return [this.say(GRABBED_LINES)];
+    }
+    if (res === 'empty') {
+      for (const x of densAround(f, w.pos)) this.densSaid.add(x.i);
+      this.densSaid.add(w.pos);
+      return chance(0.5) ? [this.say(RISK_LINES), this.say(EMPTY_LINES)] : [this.say(EMPTY_LINES)];
     }
     if (res === 'flowers') return [this.say(FLOWER_LINES)];
     if (res === 'treasure') return [this.say(TREASURE_LINES)];
