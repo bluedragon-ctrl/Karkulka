@@ -58,6 +58,8 @@ interface Settings {
   heat: boolean;
   /** How many wolves walk about the forest, in lessons, practice and trips (0–3; missing in older saves: the default, one). */
   wolves: number;
+  /** She tells walking wolves from dens: a token of his own in her views (missing in older saves: off). */
+  wolfToken: boolean;
   /** The four arrows around her on a trip alone (missing in older saves: on). */
   arrows: boolean;
   brush: Tile;
@@ -68,7 +70,7 @@ const crossedCake = () => s('g', {}, s('g', { opacity: 0.6 }, cake(0, 0, 9)), s(
 
 const DEFAULTS: Settings = {
   memory: 'medium', hint: false, teacher: 'mother', lessons: 100, practice: 1000, judge: 'grandma', practiceStarts: 'near',
-  energy: 70, boldness: 0.7, fog: false, thoughts: true, events: true, newPlaces: true, heat: true, wolves: 1, arrows: true, brush: TREE,
+  energy: 70, boldness: 0.7, fog: false, thoughts: true, events: true, newPlaces: true, heat: true, wolves: 1, wolfToken: false, arrows: true, brush: TREE,
 };
 
 const TEACHERS: { id: TeacherChoice; name: string; text: string }[] = [
@@ -391,7 +393,7 @@ export class App {
   get watching() { return this.job?.kind === 'watch' || this.job?.kind === 'watchRuns'; }
 
   private configFromSettings(): ModelConfig {
-    return { memory: MEMORY_PAIRS[this.settings.memory], hint: this.settings.hint, hidden: FIXED.hidden };
+    return { memory: MEMORY_PAIRS[this.settings.memory], hint: this.settings.hint, wolfToken: this.settings.wolfToken, hidden: FIXED.hidden };
   }
 
   private ensureModel(): Model {
@@ -558,7 +560,7 @@ export class App {
   private changeMemoryOrHint(apply: () => void) {
     const before = { ...this.settings };
     apply();
-    if (this.model && (this.model.cfg.memory !== MEMORY_PAIRS[this.settings.memory] || this.model.cfg.hint !== this.settings.hint)) {
+    if (this.model && (this.model.cfg.memory !== MEMORY_PAIRS[this.settings.memory] || this.model.cfg.hint !== this.settings.hint || !!this.model.cfg.wolfToken !== this.settings.wolfToken)) {
       if (this.trained && !confirm('This needs a new Red Riding Hood: her memory and senses are fixed before training. Her lessons will be cleared and she needs new ones. Continue?')) {
         this.settings = before;
       } else this.resetModel();
@@ -748,7 +750,7 @@ export class App {
     this.walker = new Walker(this.forest, this.model, i, this.settings.energy, this.settings.boldness, this.rng);
     this.tripStopped = false;
     this.story = null;
-    this.thoughts = new Thoughts(Math.random, this.model.cfg.hint);
+    this.thoughts = new Thoughts(Math.random, this.model.cfg.hint, !!this.model.cfg.wolfToken);
     // Events and the story have their own randomness, never the walk's.
     this.tripSpots = !this.settings.events ? []
       : this.settings.newPlaces ? placeStoryEvents(this.forest, CAST, SPOT_COUNT, tripSeed(this.storyRng() * 2 ** 32)) : this.eventSpots;
@@ -1109,14 +1111,15 @@ export class App {
 
   private renderStripNow() {
     const mem = this.model?.cfg.memory ?? MEMORY_PAIRS[this.settings.memory];
+    const wt = this.model ? !!this.model.cfg.wolfToken : this.settings.wolfToken;
     if (this.watch) {
       const { walk, k } = this.watch;
       const t = Math.min(k, walk.history.views.length - 1);
-      renderStrip(this.stripEl, walk.history, t, mem, k < walk.history.moves.length ? walk.history.moves[k] : null, this.q('memory', 'strip'), this.q('basket', 'basket'));
+      renderStrip(this.stripEl, walk.history, t, mem, k < walk.history.moves.length ? walk.history.moves[k] : null, this.q('memory', 'strip'), this.q('basket', 'basket'), wt);
     } else if ((this.tab === 'trip' && this.walker) || (this.tab === 'practice' && this.runWatch)) {
       const w = (this.tab === 'trip' ? this.walker : this.runWatch) as Walker;
-      renderStrip(this.stripEl, w.history, Math.min(w.t, w.history.views.length - 1), mem, w.done ? w.history.moves[w.t - 1] : null, this.q('memory', 'strip'), this.q('basket', 'basket'));
-    } else renderStrip(this.stripEl, null, 0, mem, undefined, this.q('memory', 'strip'), this.q('basket', 'basket'));
+      renderStrip(this.stripEl, w.history, Math.min(w.t, w.history.views.length - 1), mem, w.done ? w.history.moves[w.t - 1] : null, this.q('memory', 'strip'), this.q('basket', 'basket'), wt);
+    } else renderStrip(this.stripEl, null, 0, mem, undefined, this.q('memory', 'strip'), this.q('basket', 'basket'), wt);
   }
 
   private renderTechNow() {
@@ -1420,7 +1423,12 @@ export class App {
             this.saveSoon(); this.showCard('walkingWolf'); this.render();
           } }),
           n === 0 ? 'None' : String(n)))),
-        h('p', { class: 'muted' }, 'They are out in lessons, practice and every trip. To her each one looks just like a wolf den. She only learns to keep away from them if wolves walked about in her lessons too.')),
+        h('p', { class: 'muted' }, this.settings.wolfToken
+          ? 'They are out in lessons, practice and every trip. She sees each one as a walking wolf, not a den. She only learns to keep away from them if wolves walked about in her lessons too.'
+          : 'They are out in lessons, practice and every trip. To her each one looks just like a wolf den. She only learns to keep away from them if wolves walked about in her lessons too.'),
+        check(this.settings.wolfToken, (v) => { this.changeMemoryOrHint(() => { this.settings.wolfToken = v; }); this.showCard('wolfToken'); },
+          this.hq('She can tell a walking wolf from a den (a token of his own)', 'wolfToken')),
+        h('p', { class: 'muted' }, 'Chosen before her lessons, like her memory: changing it means a new Red Riding Hood.')),
       h('div', { class: 'group settings-box' },
         h('h3', {}, 'Forest events'),
         check(this.settings.events, (v) => {
@@ -1802,6 +1810,7 @@ export class App {
       this.stats = data.stats;
       this.settings.memory = mem;
       this.settings.hint = model.cfg.hint;
+      this.settings.wolfToken = !!model.cfg.wolfToken;
       this.walker = null;
       this.board.setForest(f);
       this.updateLink();

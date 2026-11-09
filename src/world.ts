@@ -11,6 +11,17 @@ export type Tile = 0 | 1 | 2 | 3 | 4 | 5 | 6;
 export const TILE_KINDS = 7;
 export const TILE_NAMES = ['path', 'tree', 'wolf den', "grandma's house", 'swamp', 'flowers', 'treasure'] as const;
 
+/**
+ * Not a tile: a walking wolf as she sees him. Her views (`History.views`) always record him as
+ * WALKER; whether the model can tell him from a den depends on its inputs (`ModelConfig.wolfToken`).
+ * Never in the forest's tiles, so links and forest codes are not touched.
+ */
+export const WALKER = 7;
+/** What one place in her view can show: a tile, or a walking wolf. */
+export type Seen = Tile | typeof WALKER;
+/** Kinds a view can show when she tells walking wolves from dens: the tiles plus WALKER. */
+export const VIEW_KINDS = TILE_KINDS + 1;
+
 /** Tiles she picks something up from (once per trip each). */
 export const isItem = (t: Tile): boolean => t === FLOWERS || t === TREASURE;
 

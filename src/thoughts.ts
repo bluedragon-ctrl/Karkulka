@@ -7,13 +7,13 @@
  */
 import type { Rng } from './rng';
 import type { Outcome } from './sim';
-import { DX, DY, Forest, HOME, Move, StepResult, SWAMP, VIEW_OFFSETS, WOLF, tileAt, xyOf } from './world';
+import { DX, DY, Forest, HOME, Move, Seen, StepResult, SWAMP, VIEW_OFFSETS, WALKER, WOLF, tileAt, xyOf } from './world';
 
 /** What a thought needs to know about the trip so far (a `Walker` fits). */
 export interface TripState {
   readonly forest: Forest;
   readonly positions: readonly number[];
-  readonly history: { readonly moves: readonly Move[]; readonly sectors: readonly number[] };
+  readonly history: { readonly moves: readonly Move[]; readonly sectors: readonly number[]; readonly views?: readonly (readonly Seen[])[] };
   readonly blocked: readonly boolean[];
   /** What each step did (the wolf grabbed the cake, flowers picked…); optional. */
   readonly results?: readonly StepResult[];
@@ -39,6 +39,12 @@ export const WOLF_LINES: readonly Line[] = [
   (d) => `Scary wolf ${d}!`, 'Beware of the wolf!', (d) => `A wolf den ${d}! Eek!`, (d) => `Monster ${d}!`,
   'Eek, a wolf den!', (d) => `Something growls ${d}…`,
 ];
+/** A walking wolf in sight, when she can tell him from a den. */
+export const WALKER_LINES: readonly Line[] = [
+  (d) => `A wolf is walking about ${d}!`, (d) => `The wolf is coming ${d}! Run!`, 'That wolf is moving!', (d) => `Paws ${d}! Away from here!`,
+];
+/** Steps between two thoughts about walking wolves (he moves, so he is not "said" once like a den). */
+const WALKER_GAP = 4;
 /** Only when the den lies the way she is going. */
 const WOLF_AHEAD: readonly Line[] = ['Wolf ahead!'];
 export const BUMP_LINES: readonly Line[] = ['Ouch!', 'I hit a tree.', 'Why is a tree standing here?', 'Who put this tree here?', 'Ouch, my nose!', 'Silly tree!', 'Sorry, tree.'];
@@ -85,6 +91,7 @@ export class Thoughts {
   private tiredSaid = 0;
   private homeSaid = false;
   private readonly densSaid = new Set<number>();
+  private lastWalkerAt = -100;
   private readonly lastPick = new Map<readonly Line[], number>();
 
   /** Whether the last thought was about the move itself ("Let's go north."), which she says before making it. */
@@ -93,7 +100,8 @@ export class Thoughts {
   /** Forest events that just happened, waiting for a thought (each with the step it happened at). */
   private events: { lines: readonly string[]; t: number }[] = [];
 
-  constructor(private readonly rng: Rng, private readonly hint = false) {}
+  /** `wolfToken`: she tells walking wolves from dens (otherwise she takes one for a den). */
+  constructor(private readonly rng: Rng, private readonly hint = false, private readonly wolfToken = false) {}
 
   /**
    * Call after every step of the trip; returns her thought (one or two lines), or null to stay quiet.
@@ -140,6 +148,15 @@ export class Thoughts {
 
     if (w.blocked[t - 1] && gap >= GAP.event && chance(0.7)) {
       return chance(0.35) ? [decision(), this.say(BUMP_LINES)] : [this.say(BUMP_LINES)];
+    }
+
+    // A walking wolf she saw when she picked this move: as a wolf if she can tell, else as a den.
+    const walkers = walkersIn(w.history.views?.[t - 1]);
+    if (walkers.length && gap >= GAP.event && t - this.lastWalkerAt >= WALKER_GAP) {
+      const d = walkers.find((d) => d.dx === DX[m] && d.dy === DY[m]) ?? walkers.find((d) => sameWay(m, d.dx, d.dy)) ?? walkers[0];
+      this.lastWalkerAt = t;
+      this.planned = true;
+      return [this.wolfToken ? this.say(WALKER_LINES, placeWord(d.dx, d.dy)) : this.wolfLine(m, d.dx, d.dy), decision()];
     }
 
     // Dens she saw when she picked this move, and had not thought about yet.
@@ -205,6 +222,12 @@ function densAround(f: Forest, pos: number): { i: number; dx: number; dy: number
   return VIEW_OFFSETS
     .filter(([dx, dy]) => tileAt(f, x + dx, y + dy) === WOLF)
     .map(([dx, dy]) => ({ i: (y + dy) * f.size + x + dx, dx, dy }));
+}
+
+/** Where the walking wolves are in a view she saw (WALKER places). */
+function walkersIn(view: readonly Seen[] | undefined): { dx: number; dy: number }[] {
+  if (!view) return [];
+  return VIEW_OFFSETS.filter((_, k) => view[k] === WALKER).map(([dx, dy]) => ({ dx, dy }));
 }
 
 function seesHome(f: Forest, pos: number): boolean {

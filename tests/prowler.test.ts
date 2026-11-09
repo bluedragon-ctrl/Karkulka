@@ -5,9 +5,9 @@ import { MAX_WOLVES, WOLF_START_GAP, WalkingWolf, closeness, viewWithWolves, wol
 import { mulberry32 } from '../src/rng';
 import { Walker } from '../src/sim';
 import { costToHome, walkLesson } from '../src/teachers';
-import { MEMORY_PAIRS } from '../src/tokens';
+import { MEMORY_PAIRS, asSeenBy } from '../src/tokens';
 import { startTiles } from '../src/train';
-import { VIEW_OFFSETS, WOLF, isWalkable, newBasketState, walkingDistances, xyOf } from '../src/world';
+import { VIEW_OFFSETS, WALKER, WOLF, isWalkable, newBasketState, walkingDistances, xyOf } from '../src/world';
 
 const base = generateForest('KARKULKA');
 const withWolves = (n: number) => ({ ...base, wolves: n });
@@ -49,7 +49,7 @@ describe('walking wolves', () => {
     }
   });
 
-  it('look like wolf dens to her when they are next to her', () => {
+  it('show in her view as walking wolves, which the model reads as dens unless it has his token', () => {
     const wolf = new WalkingWolf(one, startTiles(one)[0], mulberry32(2));
     const [wx, wy] = xyOf(one, wolf.pos);
     const k = VIEW_OFFSETS.findIndex(([dx, dy]) => {
@@ -58,7 +58,11 @@ describe('walking wolves', () => {
     });
     const [dx, dy] = VIEW_OFFSETS[k];
     const her = (wy - dy) * one.size + (wx - dx);
-    expect(viewWithWolves(one, her, [wolf])[k]).toBe(WOLF);
+    const view = viewWithWolves(one, her, [wolf]);
+    expect(view[k]).toBe(WALKER);
+    expect(asSeenBy({ wolfToken: false }, view)[k]).toBe(WOLF);
+    expect(asSeenBy({}, view)[k]).toBe(WOLF);
+    expect(asSeenBy({ wolfToken: true }, view)[k]).toBe(WALKER);
     expect(viewWithWolves(one, her, [])[k]).toBe(one.tiles[wolf.pos]);
   });
 

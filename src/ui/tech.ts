@@ -3,8 +3,8 @@ import type { CardKey } from '../explain';
 import { Model, N_OUT, parameterCount, softmax } from '../model';
 import type { Walker } from '../sim';
 import { FIXED, TrainStats } from '../train';
-import { BASKET_FEATS, HINT_FEATS, SLOT_FEATS, VIEW_FEATS, ViewToken, buildVocabulary } from '../tokens';
-import { Forest, MOVE_ARROWS, MOVE_NAMES, MOVES, SWAMP_COST, TILE_KINDS } from '../world';
+import { BASKET_FEATS, HINT_FEATS, ViewToken, buildVocabulary, slotFeats, viewFeats, viewKinds } from '../tokens';
+import { Forest, MOVE_ARROWS, MOVE_NAMES, MOVES, SWAMP_COST } from '../world';
 import { HUNTSMAN_ENERGY, SWAMP_PENALTY, WOLF_PENALTY } from '../teachers';
 import {
   Ambiguous, BIG_MODEL, OPS_PER_WEIGHT, RARE, ambiguityByTeacher, chanceText, frequencySummary, sci, sup, tokenCounts, trainingCompute, tripMeasures,
@@ -72,17 +72,20 @@ function currentInput(ctx: TechContext): HTMLElement {
   const last = walker.done ? n - 1 : n;
   const counter = h('span');
   const body = h('div');
+  const VF = viewFeats(model.cfg);
+  const SF = slotFeats(model.cfg);
+  const kinds = model.cfg.wolfToken ? `${viewKinds(model.cfg)} kinds (the tile kinds and the walking wolf)` : `${viewKinds(model.cfg)} tile kinds`;
   const draw = (step: number) => {
     const k = Math.min(step, last);
     counter.textContent = ` ${k + 1} / ${last + 1}`;
     // Each decision keeps the numbers the model produced at the time, so nothing is recomputed.
     const d = k < n ? walker.decisions[k] : walker.decide();
     const x = d.input;
-    const rows: HTMLElement[] = [vectorRow('basket (pinned)', x, 0, BASKET_FEATS), vectorRow('current view', x, BASKET_FEATS, VIEW_FEATS)];
-    let off = BASKET_FEATS + VIEW_FEATS;
+    const rows: HTMLElement[] = [vectorRow('basket (pinned)', x, 0, BASKET_FEATS), vectorRow('current view', x, BASKET_FEATS, VF)];
+    let off = BASKET_FEATS + VF;
     if (model.cfg.hint) { rows.push(vectorRow('home hint', x, off, HINT_FEATS)); off += HINT_FEATS; }
-    for (let s = 1; s <= model.cfg.memory; s++, off += SLOT_FEATS) {
-      rows.push(vectorRow(`${s} step${s === 1 ? '' : 's'} back`, x, off, SLOT_FEATS));
+    for (let s = 1; s <= model.cfg.memory; s++, off += SF) {
+      rows.push(vectorRow(`${s} step${s === 1 ? '' : 's'} back`, x, off, SF));
     }
     const hidden = h('span', { class: 'vec' }, ...Array.from(d.hidden, (v, j) => h('span', { class: 'bit act', style: `background:${v >= 0 ? `rgba(230,120,0,${Math.abs(v)})` : `rgba(31,120,180,${Math.abs(v)})`}`, title: `h[${j}] = ${fmt(v)}` })));
     body.replaceChildren(
@@ -101,7 +104,7 @@ function currentInput(ctx: TechContext): HTMLElement {
     draw(v);
   } });
   draw(k0);
-  return section('Current input', ctx.hint('oneHot'), `The context window at one step of her latest trip, encoded as ${model.nIn} numbers. First the pinned basket (${BASKET_FEATS} numbers: cake yes or no, flowers 0, 1 or 2+, treasure 0, 1 or 2+), which never scrolls out. Each view is 8 tiles × ${TILE_KINDS} tile kinds (one-hot); each remembered step adds a "present" flag, a view and a move (${SLOT_FEATS} numbers).`,
+  return section('Current input', ctx.hint('oneHot'), `The context window at one step of her latest trip, encoded as ${model.nIn} numbers. First the pinned basket (${BASKET_FEATS} numbers: cake yes or no, flowers 0, 1 or 2+, treasure 0, 1 or 2+), which never scrolls out. Each view is 8 tiles × ${kinds} (one-hot); each remembered step adds a "present" flag, a view and a move (${SF} numbers).`,
     h('label', { class: 'row' }, 'Step ', slider, counter), body);
 }
 
