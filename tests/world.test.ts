@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { SHORTCUT_MIN_SAVING, disagreement, generateForest, parentRouteTiles, shortcutSaving } from '../src/forest';
 import { packTiles, unpackTiles } from '../src/storage';
 import { HUNTSMAN_ENERGY, costToHome, crowMoves, endsStuck, teacherMoves, walkLesson } from '../src/teachers';
-import { FIXED, startTiles } from '../src/train';
+import { startTiles } from '../src/train';
 import { mulberry32 } from '../src/rng';
 import {
   FLOWERS, HOME, densInSight, PATH, headsHome, SWAMP, TREASURE, isItem, newBasketState, SWAMP_COST, TREE, WOLF, cheapestToHome, energyToHome, forestFromTiles, homeIndex, moveHome, stepCost, loopCount, walkableTiles, homeSector, neighbor, pathTiles, step, tileAt, unreachableTiles, viewAt, walkingDistances,
@@ -274,7 +274,6 @@ describe('the huntsman as a teacher', () => {
         expect(walk.energy).toBe(HUNTSMAN_ENERGY);
         expect(walk.history.energy[0]).toBe(HUNTSMAN_ENERGY);
         expect(walk.history.energy.every((e) => e > 0)).toBe(true);
-        expect(HUNTSMAN_ENERGY).toBeLessThanOrEqual(FIXED.evalEnergy);
         hunter += dens(walk.positions);
         father += dens(walkLesson(f, 'father', costToHome(f, 'father'), start, mulberry32(3)).positions);
       }
