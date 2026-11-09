@@ -659,6 +659,18 @@ Wolves who leave their dens and walk about the forest; the rules below are for o
   | 2 | 1% | 25% / 8% | 71% / 89% | 6% / 1% |
   | 3 | 4% | 31% / 11% | 65% / 85% | 10% / 2% |
 
+- **Measured with his own token** (20 forest codes, medium memory, 120 test trips per forest at boldness 0.5, energy 100; lessons with the same number of wolves as the test; "caught" is the share of trips in which a walking wolf met her). After 300 lessons the token makes no clear difference (within 3 points either way, about the noise). After 1000 lessons she is caught less often with it, the more wolves the more so, while getting home with the cake stays the same; dens catch her a little more often (0.1–0.5 points) and walks home are up to a step longer, since dens now get only the calm lessons and none of the running away:
+
+  | 1000 lessons | Caught: without / with token | Home with the cake: without / with | Eaten by a den: without / with |
+  | --- | --- | --- | --- |
+  | Mother, 1 wolf | 7.4% / 5.9% | 89% / 89% | 0.1% / 0.3% |
+  | Mother, 2 wolves | 9.3% / 6.3% | 88% / 88% | 0.1% / 0.3% |
+  | Mother, 3 wolves | 11.9% / 8.5% | 85% / 86% | 0.2% / 0.7% |
+  | Father, 1 wolf | 7.3% / 6.2% | 90% / 91% | 0.2% / 0.3% |
+  | Father, 3 wolves | 12.9% / 8.4% | 85% / 88% | 0.2% / 0.4% |
+
+  So the token helps once she has had enough lessons to learn the new token, which is why it stays an option, off by default, for comparing. Training takes about the same time either way.
+
 ### Later
 
 - A simple "inside her head" network picture on the main screens
