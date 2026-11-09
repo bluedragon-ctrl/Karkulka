@@ -24,6 +24,8 @@ export interface EventKind {
   fits: Place;
   /** `step`: when she steps onto the spot; `hear`: when the spot first comes into her 3 × 3 view. */
   trigger: Trigger;
+  /** The chance (0 to 1) that it really happens when she reaches the spot; missing means always. */
+  chance?: number;
   /** Story sentences, one per way it can turn out. */
   versions: string[];
   /** Her thought lines when it happens. */
@@ -68,6 +70,7 @@ export function checkStoryData(d: StoryData): string[] {
     text(k.name, w);
     if (!PLACES.includes(k.fits)) errors.push(`${w}: unknown place "${k.fits}"`);
     if (!TRIGGERS.includes(k.trigger)) errors.push(`${w}: unknown trigger "${k.trigger}"`);
+    if (k.chance !== undefined && !(k.chance > 0 && k.chance <= 1)) errors.push(`${w}: chance must be above 0 and at most 1`);
     if (!Array.isArray(k.versions) || k.versions.length < 2) errors.push(`${w}: needs at least 2 versions`);
     if (!Array.isArray(k.thoughts) || k.thoughts.length < 1) errors.push(`${w}: needs at least 1 thought`);
     [...(k.versions ?? []), ...(k.thoughts ?? [])].forEach((s) => text(s, w));
@@ -246,7 +249,7 @@ function setsOffAt(f: Forest, s: EventSpot, positions: readonly number[], t: num
   return inView(f, now, s.i) && !inView(f, before, s.i);
 }
 
-/** Every event a trip set off, in order, each at most once (versions left at 0). */
+/** Every event a trip could set off, in order, each at most once (versions left at 0; `chance` is not rolled here). */
 export function eventsSetOff(f: Forest, spots: readonly EventSpot[], positions: readonly number[]): EventMet[] {
   const out: EventMet[] = [];
   const done = new Set<number>();
@@ -284,6 +287,8 @@ export class EventTracker {
         if (this.done.has(s.i) || !setsOffAt(this.forest, s, positions, t)) continue;
         this.done.add(s.i);
         const k = eventKind(s.kind)!;
+        // Some events only happen sometimes: a roll when she reaches the spot, once per trip.
+        if (k.chance !== undefined && k.chance < 1 && this.rng() >= k.chance) continue;
         const r = this.rng();
         const e: EventMet = { spot: s.i, kind: s.kind, t, version: Math.floor(r * k.versions.length) };
         if (k.effect && basket) {
