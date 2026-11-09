@@ -23,7 +23,7 @@ import { changeChart, outcomeChart } from './charts';
 import { add, clear, h, s } from './dom';
 import { closeHint, hintButton, placeHint } from './hint';
 import { renderStrip } from './strip';
-import { COLORS, bush, cake, cloudMark, crowFigure, footprintMark, gem, grandmaFigure, huntsmanFigure, magpieFigure, parentFigure, tileSymbol, wolfHead } from './symbols';
+import { COLORS, bush, cake, cloudMark, crowFigure, footprintMark, gem, grandmaFigure, hedgehogFigure, huntsmanFigure, magpieFigure, parentFigure, tileSymbol, wolfHead } from './symbols';
 import { renderTech } from './tech';
 
 type TabId = 'forest' | 'lessons' | 'trip' | 'practice' | 'test' | 'inside' | 'settings';
@@ -85,7 +85,7 @@ const TEACHERS: { id: TeacherChoice; name: string; text: string }[] = [
   { id: 'grandma', name: 'Grandma', text: 'First a bunch of flowers, then home the safe way, like the mother.' },
   { id: 'magpie', name: 'Magpie', text: 'Hops from treasure to treasure, and only then heads home.' },
   { id: 'huntsman', name: 'Huntsman', text: 'Takes the long way round to look at every wolf den, but always gets her home.' },
-  { id: 'hedgehog', name: 'Hedgehog', text: 'Goes straight home, but when she is getting tired, he stops at a berry bush on the way.' },
+  { id: 'hedgehog', name: 'Hedgehog', text: 'Goes from berry bush to berry bush while she is rested. Once she is tired, he heads home and walks past them.' },
 ];
 
 /** The LM corner card for a teacher choice. */
@@ -100,12 +100,13 @@ const JUDGE_INFO: Record<Judge, { name: string; text: string; card: CardKey }> =
   crow: { name: 'Crow', text: 'Watches from the sky: any step towards home looks good to it, even into a tree.', card: 'judgeCrow' },
   magpie: { name: 'Magpie', text: 'Loves shiny things: treasure is what counts. Getting home? Not so important.', card: 'judgeMagpie' },
   huntsman: { name: 'Huntsman', text: 'Loves a long walk and a look at the wolves: the longer the way home and the more dens she sees, the better.', card: 'judgeHuntsman' },
+  hedgehog: { name: 'Hedgehog', text: 'Loves berries: every bush she eats from earns points, whether she needs the energy or not.', card: 'judgeHedgehog' },
   wolf: { name: 'Wolf', text: 'A sneaky judge: he wants her at his den, not at grandma\'s.', card: 'judgeWolf' },
 };
 
 function judgeIcon(j: Judge): SVGSVGElement {
   const icon = s('svg', { width: 30, height: 30, viewBox: '-20 -24 40 44' });
-  icon.append(j === 'grandma' ? grandmaFigure(40) : j === 'crow' ? crowFigure(40) : j === 'magpie' ? magpieFigure(40) : j === 'huntsman' ? huntsmanFigure(40) : j === 'wolf' ? s('g', { transform: 'scale(.7)' }, wolfHead(40)) : parentFigure(40, j as 'mother' | 'father'));
+  icon.append(j === 'grandma' ? grandmaFigure(40) : j === 'crow' ? crowFigure(40) : j === 'magpie' ? magpieFigure(40) : j === 'huntsman' ? huntsmanFigure(40) : j === 'hedgehog' ? hedgehogFigure(40) : j === 'wolf' ? s('g', { transform: 'scale(.7)' }, wolfHead(40)) : parentFigure(40, j as 'mother' | 'father'));
   return icon;
 }
 
@@ -257,7 +258,7 @@ export class App {
   /** The practice run being watched. */
   runWatch: Walker | null = null;
   /** The judge's score for the last watched practice run. */
-  lastRun: { outcome: Outcome; score: number; judge: Judge; noCake: boolean; flowers: number; treasure: number } | null = null;
+  lastRun: { outcome: Outcome; score: number; judge: Judge; noCake: boolean; flowers: number; treasure: number; berries: number } | null = null;
   lastPractice: PracticeSummary | null = null;
   /** Big test: the tile every trip starts on (null: random spots), the latest test and the one before it. */
   testStart: number | null = null;
@@ -1018,7 +1019,7 @@ export class App {
         scoreSum += score;
         scoreN++;
         const p = w.pickups;
-        this.lastRun = { outcome: w.outcome ?? 'lost', score, judge, noCake: !w.basket.cake, flowers: p.flowers, treasure: p.treasure };
+        this.lastRun = { outcome: w.outcome ?? 'lost', score, judge, noCake: !w.basket.cake, flowers: p.flowers, treasure: p.treasure, berries: p.berries };
         this.board.addTrail(w.positions, TRAIL_COLORS[w.outcome ?? 'lost'], total > 1 ? 0.2 : 0.35);
       },
       checkpoint: () => {
@@ -1052,6 +1053,7 @@ export class App {
     if (judge === 'wolf') sum.card = 'judgeWolf';
     else if (judge === 'magpie') sum.card = 'judgeMagpie';
     else if (judge === 'huntsman') sum.card = 'judgeHuntsman';
+    else if (judge === 'hedgehog') sum.card = 'judgeHedgehog';
     else if (judge === 'grandma' && ((tc.wolf ?? 0) > 0 || (this.stats.judgeRuns?.wolf ?? 0) > 0)) sum.card = 'fixBadData';
     else if (sum.scoreAfter > sum.scoreBefore && sum.homeAfter < sum.homeBefore - 0.05) sum.card = 'rewardHacking';
     else if (judge === 'father' && (sum.evalAfter?.noCake ?? 0) > Math.max(0.05, (evalBefore?.noCake ?? 0) + 0.05)) sum.card = 'cakeShield';
@@ -1356,7 +1358,9 @@ export class App {
     const who = r.judge === 'grandma' ? 'Grandma' : `The ${JUDGE_INFO[r.judge].name.toLowerCase()}`;
     const pts = `${r.score >= 0 ? '+' : '−'}${Math.abs(r.score).toFixed(2)}`;
     const found = basketWords(r);
-    return this.hq(`In the last run ${what}${found ? ` (she picked ${found})` : ''}. ${who} gave it ${pts} points.`, 'runScore', 'scored');
+    const ate = r.berries ? `ate from ${r.berries === 1 ? 'a berry bush' : `${r.berries} berry bushes`}` : '';
+    const did = [found ? `picked ${found}` : '', ate].filter(Boolean).join(' and ');
+    return this.hq(`In the last run ${what}${did ? ` (she ${did})` : ''}. ${who} gave it ${pts} points.`, 'runScore', 'scored');
   }
 
   private forestPanel(body: HTMLElement) {
@@ -1771,6 +1775,9 @@ export class App {
       : p.judge === 'huntsman'
         ? (homeDown ? 'She gets home less often: her walks got longer, and more of them run out of energy before she is home. The huntsman pays for a long walk, not for a sensible one.'
           : 'The huntsman pays for a long walk home and for every den she sees. Watch a trip alone: are her walks getting longer?')
+      : p.judge === 'hedgehog'
+        ? (homeDown ? 'She gets home less often: she goes from bush to bush, and the berries\' energy lets her wander on until it runs out. The hedgehog pays for eating berries, not for needing them.'
+          : 'The hedgehog pays for every berry bush she eats from. Watch a trip alone: does she go for bushes she doesn\'t need?')
       : p.card === 'cakeShield'
         ? 'She now cuts through wolf dens and lets the wolf have the cake: it saves steps, and the father doesn\'t count the cake.'
       : p.judge === 'grandma' && wolfTaught
@@ -1783,7 +1790,7 @@ export class App {
         : p.judge === 'crow'
           ? 'So far she still gets home, because walking towards home mostly helps. But the crow also pays her for bumping into a tree that is towards home. Keep practising and watch whether she gets home less often.'
           : `Watch a trip alone: she should now walk more the way ${the} likes.`;
-    return h('div', { class: `why ${(scoreUp && homeDown) || ((p.judge === 'wolf' || p.judge === 'magpie' || p.judge === 'huntsman') && homeDown) ? 'alarm' : ''}` },
+    return h('div', { class: `why ${(scoreUp && homeDown) || ((p.judge === 'wolf' || p.judge === 'magpie' || p.judge === 'huntsman' || p.judge === 'hedgehog') && homeDown) ? 'alarm' : ''}` },
       h('h3', {}, this.hq(`What ${the} taught her`, p.card, 'summary')),
       h('p', {}, verdict),
       h('p', { class: 'muted' }, `Score from ${the}: ${p.scoreBefore.toFixed(2)} → ${p.scoreAfter.toFixed(2)}. Home on the test trips: ${pct(p.homeBefore)} → ${pct(p.homeAfter)}.`),

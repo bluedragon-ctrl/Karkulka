@@ -42,6 +42,8 @@ export const FIXED = {
   huntsmanDen: 0.2,
   /** Huntsman judge: points for each den she looks inside while the wolf is out (once per den per run). */
   huntsmanDenInside: 0.5,
+  /** Hedgehog judge: points for each berry bush she eats from, at the move (taken back if she is eaten). */
+  hedgehogBerries: 0.5,
   /** "Mother and the wolf": share of lessons the wolf in disguise slips in. */
   wolfLessonShare: 0.2,
   practiceBoldness: 0.7,
@@ -258,8 +260,8 @@ export function trainLessons(
  * she can game: that is reward hacking. The wolf wants her at his den: a judge
  * with bad aims ruins a model that was doing well.
  */
-export type Judge = 'grandma' | 'father' | 'mother' | 'crow' | 'magpie' | 'huntsman' | 'wolf';
-export const JUDGES: readonly Judge[] = ['grandma', 'father', 'mother', 'crow', 'magpie', 'huntsman', 'wolf'];
+export type Judge = 'grandma' | 'father' | 'mother' | 'crow' | 'magpie' | 'huntsman' | 'hedgehog' | 'wolf';
+export const JUDGES: readonly Judge[] = ['grandma', 'father', 'mother', 'crow', 'magpie', 'huntsman', 'hedgehog', 'wolf'];
 
 /** Distances the judges measure with; they know the whole forest. */
 export interface JudgeMaps {
@@ -330,6 +332,8 @@ export function judgeRewards(judge: Judge, f: Forest, maps: JudgeMaps, run: Run)
     // The wolf out (an option): the father likes the shortcut through the den.
     if (res === 'empty' && judge === 'father') give(t, FIXED.fatherDenShortcut);
     if (res === 'treasure' && judge === 'magpie') give(t, FIXED.magpieTreasure);
+    // The hedgehog pays for eating berries, whether she needed the energy or not.
+    if (res === 'berries' && judge === 'hedgehog') give(t, FIXED.hedgehogBerries);
     // The wolf pays for every walk into a den, also the one where he only gets the cake, and one while he is out.
     if ((res === 'grabbed' || res === 'empty') && judge === 'wolf') r[t] += FIXED.wolfDen;
   });

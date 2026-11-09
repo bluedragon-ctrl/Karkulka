@@ -3,11 +3,11 @@ import { BERRY_BUSHES, BERRY_MIN_DIST, generateForest, parentRouteTiles } from '
 import { createModel } from '../src/model';
 import { mulberry32 } from '../src/rng';
 import { Walker } from '../src/sim';
-import { ENERGY_MARGIN, PLANS_ENERGY, TEACHER_KINDS, berryStop, energyTrack, enoughEnergy, walkLesson } from '../src/teachers';
+import { PLANS_ENERGY, TEACHER_KINDS, forageStop, energyTrack, enoughEnergy, walkLesson } from '../src/teachers';
 import { ENERGY_LEVELS, energyLevel, encodeContext, BASKET_FEATS, MEMORY_PAIRS } from '../src/tokens';
-import { startTiles, teacherCosts } from '../src/train';
+import { FIXED, Run, judgeMaps, judgeRewards, judgeScore, startTiles, teacherCosts } from '../src/train';
 import {
-  BERRIES, BERRY_ENERGY, FLOWERS, Forest, HOME, MOVES, PATH, TREASURE, TREE, Tile, energyAfter, energyToHome, forestFromTiles,
+  BERRIES, BERRY_ENERGY, FLOWERS, Forest, HOME, MOVES, Move, PATH, TREASURE, TREE, Tile, energyAfter, energyToHome, forestFromTiles,
   isWalkable, neighbor, newBasketState, step, tileAt, viewAt, walkingDistances,
 } from '../src/world';
 
@@ -117,35 +117,34 @@ describe('lesson energy', () => {
     }
   });
 
-  it('the hedgehog stops for berries only when she is tired, and then gets her home', () => {
-    let detours = 0;
+  it('the hedgehog forages while she is rested, heads home below half, and always gets her home', () => {
+    let foraged = 0;
     for (const code of ['KARKULKA', 'A1', 'B2', 'C3']) {
       const f = generateForest(code);
       const costs = teacherCosts(f);
-      const eh = energyToHome(f);
       for (const start of startTiles(f).filter((s) => f.tiles[s] !== BERRIES)) {
-        // Plenty: straight home, past every bush.
-        const rested = walkLesson(f, 'hedgehog', costs.hedgehog, start, mulberry32(1), costs.den, eh[start] + ENERGY_MARGIN + 20);
-        expect(rested.positions.at(-1)).toBe(f.home);
-        expect(rested.positions.slice(1, -1).filter((p) => f.tiles[p] === BERRIES)).toEqual([]);
-        // Tired: if a bush is worth it, he goes there first.
-        const tight = Math.max(2, Math.round(eh[start] * 0.75));
-        const walk = walkLesson(f, 'hedgehog', costs.hedgehog, start, mulberry32(1), costs.den, tight);
+        const walk = walkLesson(f, 'hedgehog', costs.hedgehog, start, mulberry32(1), costs.den, 60);
         expect(walk.positions.at(-1)).toBe(f.home);
-        if (walk.positions.some((p) => f.tiles[p] === BERRIES)) detours++;
+        // Every bush he goes out of his way to is eaten while she still has at least half her energy.
+        walk.positions.forEach((p, k) => {
+          if (k > 0 && f.tiles[p] === BERRIES && walk.positions.indexOf(p) === k) {
+            foraged++;
+            expect(walk.history.energy[k - 1]).toBeGreaterThanOrEqual(30);
+          }
+        });
       }
     }
-    expect(detours).toBeGreaterThan(20);
+    expect(foraged).toBeGreaterThan(40);
   });
 
-  it('berryStop: none with enough energy, else the nearest bush that leaves enough', () => {
+  it('forageStop: the nearest bush while rested, none below half', () => {
     const f = corridor();
-    const pos = f.size + 1;
     const eh = energyToHome(f);
     const from = new Float64Array(f.tiles.length).map((_, i) => Math.abs((i % f.size) - 1) + (Math.floor(i / f.size) === 1 ? 0 : Infinity));
-    expect(berryStop(f, pos, eh[pos] + ENERGY_MARGIN, 30, from, eh, [])).toBe(-1);
-    expect(berryStop(f, pos, 4, 30, from, eh, [])).toBe(f.size + 3);
-    expect(berryStop(f, pos, 4, 30, from, eh, [f.size + 3])).toBe(-1);
+    expect(forageStop(f, 30, 30, from, eh, [])).toBe(f.size + 3);
+    expect(forageStop(f, 15, 30, from, eh, [])).toBe(f.size + 3);
+    expect(forageStop(f, 14, 30, from, eh, [])).toBe(-1);
+    expect(forageStop(f, 30, 30, from, eh, [f.size + 3])).toBe(-1);
   });
 });
 
@@ -174,5 +173,21 @@ describe('the generator', () => {
       expect(f.tiles.every((t, i) => !isWalkable(t) || dist[i] >= 0)).toBe(true);
     }
     expect(two).toBeGreaterThanOrEqual(codes.length - 2);
+  });
+});
+
+describe('the hedgehog judge', () => {
+  const f = corridor();
+  const maps = judgeMaps(f);
+  const base = { start: f.size + 1, positions: [f.size + 1, f.size + 2, f.size + 3, f.size + 4], moves: [1, 1, 1] as Move[] };
+  it('pays for each bush she eats from, at the move, on top of Grandma\'s points', () => {
+    const run: Run = { ...base, outcome: 'lost', results: ['moved', 'berries', 'moved'] };
+    const r = judgeRewards('hedgehog', f, maps, run);
+    expect(r[1]).toBeCloseTo(FIXED.hedgehogBerries);
+    expect(judgeScore('hedgehog', f, maps, run) - judgeScore('grandma', f, maps, run)).toBeCloseTo(FIXED.hedgehogBerries);
+  });
+  it('takes the berry points back when she is eaten', () => {
+    const run: Run = { ...base, outcome: 'eaten', results: ['moved', 'berries', 'eaten'] };
+    expect(judgeScore('hedgehog', f, maps, run)).toBeCloseTo(FIXED.rewardEaten);
   });
 });

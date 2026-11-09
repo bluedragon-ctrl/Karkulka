@@ -4,8 +4,9 @@
  * crow, who heads straight for home and flies on over the first tree in the way,
  * Grandma, who fetches a bunch of flowers first, the magpie, who collects
  * every treasure before it heads home, and the huntsman, who goes the long way
- * round to have a look at every wolf den, and the hedgehog, who stops for berries when she
- * is tired. Every teacher but the hedgehog is also a judge.
+ * round to have a look at every wolf den, and the hedgehog, who goes from berry bush to berry
+ * bush while she is rested and heads home once she is below half her energy. The teachers are
+ * the same cast as the judges.
  */
 import { closeness, viewWithWolves, wolvesAfter, wolvesFor } from './prowler';
 import { Rng, pick, randInt } from './rng';
@@ -32,14 +33,13 @@ export const HUNTSMAN_ENERGY = 90;
  * its walk needs plus a random spare of 0 to this much, so lessons show every energy level.
  */
 export const LESSON_SPARE = 60;
-/** Energy Grandma, the magpie and the hedgehog keep in hand for the way home when they plan. */
+/** Energy Grandma and the magpie keep in hand for the way home when they plan. */
 export const ENERGY_MARGIN = 5;
 /** Grandma's and the magpie's spare energy is 0 to this much: their errands are long, so she is seldom too tired for one. */
 export const ERRAND_SPARE = 90;
 /**
  * Half of the hedgehog's lessons start with this share (from…to) of the energy needed to walk
- * home: often too little without berries. The other half have a spare like the parents', so she
- * also sees him walk past a bush when she has plenty.
+ * home: often too little without berries. The other half have a spare like the parents'.
  */
 export const HEDGEHOG_ENERGY = [0.6, 1.4] as const;
 /** Teachers who plan with her energy: they draw it before they walk. The others ignore it, and their energy is filled in after. */
@@ -247,7 +247,7 @@ export function walkLesson(f: Forest, teacher: Teacher, cost: Float64Array, star
       return reachable(costToTiles(g, tilesWhere(g, (t, i) => isWalkable(t) && fromHere[i] + home[i] <= left && densInSight(g, i).some((d) => !seen.has(d))), 'steady'), pos);
     }
     if (teacher === 'hedgehog') {
-      const bush = berryStop(g, pos, left, budget, fromHere, eHome, trip.picked);
+      const bush = forageStop(g, left, budget, fromHere, eHome, trip.picked);
       return bush < 0 ? null : reachable(costToTiles(g, [bush], 'steady'), pos);
     }
     return null;
@@ -264,7 +264,8 @@ export function walkLesson(f: Forest, teacher: Teacher, cost: Float64Array, star
     if (toDen && !hunting && nearWolf(f, pos) && denMoves(f, toDen, pos).length) hunting = true;
     const crow = teacher === 'crow' ? crowMoves(f, pos) : null;
     // A new errand after each pickup or new den (the magpie looks for the next treasure, the huntsman for the next den; Grandma heads home).
-    const done = teacher === 'huntsman' ? seen.size : trip.picked.length;
+    // The hedgehog also looks again when she drops below half her energy (then he heads home).
+    const done = teacher === 'huntsman' ? seen.size : teacher === 'hedgehog' ? trip.picked.length * 2 + Number(rested(left, budget)) : trip.picked.length;
     if (doneSoFar !== done) { goal = errand(f, cost); doneSoFar = done; detour = null; }
     // A walking wolf near: everyone but the crow (who flies) and the wolf at his den keeps away from the
     // ones in sight, planning round them, or just getting away when there is no way round.
@@ -344,21 +345,17 @@ export function enoughEnergy(costs: readonly { cost: number; gain: number }[]): 
   return need - (costs.length ? costs[costs.length - 1].cost : 0);
 }
 
+/** The hedgehog forages while she has at least half her starting energy; below half he heads home. */
+export const rested = (left: number, budget: number): boolean => left >= budget / 2;
+
 /**
- * The berry bush the hedgehog stops at, or -1 to walk straight home: none while she has the
- * energy to get home with a little in hand. Otherwise the nearest uneaten bush she can reach that
- * leaves her enough to get home from it with a little in hand, then any that is enough, then the
- * one that leaves her best off (he looks for another after it).
+ * The berry bush the hedgehog goes to next, or -1 to head home: while she is rested (at least
+ * half her starting energy), the nearest uneaten bush she can reach that still leaves her enough
+ * to get home from it; once she is below half, none, even when one would help. Not a good
+ * habit (she eats when she least needs it), shown on purpose: a teacher's habits are learned too.
  */
-export function berryStop(f: Forest, pos: number, left: number, budget: number, fromHere: Float64Array, eHome: Float64Array, eaten: readonly number[]): number {
-  if (left >= eHome[pos] + ENERGY_MARGIN) return -1;
-  const bushes = tilesWhere(f, (t, i) => t === BERRIES && !eaten.includes(i) && fromHere[i] <= left);
-  if (!bushes.length) return -1;
-  const spare = (b: number) => Math.min(budget, left - fromHere[b] + BERRY_ENERGY) - eHome[b];
-  const nearest = (bs: number[]) => bs.reduce((a, b) => (fromHere[b] < fromHere[a] ? b : a));
-  const good = bushes.filter((b) => spare(b) >= ENERGY_MARGIN);
-  if (good.length) return nearest(good);
-  const enough = bushes.filter((b) => spare(b) >= 0);
-  if (enough.length) return nearest(enough);
-  return bushes.reduce((a, b) => (spare(b) > spare(a) ? b : a));
+export function forageStop(f: Forest, left: number, budget: number, fromHere: Float64Array, eHome: Float64Array, eaten: readonly number[]): number {
+  if (!rested(left, budget)) return -1;
+  const bushes = tilesWhere(f, (t, i) => t === BERRIES && !eaten.includes(i) && fromHere[i] <= left && Math.min(budget, left - fromHere[i] + BERRY_ENERGY) >= eHome[i]);
+  return bushes.length ? bushes.reduce((a, b) => (fromHere[b] < fromHere[a] ? b : a)) : -1;
 }
