@@ -5,7 +5,7 @@ import { mulberry32 } from '../src/rng';
 import { Walker } from '../src/sim';
 import { PLANS_ENERGY, TEACHER_KINDS, forageStop, energyTrack, enoughEnergy, walkLesson } from '../src/teachers';
 import { ENERGY_LEVELS, energyLevel, encodeContext, BASKET_FEATS, MEMORY_PAIRS } from '../src/tokens';
-import { FIXED, Run, judgeMaps, judgeRewards, judgeScore, startTiles, teacherCosts } from '../src/train';
+import { DEFAULT_ENERGY, FIXED, Run, evaluate, judgeMaps, judgeRewards, judgeScore, startTiles, teacherCosts } from '../src/train';
 import {
   BERRIES, BERRY_ENERGY, FLOWERS, Forest, HOME, MOVES, Move, PATH, TREASURE, TREE, Tile, energyAfter, energyToHome, forestFromTiles,
   isWalkable, neighbor, newBasketState, step, tileAt, viewAt, walkingDistances,
@@ -189,5 +189,18 @@ describe('the hedgehog judge', () => {
   it('takes the berry points back when she is eaten', () => {
     const run: Run = { ...base, outcome: 'eaten', results: ['moved', 'berries', 'eaten'] };
     expect(judgeScore('hedgehog', f, maps, run)).toBeCloseTo(FIXED.rewardEaten);
+  });
+});
+
+describe('test trips', () => {
+  it('use the energy they are given (the energy from Settings), 60 by default', () => {
+    const f = generateForest('KARKULKA');
+    const m = createModel({ memory: 1, hint: false, hidden: 4 }, mulberry32(1));
+    expect(DEFAULT_ENERGY).toBe(60);
+    expect(evaluate(m, f, 0).energy).toBe(DEFAULT_ENERGY);
+    // Every fixed start is at least 2 steps from home: with 1 energy she can never get there.
+    const tired = evaluate(m, f, 0, 1);
+    expect(tired.energy).toBe(1);
+    expect(tired.home).toBe(0);
   });
 });

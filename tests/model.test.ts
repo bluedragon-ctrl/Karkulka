@@ -172,7 +172,7 @@ describe('training', () => {
     const anywhere = practiceSetup(f, stats, 'anywhere');
     expect(practiceStartTiles(f, stats, anywhere)).toEqual(startTiles(f));
     expect(practiceStartTiles(f, stats, near).length).toBeLessThan(startTiles(f).length);
-    expect(practiceWalker(m, f, startTiles(f)[0], stats, mulberry32(3), anywhere).energy).toBe(FIXED.evalEnergy);
+    expect(practiceWalker(m, f, startTiles(f)[0], stats, mulberry32(3), anywhere).energy).toBe(FIXED.practiceMaxEnergy);
     trainPractice(m, f, 'grandma', 200, stats, mulberry32(3), undefined, 'anywhere');
     expect(stats.practiceRuns).toBe(200);
     expect(stats.radius).toBe(FIXED.curriculumStart);

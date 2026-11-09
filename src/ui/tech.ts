@@ -250,7 +250,7 @@ export function renderTech(el: HTMLElement, ctx: TechContext) {
     ['Exploration during practice (boldness)', String(FIXED.practiceBoldness)],
     ['Curriculum', `start ${FIXED.curriculumStart} steps, +${FIXED.curriculumStep} when ${FIXED.curriculumThreshold * 100}% of the last ${FIXED.curriculumWindow} runs reach home`],
     ['Curriculum now', `${stats.radius} steps from home (when practice starts close to home first)`],
-    ['Test trips for the outcome chart', `${FIXED.evalStarts} fixed starts, boldness ${FIXED.evalBoldness}, energy ${FIXED.evalEnergy}; about ${FIXED.evalPoints} times per job (every batch of ${FIXED.chunk} in short jobs)`],
+    ['Test trips for the outcome chart', `${FIXED.evalStarts} fixed starts, boldness ${FIXED.evalBoldness}, the energy set in Settings; about ${FIXED.evalPoints} times per job (every batch of ${FIXED.chunk} in short jobs)`],
     ['Lessons / practice runs so far', `${stats.lessons} / ${stats.practiceRuns}`],
   ];
   el.append(computeSection(model, stats, ctx.hint));

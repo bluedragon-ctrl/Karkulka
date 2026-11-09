@@ -6,6 +6,13 @@ import { LessonWalk, Teacher, TeacherChoice, costToDen, costToHome, walkLesson }
 import { encodeContext } from './tokens';
 import { Basket, densInSight, Forest, Move, PATH, headsHome, isWalkable, StepResult, SWAMP, energyToHome, nearWolf, tilesWhere, walkingDistances } from './world';
 
+/**
+ * Her energy on a trip alone, unless Settings say otherwise. Test trips (the outcome chart and the
+ * checks after the forest changes) use the energy from Settings too, so every trip in the game has
+ * the same budget; this is only the default.
+ */
+export const DEFAULT_ENERGY = 60;
+
 /** Internals the user never sets; shown read-only in the technical tab. */
 export const FIXED = {
   hidden: 48,
@@ -56,7 +63,8 @@ export const FIXED = {
   evalBoldness: 0.5,
   /** Rounds of test trips for the before/after check when the forest changes. */
   checkRounds: 3,
-  evalEnergy: 100,
+  /** Practice energy: what practice from anywhere starts with, and the most the close-to-home circle gives. */
+  practiceMaxEnergy: 100,
   /** About this many rounds of test trips per job, so long jobs don't spend most of their time testing. */
   evalPoints: 20,
   chunk: 25,
@@ -68,7 +76,7 @@ export interface Point { x: number; y: number }
  * home without the cake (part of `home`); flowers and treasure are brought home per trip.
  * The basket numbers are missing in charts from before the basket.
  */
-export interface EvalPoint { x: number; home: number; eaten: number; lost: number; noCake?: number; flowers?: number; treasure?: number }
+export interface EvalPoint { x: number; home: number; eaten: number; lost: number; noCake?: number; flowers?: number; treasure?: number; energy?: number }
 
 export interface TrainStats {
   lessons: number;
@@ -143,8 +151,8 @@ export const evalEvery = (count: number): number => Math.max(1, Math.ceil(Math.c
 const testsAfter = (i: number, count: number): boolean =>
   i === count - 1 || ((i + 1) / FIXED.chunk) % evalEvery(count) === 0;
 
-/** How she does alone from a fixed set of starts. */
-export function evaluate(model: Model, f: Forest, x: number): EvalPoint {
+/** How she does alone from a fixed set of starts, with `energy` (the energy set in Settings). */
+export function evaluate(model: Model, f: Forest, x: number, energy = DEFAULT_ENERGY): EvalPoint {
   const starts = evalStarts(f);
   const rng = rngFrom(`evalrun:${f.code}:${x}`);
   const counts: Record<Outcome, number> = { home: 0, eaten: 0, lost: 0 };
@@ -152,7 +160,7 @@ export function evaluate(model: Model, f: Forest, x: number): EvalPoint {
   let flowers = 0;
   let treasure = 0;
   for (const s of starts) {
-    const w = new Walker(f, model, s, FIXED.evalEnergy, FIXED.evalBoldness, rng);
+    const w = new Walker(f, model, s, energy, FIXED.evalBoldness, rng);
     const out = w.run();
     counts[out]++;
     if (out === 'home') {
@@ -163,13 +171,13 @@ export function evaluate(model: Model, f: Forest, x: number): EvalPoint {
     treasure += w.basket.treasure;
   }
   const n = Math.max(1, starts.length);
-  return { x, home: counts.home / n, eaten: counts.eaten / n, lost: counts.lost / n, noCake: noCake / n, flowers: flowers / n, treasure: treasure / n };
+  return { x, home: counts.home / n, eaten: counts.eaten / n, lost: counts.lost / n, noCake: noCake / n, flowers: flowers / n, treasure: treasure / n, energy };
 }
 
 /** Share of test trips that end at home, over a few rounds of the fixed test trips (steadier than one round). */
-export function homeShare(model: Model, f: Forest, rounds = FIXED.checkRounds): number {
+export function homeShare(model: Model, f: Forest, energy = DEFAULT_ENERGY, rounds = FIXED.checkRounds): number {
   let sum = 0;
-  for (let k = 0; k < rounds; k++) sum += evaluate(model, f, -1 - k).home;
+  for (let k = 0; k < rounds; k++) sum += evaluate(model, f, -1 - k, energy).home;
   return sum / rounds;
 }
 
@@ -212,9 +220,9 @@ export function guessesRight(model: Model, walk: LessonWalk): { right: number; s
 }
 
 /** Record one batch of lessons for the charts: its mean loss and, when `test` is set, a round of test trips. */
-export function recordLessonBatch(model: Model, f: Forest, stats: TrainStats, meanLoss: number, test = true) {
+export function recordLessonBatch(model: Model, f: Forest, stats: TrainStats, meanLoss: number, test = true, energy = DEFAULT_ENERGY) {
   stats.lessonLoss.push({ x: stats.lessons, y: meanLoss });
-  if (test) stats.lessonEval.push(evaluate(model, f, stats.lessons));
+  if (test) stats.lessonEval.push(evaluate(model, f, stats.lessons, energy));
 }
 
 export function chooseTeacher(choice: TeacherChoice, rng: Rng): Teacher {
@@ -230,7 +238,7 @@ export interface ChunkInfo {
 
 export function trainLessons(
   model: Model, opt: Adam, f: Forest, choice: TeacherChoice, count: number, stats: TrainStats, rng: Rng,
-  onChunk?: (info: ChunkInfo) => void,
+  onChunk?: (info: ChunkInfo) => void, testEnergy = DEFAULT_ENERGY,
 ) {
   const costs = teacherCosts(f);
   const starts = startTiles(f);
@@ -245,7 +253,7 @@ export function trainLessons(
     lossN++;
     paths.push({ positions: walk.positions, tag: teacher });
     if ((i + 1) % FIXED.chunk === 0 || i === count - 1) {
-      recordLessonBatch(model, f, stats, lossSum / lossN, testsAfter(i, count));
+      recordLessonBatch(model, f, stats, lossSum / lossN, testsAfter(i, count), testEnergy);
       lossSum = 0;
       lossN = 0;
       onChunk?.({ done: i + 1, paths });
@@ -399,7 +407,7 @@ export function headingShare(f: Forest, run: Run): number {
 }
 
 export function practiceEnergy(radius: number) {
-  return Math.min(FIXED.evalEnergy, 4 * radius + 10);
+  return Math.min(FIXED.practiceMaxEnergy, 4 * radius + 10);
 }
 
 /**
@@ -426,7 +434,7 @@ export const practiceStartTiles = (f: Forest, stats: TrainStats, setup: Practice
 
 /** A practice run, not yet walked: she starts at `start` with the practice energy and boldness. */
 export const practiceWalker = (model: Model, f: Forest, start: number, stats: TrainStats, rng: Rng, setup?: PracticeSetup): Walker =>
-  new Walker(f, model, start, setup?.starts === 'anywhere' ? FIXED.evalEnergy : practiceEnergy(stats.radius), FIXED.practiceBoldness, rng);
+  new Walker(f, model, start, setup?.starts === 'anywhere' ? FIXED.practiceMaxEnergy : practiceEnergy(stats.radius), FIXED.practiceBoldness, rng);
 
 /**
  * Learn from one finished practice run: the judge scores it, each move is nudged by
@@ -476,14 +484,14 @@ export function learnFromRun(model: Model, f: Forest, judge: Judge, w: Walker, s
 }
 
 /** Record one batch of practice runs for the charts: the judge's mean score and, when `test` is set, a round of test trips. */
-export function recordPracticeBatch(model: Model, f: Forest, stats: TrainStats, meanScore: number, test = true) {
+export function recordPracticeBatch(model: Model, f: Forest, stats: TrainStats, meanScore: number, test = true, energy = DEFAULT_ENERGY) {
   stats.practiceScore.push({ x: stats.practiceRuns, y: meanScore });
-  if (test) stats.practiceEval.push(evaluate(model, f, stats.lessons + stats.practiceRuns));
+  if (test) stats.practiceEval.push(evaluate(model, f, stats.lessons + stats.practiceRuns, energy));
 }
 
 export function trainPractice(
   model: Model, f: Forest, judge: Judge, count: number, stats: TrainStats, rng: Rng,
-  onChunk?: (info: ChunkInfo) => void, startsAt: PracticeStarts = 'near',
+  onChunk?: (info: ChunkInfo) => void, startsAt: PracticeStarts = 'near', testEnergy = DEFAULT_ENERGY,
 ) {
   const setup = practiceSetup(f, stats, startsAt);
   let scoreSum = 0;
@@ -505,7 +513,7 @@ export function trainPractice(
     paths.push({ positions: w.positions, tag: w.outcome! });
 
     if ((i + 1) % FIXED.chunk === 0 || i === count - 1) {
-      recordPracticeBatch(model, f, stats, scoreSum / scoreN, testsAfter(i, count));
+      recordPracticeBatch(model, f, stats, scoreSum / scoreN, testsAfter(i, count), testEnergy);
       scoreSum = 0;
       scoreN = 0;
       onChunk?.({ done: i + 1, paths });

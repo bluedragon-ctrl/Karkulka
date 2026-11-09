@@ -176,14 +176,14 @@ export const CARD_DETAILS: Partial<Record<CardKey, { title: string; lines: () =>
   ] },
   testTrips: { title: 'The test', lines: () => [
     `${FIXED.evalStarts} trips from the same fixed starting spots every time`,
-    `Boldness ${FIXED.evalBoldness} and ${FIXED.evalEnergy} energy on each trip`,
+    `Boldness ${FIXED.evalBoldness}, and the energy set in Settings, like her trips alone`,
     `About ${FIXED.evalPoints} tests in each run of lessons or practice`,
   ] },
   curriculum: { title: 'The numbers', lines: () => [
     `She starts within ${FIXED.curriculumStart} steps of home`,
     `When she gets home in ${Math.round(FIXED.curriculumThreshold * 100)}% of her last ${FIXED.curriculumWindow} runs, the circle grows by ${FIXED.curriculumStep} steps`,
-    `Energy for a practice trip: 4 × the circle + 10, at most ${FIXED.evalEnergy}`,
-    `Anywhere: any path tile, ${FIXED.evalEnergy} energy, and the circle stays as it is`,
+    `Energy for a practice trip: 4 × the circle + 10, at most ${FIXED.practiceMaxEnergy}`,
+    `Anywhere: any path tile, ${FIXED.practiceMaxEnergy} energy, and the circle stays as it is`,
   ] },
   judgeGrandma: { title: 'How Grandma scores a run', lines: () => [
     `${num(FIXED.rewardHome)} for reaching home`,

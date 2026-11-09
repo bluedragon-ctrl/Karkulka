@@ -12,7 +12,7 @@ import { Thoughts } from '../thoughts';
 import * as store from '../storage';
 import { LessonWalk, TEACHER_KINDS, Teacher, TeacherChoice, costToHome, endsAtDen, endsStuck, teacherMoves, walkLesson } from '../teachers';
 import { ENERGY_NAMES, MEMORY_PAIRS, MemorySize, ModelConfig, energyLevel } from '../tokens';
-import { EvalPoint, FIXED, JUDGES, Judge, PRACTICE_STARTS, PracticeStarts, TrainStats, chooseTeacher, guessesRight, homeShare, learnFromLesson, learnFromRun, newStats, practiceSetup, practiceWalker, recordLessonBatch, recordPracticeBatch, practiceStartTiles, startTiles, teacherCosts } from '../train';
+import { DEFAULT_ENERGY, EvalPoint, FIXED, JUDGES, Judge, PRACTICE_STARTS, PracticeStarts, TrainStats, chooseTeacher, guessesRight, homeShare, learnFromLesson, learnFromRun, newStats, practiceSetup, practiceWalker, recordLessonBatch, recordPracticeBatch, practiceStartTiles, startTiles, teacherCosts } from '../train';
 import { WorkerRequest, runTraining } from '../workerTypes';
 import {
   BERRIES, DEFAULT_SIZE, FLOWERS, Forest, HOME, MOVES, MOVE_ARROWS, MOVE_NAMES, PATH, SECTOR_WORDS, SWAMP, TREASURE, TREE, Tile, WOLF, copyForest,
@@ -72,7 +72,7 @@ const crossedCake = () => s('g', {}, s('g', { opacity: 0.6 }, cake(0, 0, 9)), s(
 
 const DEFAULTS: Settings = {
   memory: 'medium', hint: false, teacher: 'mother', lessons: 100, practice: 1000, judge: 'grandma', practiceStarts: 'near',
-  energy: 60, boldness: 0.7, fog: false, thoughts: true, events: true, newPlaces: true, heat: true, wolves: 1, wolfToken: false, wolfOut: 0, arrows: true, brush: TREE,
+  energy: DEFAULT_ENERGY, boldness: 0.7, fog: false, thoughts: true, events: true, newPlaces: true, heat: true, wolves: 1, wolfToken: false, wolfOut: 0, arrows: true, brush: TREE,
 };
 
 const TEACHERS: { id: TeacherChoice; name: string; text: string }[] = [
@@ -347,7 +347,7 @@ export class App {
   /** Test her in the current forest and add the result to the change chart. */
   private logCheck(label: string) {
     if (!this.model) return;
-    this.changeLog.push({ label, home: homeShare(this.model, this.forest) });
+    this.changeLog.push({ label, home: homeShare(this.model, this.forest, this.settings.energy) });
     if (this.changeLog.length > MAX_CHANGE_POINTS) this.changeLog.splice(1, 1); // keep "before"
     this.uncheckedEdits = false;
   }
@@ -610,7 +610,7 @@ export class App {
     const catchUp = this.outdated;
     this.watchedEnd = null;
     this.runJob(
-      { kind: 'lessons', model, forest: copyForest(this.forest), stats: this.stats, count, seed: this.seed(), teacher: this.settings.teacher },
+      { kind: 'lessons', model, forest: copyForest(this.forest), stats: this.stats, count, seed: this.seed(), teacher: this.settings.teacher, testEnergy: this.settings.energy },
       0.1,
       () => {
         this.markTrained();
@@ -734,7 +734,7 @@ export class App {
       },
       checkpoint: () => {
         if (!lossN) return;
-        recordLessonBatch(model, this.forest, this.stats, lossSum / lossN);
+        recordLessonBatch(model, this.forest, this.stats, lossSum / lossN, true, this.settings.energy);
         lossSum = 0;
         lossN = 0;
       },
@@ -967,7 +967,7 @@ export class App {
     this.lastPractice = null;
     this.lastRun = null;
     this.runJob(
-      { kind: 'practice', model: this.model, forest: copyForest(this.forest), stats: this.stats, count, seed: this.seed(), judge, starts: this.settings.practiceStarts },
+      { kind: 'practice', model: this.model, forest: copyForest(this.forest), stats: this.stats, count, seed: this.seed(), judge, starts: this.settings.practiceStarts, testEnergy: this.settings.energy },
       0.12,
       () => {
         this.walker = null;
@@ -1024,7 +1024,7 @@ export class App {
       },
       checkpoint: () => {
         if (!scoreN) return;
-        recordPracticeBatch(model, this.forest, this.stats, scoreSum / scoreN);
+        recordPracticeBatch(model, this.forest, this.stats, scoreSum / scoreN, true, this.settings.energy);
         scoreSum = 0;
         scoreN = 0;
       },
