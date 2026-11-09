@@ -4,7 +4,7 @@ import type { Rng } from './rng';
 import type { History } from './teachers';
 import { WalkingWolf, viewWithWolves, wolvesAfter, wolvesFor } from './prowler';
 import { encodeContext, snapBasket } from './tokens';
-import { Basket, Effect, FLOWERS, Forest, Move, StepResult, TREASURE, BasketState, WolfOutRoll, homeSector, newBasketState, pickUpAtStart, step, wolfOutRolls } from './world';
+import { BERRIES, Basket, Effect, FLOWERS, Forest, Move, StepResult, TREASURE, BasketState, WolfOutRoll, energyAfter, homeSector, newBasketState, pickUpAtStart, step, wolfOutRolls } from './world';
 
 export type Outcome = 'home' | 'eaten' | 'lost';
 
@@ -66,7 +66,7 @@ export class Walker {
   outcome: Outcome | null = null;
   private pending: Decision | null = null;
   /** How many flowers and treasures the forest holds; the forest never changes during a trip. */
-  private readonly inForest: { flowersInForest: number; treasureInForest: number };
+  private readonly inForest: { flowersInForest: number; treasureInForest: number; berriesInForest: number };
 
   constructor(
     readonly forest: Forest,
@@ -83,11 +83,11 @@ export class Walker {
     this.wolves = wolvesFor(forest, start, rng);
     // Likewise: with the wolf always home, nothing is drawn.
     this.wolfOut = wolfOutRolls(forest, rng);
-    this.history = { views: [viewWithWolves(forest, start, this.wolves)], moves: [], sectors: [homeSector(forest, start)], baskets: [snapBasket(this.trip.basket)] };
+    this.history = { views: [viewWithWolves(forest, start, this.wolves, this.trip.picked)], moves: [], sectors: [homeSector(forest, start)], baskets: [snapBasket(this.trip.basket)], energy: [energy] };
     this.baskets = [snapBasket(this.trip.basket)];
     this.energyLeft = energy;
     const all = (t: number) => forest.tiles.filter((x) => x === t).length;
-    this.inForest = { flowersInForest: all(FLOWERS), treasureInForest: all(TREASURE) };
+    this.inForest = { flowersInForest: all(FLOWERS), treasureInForest: all(TREASURE), berriesInForest: all(BERRIES) };
   }
 
   get basket(): Basket { return this.trip.basket; }
@@ -96,9 +96,9 @@ export class Walker {
    * What she picked on this trip, out of how many are in the forest. Counts pickups even if
    * the wolf later ate her (her basket is then empty, but she did pick them).
    */
-  get pickups(): { flowers: number; treasure: number; flowersInForest: number; treasureInForest: number } {
+  get pickups(): { flowers: number; treasure: number; berries: number; flowersInForest: number; treasureInForest: number; berriesInForest: number } {
     const kind = (t: number) => this.trip.picked.filter((i) => this.forest.tiles[i] === t).length;
-    return { flowers: kind(FLOWERS), treasure: kind(TREASURE), ...this.inForest };
+    return { flowers: kind(FLOWERS), treasure: kind(TREASURE), berries: kind(BERRIES), ...this.inForest };
   }
 
   /** The step at which the wolf grabbed the cake (0-based move index), or -1. */
@@ -112,7 +112,11 @@ export class Walker {
 
   setEnergy(e: number) {
     this.energy = e;
-    if (this.t === 0) this.energyLeft = e;
+    if (this.t === 0) {
+      this.energyLeft = e;
+      this.history.energy[0] = e;
+      this.pending = null;
+    }
   }
 
   /** The model's probabilities for the next move (before boldness). */
@@ -149,13 +153,15 @@ export class Walker {
       if (e.effect) this.effects.push({ t: e.t, kind: e.kind, effect: e.effect });
     }
     this.baskets.push(snapBasket(this.trip.basket));
-    this.energyLeft = Math.max(0, this.energyLeft - r.cost);
+    // Berries give energy back after the step's cost, so the last step onto a bush still saves her.
+    this.energyLeft = energyAfter(this.energyLeft, this.energy, r.cost, r.gain);
     if (r.result === 'home') this.outcome = 'home';
     else if (r.result === 'eaten') this.outcome = 'eaten';
     else {
-      this.history.views.push(viewWithWolves(this.forest, r.pos, this.wolves));
+      this.history.views.push(viewWithWolves(this.forest, r.pos, this.wolves, this.trip.picked));
       this.history.sectors.push(homeSector(this.forest, r.pos));
       this.history.baskets.push(snapBasket(this.trip.basket));
+      this.history.energy.push(this.energyLeft);
       if (this.energyLeft <= 0) this.outcome = 'lost';
     }
     return m;

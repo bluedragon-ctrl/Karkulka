@@ -3,7 +3,7 @@ import type { CardKey } from '../explain';
 import { Model, N_OUT, parameterCount, softmax } from '../model';
 import type { Walker } from '../sim';
 import { FIXED, TrainStats } from '../train';
-import { BASKET_FEATS, HINT_FEATS, ViewToken, buildVocabulary, slotFeats, viewFeats, viewKinds } from '../tokens';
+import { BASKET_FEATS, ENERGY_FEATS, ENERGY_LEVELS, HINT_FEATS, PINNED_FEATS, ViewToken, buildVocabulary, slotFeats, viewFeats, viewKinds } from '../tokens';
 import { Forest, MOVE_ARROWS, MOVE_NAMES, MOVES, SWAMP_COST } from '../world';
 import { HUNTSMAN_ENERGY, SWAMP_PENALTY, WOLF_PENALTY } from '../teachers';
 import {
@@ -81,8 +81,8 @@ function currentInput(ctx: TechContext): HTMLElement {
     // Each decision keeps the numbers the model produced at the time, so nothing is recomputed.
     const d = k < n ? walker.decisions[k] : walker.decide();
     const x = d.input;
-    const rows: HTMLElement[] = [vectorRow('basket (pinned)', x, 0, BASKET_FEATS), vectorRow('current view', x, BASKET_FEATS, VF)];
-    let off = BASKET_FEATS + VF;
+    const rows: HTMLElement[] = [vectorRow('basket (pinned)', x, 0, BASKET_FEATS), vectorRow('energy (pinned)', x, BASKET_FEATS, ENERGY_FEATS), vectorRow('current view', x, PINNED_FEATS, VF)];
+    let off = PINNED_FEATS + VF;
     if (model.cfg.hint) { rows.push(vectorRow('home hint', x, off, HINT_FEATS)); off += HINT_FEATS; }
     for (let s = 1; s <= model.cfg.memory; s++, off += SF) {
       rows.push(vectorRow(`${s} step${s === 1 ? '' : 's'} back`, x, off, SF));
@@ -104,7 +104,7 @@ function currentInput(ctx: TechContext): HTMLElement {
     draw(v);
   } });
   draw(k0);
-  return section('Current input', ctx.hint('oneHot'), `The context window at one step of her latest trip, encoded as ${model.nIn} numbers. First the pinned basket (${BASKET_FEATS} numbers: cake yes or no, flowers 0, 1 or 2+, treasure 0, 1 or 2+), which never scrolls out. Each view is 8 tiles × ${kinds} (one-hot); each remembered step adds a "present" flag, a view and a move (${SF} numbers).`,
+  return section('Current input', ctx.hint('oneHot'), `The context window at one step of her latest trip, encoded as ${model.nIn} numbers. First the pinned basket (${BASKET_FEATS} numbers: cake yes or no, flowers 0, 1 or 2+, treasure 0, 1 or 2+) and her energy (${ENERGY_FEATS} numbers: below ${ENERGY_LEVELS[0]}, ${ENERGY_LEVELS.slice(0, -1).map((l, k) => `${l}–${ENERGY_LEVELS[k + 1] - 1}`).join(', ')}, ${ENERGY_LEVELS.at(-1)} or more), which never scroll out. Each view is 8 tiles × ${kinds} (one-hot); each remembered step adds a "present" flag, a view and a move (${SF} numbers).`,
     h('label', { class: 'row' }, 'Step ', slider, counter), body);
 }
 

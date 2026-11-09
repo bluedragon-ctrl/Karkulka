@@ -131,8 +131,8 @@ function meet(trip: BasketState, wolf: WalkingWolf): StepResult {
 }
 
 /** What she sees at `pos`: the 8 tiles around her, with each walking wolf as WALKER (see `asSeenBy` for how the model reads it). */
-export function viewWithWolves(f: Forest, pos: number, wolves: readonly WalkingWolf[]): Seen[] {
-  const view: Seen[] = viewAt(f, pos);
+export function viewWithWolves(f: Forest, pos: number, wolves: readonly WalkingWolf[], eaten?: readonly number[]): Seen[] {
+  const view: Seen[] = viewAt(f, pos, eaten);
   const [x, y] = xyOf(f, pos);
   for (const wolf of wolves) {
     if (!wolf.here) continue;

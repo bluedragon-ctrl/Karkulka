@@ -4,27 +4,46 @@
  * crow, who heads straight for home and flies on over the first tree in the way,
  * Grandma, who fetches a bunch of flowers first, the magpie, who collects
  * every treasure before it heads home, and the huntsman, who goes the long way
- * round to have a look at every wolf den. The teachers are the same cast as the judges.
+ * round to have a look at every wolf den, and the hedgehog, who stops for berries when she
+ * is tired. Every teacher but the hedgehog is also a judge.
  */
 import { closeness, viewWithWolves, wolvesAfter, wolvesFor } from './prowler';
-import { Rng, pick } from './rng';
-import { Basket, copyForest, densInSight, stepCost, FLOWERS, Forest, HOME, Seen, TREASURE, TREE, headsHome, xyOf, Move, MOVES, SWAMP, WOLF, cheapestTo, cheapestToHome, isWalkable, neighbor, nearWolf, newBasketState, pickUpAtStart, step, tilesWhere, homeSector } from './world';
+import { Rng, pick, randInt } from './rng';
+import { BERRIES, BERRY_ENERGY, Basket, copyForest, densInSight, energyAfter, energyToHome, stepCost, FLOWERS, Forest, HOME, Seen, TREASURE, TREE, headsHome, xyOf, Move, MOVES, SWAMP, WOLF, cheapestTo, cheapestToHome, isWalkable, neighbor, nearWolf, newBasketState, pickUpAtStart, step, tilesWhere, homeSector } from './world';
 
-export type Teacher = 'mother' | 'father' | 'wolf' | 'crow' | 'grandma' | 'magpie' | 'huntsman';
-export const TEACHER_KINDS: readonly Teacher[] = ['mother', 'father', 'wolf', 'crow', 'grandma', 'magpie', 'huntsman'];
+export type Teacher = 'mother' | 'father' | 'wolf' | 'crow' | 'grandma' | 'magpie' | 'huntsman' | 'hedgehog';
+export const TEACHER_KINDS: readonly Teacher[] = ['mother', 'father', 'wolf', 'crow', 'grandma', 'magpie', 'huntsman', 'hedgehog'];
 /**
  * How a teacher counts a step: carefully (around swamps and away from dens: the mother, and
  * Grandma, who walks home the mother's way), steadily (by the energy it takes: the huntsman,
- * who saves his strength for a long walk), or quickly (one step is one step: everyone else).
+ * who saves his strength for a long walk, and the hedgehog), or quickly (one step is one step: everyone else).
  */
 export type Way = 'careful' | 'steady' | 'quick';
 const wayOf = (teacher: Teacher): Way =>
-  teacher === 'mother' || teacher === 'grandma' ? 'careful' : teacher === 'huntsman' ? 'steady' : 'quick';
+  teacher === 'mother' || teacher === 'grandma' ? 'careful' : teacher === 'huntsman' || teacher === 'hedgehog' ? 'steady' : 'quick';
 /** "both" mixes the parents half and half; "motherWolf" is the mother with a few of the wolf's lessons slipped in. */
 export type TeacherChoice = Teacher | 'both' | 'motherWolf';
 
-/** The energy the huntsman plans his walk around: he only goes on to another den if he can still get her home on it. */
+/** The energy the huntsman's lessons start with: he only goes on to another den if he can still get her home on what is left. */
 export const HUNTSMAN_ENERGY = 90;
+
+/**
+ * Lessons have an energy track, pinned like on her trips alone. A lesson starts with the energy
+ * its walk needs plus a random spare of 0 to this much, so lessons show every energy level.
+ */
+export const LESSON_SPARE = 60;
+/** Energy Grandma, the magpie and the hedgehog keep in hand for the way home when they plan. */
+export const ENERGY_MARGIN = 5;
+/** Grandma's and the magpie's spare energy is 0 to this much: their errands are long, so she is seldom too tired for one. */
+export const ERRAND_SPARE = 90;
+/**
+ * Half of the hedgehog's lessons start with this share (from…to) of the energy needed to walk
+ * home: often too little without berries. The other half have a spare like the parents', so she
+ * also sees him walk past a bush when she has plenty.
+ */
+export const HEDGEHOG_ENERGY = [0.6, 1.4] as const;
+/** Teachers who plan with her energy: they draw it before they walk. The others ignore it, and their energy is filled in after. */
+export const PLANS_ENERGY: readonly Teacher[] = ['grandma', 'magpie', 'huntsman', 'hedgehog'];
 
 /** Extra cost the careful mother gives to tiles next to a wolf den. */
 export const WOLF_PENALTY = 6;
@@ -129,12 +148,16 @@ export interface History {
   sectors: number[];
   /** Her basket at each view (in lessons too, a flower patch or treasure the parent walks over is picked up). */
   baskets: Basket[];
+  /** Her energy left at each view (pinned as the energy token). */
+  energy: number[];
 }
 
 export interface LessonWalk {
   teacher: Teacher;
   positions: number[];
   history: History;
+  /** The energy the lesson started with. */
+  energy: number;
   /** The crow flew on over a tree with its last move: she bumped into the tree and was left behind. */
   stuck?: boolean;
   /** Each walking wolf's tile at each of her positions (-1: gone), when any were out. */
@@ -190,39 +213,53 @@ export const endsStuck = (walk: LessonWalk): boolean => walk.stuck === true;
  * on, and the lesson ends with her bumping into the tree. `denCost` (from
  * `costToDen`) is only needed for the wolf; the crow ignores `cost`.
  */
-export function walkLesson(f: Forest, teacher: Teacher, cost: Float64Array, start: number, rng: Rng, denCost?: Float64Array): LessonWalk {
+export function walkLesson(f: Forest, teacher: Teacher, cost: Float64Array, start: number, rng: Rng, denCost?: Float64Array, startEnergy?: number): LessonWalk {
   const positions = [start];
   // Her basket follows the same rules as on a trip alone: a flower patch or treasure at the start or on the way is picked up.
   const trip = newBasketState();
   pickUpAtStart(f, start, trip);
   const wolves = wolvesFor(f, start, rng);
-  const history: History = { views: [viewWithWolves(f, start, wolves)], moves: [], sectors: [homeSector(f, start)], baskets: [{ ...trip.basket }] };
+  const history: History = { views: [viewWithWolves(f, start, wolves, trip.picked)], moves: [], sectors: [homeSector(f, start)], baskets: [{ ...trip.basket }], energy: [] };
   const toDen = teacher === 'wolf' ? denCost ?? costToDen(f) : null;
   let hunting = false;
   // The dens the huntsman has had a look at so far.
   const seen = new Set<number>(densInSight(f, start));
-  let spent = 0;
-  // Grandma, the magpie and the huntsman first walk to something, then home: `goal` is the cost to what they are after.
+  // Energy: the teachers who plan with it draw it now; the others get theirs after the walk (see `lessonEnergy`).
+  const plans = PLANS_ENERGY.includes(teacher);
+  const homeEnergy = plans ? energyToHome(f) : null;
+  const budget = startEnergy ?? (plans ? planningEnergy(teacher, homeEnergy![start], rng) : 0);
+  let left = budget;
+  // What each step cost and gave back, to fill in the energy track after the walk.
+  const costs: { cost: number; gain: number }[] = [];
+  // Grandma, the magpie, the huntsman and the hedgehog first walk to something, then home: `goal` is the cost to what they are after.
   // `g` is the forest as planned in: the real one, or one with the walking wolves' tiles closed.
   const errand = (g: Forest, home: Float64Array): Float64Array | null => {
-    if (teacher === 'grandma' && trip.basket.flowers === 0) return reachable(costToTiles(g, tilesWhere(g, (t) => t === FLOWERS), 'careful'), pos);
-    if (teacher === 'magpie') return reachable(costToTiles(g, tilesWhere(g, (t, i) => t === TREASURE && !trip.picked.includes(i)), 'quick'), pos);
+    if (!plans) return null;
+    // They walk by their own way but plan with the energy a walk takes, keeping a little in hand.
+    const fromHere = energyFrom(g, pos);
+    const eHome = g === f ? homeEnergy! : energyToHome(g);
+    const affords = (i: number) => fromHere[i] + eHome[i] + ENERGY_MARGIN <= left;
+    if (teacher === 'grandma' && trip.basket.flowers === 0) return reachable(costToTiles(g, tilesWhere(g, (t, i) => t === FLOWERS && affords(i)), 'careful'), pos);
+    if (teacher === 'magpie') return reachable(costToTiles(g, tilesWhere(g, (t, i) => t === TREASURE && !trip.picked.includes(i) && affords(i)), 'quick'), pos);
     if (teacher === 'huntsman') {
       // A spot to see a new den from, if he can still get her home from there on her energy.
       // He walks by energy, so the cost there and home is what the walk will really take.
-      const left = HUNTSMAN_ENERGY - spent;
-      const fromHere = energyFrom(g, pos);
       return reachable(costToTiles(g, tilesWhere(g, (t, i) => isWalkable(t) && fromHere[i] + home[i] <= left && densInSight(g, i).some((d) => !seen.has(d))), 'steady'), pos);
+    }
+    if (teacher === 'hedgehog') {
+      const bush = berryStop(g, pos, left, budget, fromHere, eHome, trip.picked);
+      return bush < 0 ? null : reachable(costToTiles(g, [bush], 'steady'), pos);
     }
     return null;
   };
   let goal: Float64Array | null = null;
+  let flew = false;
   // The way round a walking wolf, kept once planned: the forest with his tiles closed, and the cost to the goal in it.
   let detour: { g: Forest; cost: Float64Array } | null = null;
   let doneSoFar = -1;
   let pos = start;
   let eaten = false;
-  const out = (extra: Partial<LessonWalk> = {}): LessonWalk => ({ teacher, positions, history, ...(wolves.length ? { wolves: wolves.map((w) => w.path) } : {}), ...extra });
+  const out = (extra: Partial<LessonWalk> = {}): LessonWalk => ({ teacher, positions, history, energy: 0, ...(wolves.length ? { wolves: wolves.map((w) => w.path) } : {}), ...extra });
   for (let guard = 0; guard < f.tiles.length * 2 && pos !== f.home && f.tiles[pos] !== WOLF && !eaten; guard++) {
     if (toDen && !hunting && nearWolf(f, pos) && denMoves(f, toDen, pos).length) hunting = true;
     const crow = teacher === 'crow' ? crowMoves(f, pos) : null;
@@ -256,17 +293,72 @@ export function walkLesson(f: Forest, teacher: Teacher, cost: Float64Array, star
     if (wolves.length) stepped.result = wolvesAfter(wolves, stepped.pos, stepped.result, trip);
     eaten = stepped.result === 'eaten';
     pos = stepped.pos;
-    spent += stepped.cost;
+    costs.push({ cost: stepped.cost, gain: stepped.gain ?? 0 });
+    left = energyAfter(left, budget, stepped.cost, stepped.gain);
     history.moves.push(m);
     positions.push(pos);
     for (const d of densInSight(f, pos)) seen.add(d);
     // The crow flew over a tree; she stays put, and the lesson ends there.
-    if (crow?.flies) return out({ stuck: true });
+    if (crow?.flies) { flew = true; break; }
     if (pos !== f.home && f.tiles[pos] !== WOLF && !eaten) {
-      history.views.push(viewWithWolves(f, pos, wolves));
+      history.views.push(viewWithWolves(f, pos, wolves, trip.picked));
       history.sectors.push(homeSector(f, pos));
       history.baskets.push({ ...trip.basket });
     }
   }
-  return out();
+  // The energy track: what the teacher planned with, or for the others what the walk took plus a spare,
+  // and never so little that she would run out on the way (a planning teacher's plan can be a little off).
+  const energy = Math.max(startEnergy ?? (plans ? budget : enoughEnergy(costs) + randInt(rng, LESSON_SPARE + 1)), enoughEnergy(costs));
+  history.energy = energyTrack(energy, costs).slice(0, history.views.length);
+  return out({ energy, ...(flew ? { stuck: true } : {}) });
+}
+
+/** The energy a planning teacher's lesson starts with, from the energy needed to walk home from the start. */
+function planningEnergy(teacher: Teacher, toHome: number, rng: Rng): number {
+  if (teacher === 'huntsman') return HUNTSMAN_ENERGY;
+  if (teacher === 'hedgehog') {
+    const [lo, hi] = HEDGEHOG_ENERGY;
+    if (rng() < 0.5) return Math.max(2, Math.round(toHome * (lo + (hi - lo) * rng())));
+    return toHome + randInt(rng, LESSON_SPARE + 1);
+  }
+  return toHome + randInt(rng, ERRAND_SPARE + 1);
+}
+
+/** Energy left at each position of a walk that starts with `start` (the start first). */
+export function energyTrack(start: number, costs: readonly { cost: number; gain: number }[]): number[] {
+  const out = [start];
+  let left = start;
+  for (const c of costs) out.push(left = energyAfter(left, start, c.cost, c.gain));
+  return out;
+}
+
+/** The least starting energy with which she never runs out before the walk's last step (the last step may use up the last of it). */
+export function enoughEnergy(costs: readonly { cost: number; gain: number }[]): number {
+  let need = 1;
+  for (const c of costs) need += c.cost;
+  // Without berries that is exactly enough; with them, less may do.
+  for (let e = 1; e < need; e++) {
+    const track = energyTrack(e, costs);
+    if (track.slice(1, -1).every((x) => x > 0)) return e;
+  }
+  return need - (costs.length ? costs[costs.length - 1].cost : 0);
+}
+
+/**
+ * The berry bush the hedgehog stops at, or -1 to walk straight home: none while she has the
+ * energy to get home with a little in hand. Otherwise the nearest uneaten bush she can reach that
+ * leaves her enough to get home from it with a little in hand, then any that is enough, then the
+ * one that leaves her best off (he looks for another after it).
+ */
+export function berryStop(f: Forest, pos: number, left: number, budget: number, fromHere: Float64Array, eHome: Float64Array, eaten: readonly number[]): number {
+  if (left >= eHome[pos] + ENERGY_MARGIN) return -1;
+  const bushes = tilesWhere(f, (t, i) => t === BERRIES && !eaten.includes(i) && fromHere[i] <= left);
+  if (!bushes.length) return -1;
+  const spare = (b: number) => Math.min(budget, left - fromHere[b] + BERRY_ENERGY) - eHome[b];
+  const nearest = (bs: number[]) => bs.reduce((a, b) => (fromHere[b] < fromHere[a] ? b : a));
+  const good = bushes.filter((b) => spare(b) >= ENERGY_MARGIN);
+  if (good.length) return nearest(good);
+  const enough = bushes.filter((b) => spare(b) >= 0);
+  if (enough.length) return nearest(enough);
+  return bushes.reduce((a, b) => (spare(b) > spare(a) ? b : a));
 }

@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { SHORTCUT_MIN_SAVING, disagreement, generateForest, parentRouteTiles, shortcutSaving } from '../src/forest';
 import { packTiles, unpackTiles } from '../src/storage';
-import { costToHome, crowMoves, endsStuck, teacherMoves, walkLesson } from '../src/teachers';
+import { HUNTSMAN_ENERGY, costToHome, crowMoves, endsStuck, teacherMoves, walkLesson } from '../src/teachers';
 import { FIXED, startTiles } from '../src/train';
 import { mulberry32 } from '../src/rng';
 import {
@@ -270,8 +270,11 @@ describe('the huntsman as a teacher', () => {
         expect(walk.positions.at(-1)).toBe(f.home);
         expect(walk.positions.some((p) => f.tiles[p] === WOLF)).toBe(false);
         expect(walk.history.views.length).toBe(walk.history.moves.length);
-        const energy = walk.positions.slice(1).reduce((e, p) => e + stepCost(f.tiles[p]), 0);
-        expect(energy).toBeLessThanOrEqual(FIXED.evalEnergy);
+        // His lessons start with the huntsman's energy and never run out on the way (berries can top it up).
+        expect(walk.energy).toBe(HUNTSMAN_ENERGY);
+        expect(walk.history.energy[0]).toBe(HUNTSMAN_ENERGY);
+        expect(walk.history.energy.every((e) => e > 0)).toBe(true);
+        expect(HUNTSMAN_ENERGY).toBeLessThanOrEqual(FIXED.evalEnergy);
         hunter += dens(walk.positions);
         father += dens(walkLesson(f, 'father', costToHome(f, 'father'), start, mulberry32(3)).positions);
       }

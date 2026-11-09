@@ -5,9 +5,9 @@ import { accumulate, createAdam, createModel, forward, modelFromJSON, modelToJSO
 import { mulberry32 } from '../src/rng';
 import { Walker } from '../src/sim';
 import { costToHome, endsAtDen, walkLesson } from '../src/teachers';
-import { BASKET_FEATS, MEMORY_PAIRS, SLOT_FEATS, VIEW_FEATS, encodeContext, inputSize, buildVocabulary, slotFeats, viewFeats } from '../src/tokens';
+import { BASKET_FEATS, ENERGY_FEATS, MEMORY_PAIRS, PINNED_FEATS, SLOT_FEATS, VIEW_FEATS, encodeContext, energyLevel, inputSize, buildVocabulary, slotFeats, viewFeats } from '../src/tokens';
 import { FIXED, JUDGES, Run, evalStarts, teacherCosts, chooseTeacher, evalEvery, guessesRight, headsHome, judgeMaps, learnFromRun, practiceSetup, practiceStartTiles, practiceWalker, startTiles, judgeRewards, judgeScore, homeShare, newStats, runOf, trainLessons, trainPractice } from '../src/train';
-import { FLOWERS, Forest, HOME, Move, PATH, StepResult, SWAMP, TREASURE, TREE, TILE_KINDS, Tile, VIEW_KINDS, WALKER, WOLF, allReachable, forestFromTiles, neighbor, pathTiles, walkableTiles } from '../src/world';
+import { BERRY_ENERGY, FLOWERS, Forest, HOME, Move, PATH, StepResult, SWAMP, TREASURE, TREE, TILE_KINDS, Tile, VIEW_KINDS, WALKER, WOLF, allReachable, forestFromTiles, neighbor, pathTiles, walkableTiles } from '../src/world';
 
 const cfg = { memory: MEMORY_PAIRS.medium, hint: false, hidden: 16 };
 
@@ -21,14 +21,18 @@ describe('tokens', () => {
     // The pinned basket comes first: cake yes, no flowers, no treasure.
     expect(BASKET_FEATS).toBe(8);
     expect(Array.from(x.slice(0, BASKET_FEATS))).toEqual([0, 1, 1, 0, 0, 1, 0, 0]);
-    expect(x.slice(BASKET_FEATS, BASKET_FEATS + VIEW_FEATS).reduce((a, b) => a + b, 0)).toBe(8);
-    expect(VIEW_FEATS).toBe(8 * 7);
+    // Then her energy: exactly one level is on.
+    expect(PINNED_FEATS).toBe(BASKET_FEATS + ENERGY_FEATS);
+    expect(Array.from(x.slice(BASKET_FEATS, PINNED_FEATS)).reduce((a, b) => a + b, 0)).toBe(1);
+    expect(x[BASKET_FEATS + energyLevel(w.history.energy[2])]).toBe(1);
+    expect(x.slice(PINNED_FEATS, PINNED_FEATS + VIEW_FEATS).reduce((a, b) => a + b, 0)).toBe(8);
+    expect(VIEW_FEATS).toBe(8 * 8);
     // Two steps of history are present, the third slot is empty.
-    const mem = BASKET_FEATS + VIEW_FEATS;
+    const mem = PINNED_FEATS + VIEW_FEATS;
     expect(x[mem]).toBe(1);
     expect(x[mem + SLOT_FEATS]).toBe(1);
     expect(x[mem + 2 * SLOT_FEATS]).toBe(0);
-    expect(inputSize({ memory: 1, hint: true })).toBe(BASKET_FEATS + VIEW_FEATS + 8 + SLOT_FEATS);
+    expect(inputSize({ memory: 1, hint: true })).toBe(PINNED_FEATS + VIEW_FEATS + 8 + SLOT_FEATS);
   });
 
   it('gives a walking wolf his own token only with wolfToken on', () => {
@@ -37,20 +41,20 @@ describe('tokens', () => {
     w.history.views[2][0] = WALKER;
     const on = { ...cfg, wolfToken: true };
     expect(VIEW_KINDS).toBe(TILE_KINDS + 1);
-    expect(viewFeats(on)).toBe(8 * 8);
+    expect(viewFeats(on)).toBe(8 * 9);
     expect(slotFeats(on)).toBe(SLOT_FEATS + 8);
     expect(inputSize(on)).toBe(inputSize(cfg) + 8 * (1 + cfg.memory));
     // Off: the walking wolf is read as a den, in the current view and in memory alike.
     const off = encodeContext(cfg, w.history, 2);
-    expect(off[BASKET_FEATS + WOLF]).toBe(1);
-    expect(off[BASKET_FEATS + VIEW_FEATS + 1 + WOLF]).toBe(1);
+    expect(off[PINNED_FEATS + WOLF]).toBe(1);
+    expect(off[PINNED_FEATS + VIEW_FEATS + 1 + WOLF]).toBe(1);
     // On: his own place in the one-hot, never the den's.
     const x = encodeContext(on, w.history, 2);
     expect(x.length).toBe(inputSize(on));
-    expect(x[BASKET_FEATS + WALKER]).toBe(1);
-    expect(x[BASKET_FEATS + WOLF]).toBe(0);
-    expect(x.slice(BASKET_FEATS, BASKET_FEATS + viewFeats(on)).reduce((a, b) => a + b, 0)).toBe(8);
-    const mem = BASKET_FEATS + viewFeats(on);
+    expect(x[PINNED_FEATS + WALKER]).toBe(1);
+    expect(x[PINNED_FEATS + WOLF]).toBe(0);
+    expect(x.slice(PINNED_FEATS, PINNED_FEATS + viewFeats(on)).reduce((a, b) => a + b, 0)).toBe(8);
+    const mem = PINNED_FEATS + viewFeats(on);
     expect(x[mem]).toBe(1);
     expect(x[mem + 1 + WALKER]).toBe(1);
     expect(x[mem + slotFeats(on)]).toBe(1);
@@ -380,9 +384,14 @@ describe('judges', () => {
       const w = new Walker(f, m, start, 15, 1, mulberry32(start));
       const outcome = w.run();
       expect(['home', 'eaten', 'lost']).toContain(outcome);
-      expect(w.t).toBeLessThanOrEqual(15);
+      // Berries give some energy back, so she can walk a little longer.
+      const gained = w.pickups.berries * BERRY_ENERGY;
+      expect(w.t).toBeLessThanOrEqual(15 + gained);
       if (outcome === 'lost') expect(w.energyLeft).toBe(0);
-      expect(w.energy - w.energyLeft).toBeGreaterThanOrEqual(w.t); // swamp steps cost more than 1
+      expect(w.energy - w.energyLeft + gained).toBeGreaterThanOrEqual(w.t); // swamp steps cost more than 1
+      // Her energy token follows her energy at every step.
+      expect(w.history.energy).toHaveLength(w.history.views.length);
+      expect(w.history.energy[0]).toBe(15);
     }
   });
 

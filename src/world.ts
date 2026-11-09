@@ -8,16 +8,19 @@ export const HOME = 3;
 export const SWAMP = 4;
 export const FLOWERS = 5;
 export const TREASURE = 6;
-export type Tile = 0 | 1 | 2 | 3 | 4 | 5 | 6;
-export const TILE_KINDS = 7;
-export const TILE_NAMES = ['path', 'tree', 'wolf den', "grandma's house", 'swamp', 'flowers', 'treasure'] as const;
+/** A berry bush: eating its berries gives her back some energy, once per trip. Not a basket item. */
+export const BERRIES = 7;
+export type Tile = 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7;
+/** The forest link packs two tiles per character (64 characters), so 8 is the most tile kinds it fits. */
+export const TILE_KINDS = 8;
+export const TILE_NAMES = ['path', 'tree', 'wolf den', "grandma's house", 'swamp', 'flowers', 'treasure', 'berry bush'] as const;
 
 /**
  * Not a tile: a walking wolf as she sees him. Her views (`History.views`) always record him as
  * WALKER; whether the model can tell him from a den depends on its inputs (`ModelConfig.wolfToken`).
  * Never in the forest's tiles, so links and forest codes are not touched.
  */
-export const WALKER = 7;
+export const WALKER = 8;
 /** What one place in her view can show: a tile, or a walking wolf. */
 export type Seen = Tile | typeof WALKER;
 /** Kinds a view can show when she tells walking wolves from dens: the tiles plus WALKER. */
@@ -26,12 +29,15 @@ export const VIEW_KINDS = TILE_KINDS + 1;
 /** Tiles she picks something up from (once per trip each). */
 export const isItem = (t: Tile): boolean => t === FLOWERS || t === TREASURE;
 
+/** Energy the berries of one bush give back (never above her starting energy). */
+export const BERRY_ENERGY = 15;
+
 /** Energy one step costs when she walks onto a tile (a blocked move costs 1). */
 export const SWAMP_COST = 3;
 export const stepCost = (t: Tile): number => (t === SWAMP ? SWAMP_COST : 1);
 
 /** Tiles she can stand on during a trip (home and dens end it). */
-export const isWalkable = (t: Tile): boolean => t === PATH || t === SWAMP || t === FLOWERS || t === TREASURE;
+export const isWalkable = (t: Tile): boolean => t === PATH || t === SWAMP || t === FLOWERS || t === TREASURE || t === BERRIES;
 
 /**
  * Her basket: the cake she sets out with, and what she picked up on the way.
@@ -40,7 +46,7 @@ export const isWalkable = (t: Tile): boolean => t === PATH || t === SWAMP || t =
 export interface Basket { cake: boolean; flowers: number; treasure: number }
 export const fullBasket = (): Basket => ({ cake: true, flowers: 0, treasure: 0 });
 
-/** The basket during a trip, with the item tiles already picked (each counts once). */
+/** The basket during a trip, with the item tiles already picked and the berry bushes already eaten (each counts once). */
 export interface BasketState { basket: Basket; picked: number[] }
 export const newBasketState = (): BasketState => ({ basket: fullBasket(), picked: [] });
 
@@ -148,9 +154,10 @@ export function neighbor(f: Forest, pos: number, m: Move): number {
 
 /**
  * `grabbed`: the wolf took the cake and she ran on; `empty`: she stepped onto a den while the
- * wolf was out, so nothing happened and she ran on; `flowers`, `treasure`: she picked some up.
+ * wolf was out, so nothing happened and she ran on; `flowers`, `treasure`: she picked some up;
+ * `berries`: she ate the berries of a bush (energy back).
  */
-export type StepResult = 'moved' | 'blocked' | 'home' | 'eaten' | 'grabbed' | 'empty' | 'flowers' | 'treasure';
+export type StepResult = 'moved' | 'blocked' | 'home' | 'eaten' | 'grabbed' | 'empty' | 'flowers' | 'treasure' | 'berries';
 
 /** Whether the wolf is out this time she steps onto a den: one roll per step onto a den. */
 export type WolfOutRoll = () => boolean;
@@ -174,8 +181,10 @@ export function wolfOutRolls(f: Forest, rng: () => number): WolfOutRoll | undefi
  * cake instead of her (she stands on the den and runs on), and item tiles fill
  * the basket once each. Without one, every den eats her. With `wolfOut` (and a trip state), each
  * step onto a den first asks whether the wolf is out: then nothing happens and she runs on, cake and all.
+ * A berry bush not yet eaten (with a trip state) gives `gain` energy back after the step's cost;
+ * the walker keeps it under her starting energy. Without a trip state a bush is ordinary path.
  */
-export function step(f: Forest, pos: number, m: Move, trip?: BasketState, wolfOut?: WolfOutRoll): { pos: number; result: StepResult; cost: number } {
+export function step(f: Forest, pos: number, m: Move, trip?: BasketState, wolfOut?: WolfOutRoll): { pos: number; result: StepResult; cost: number; gain?: number } {
   const n = neighbor(f, pos, m);
   if (n < 0) return { pos, result: 'blocked', cost: 1 };
   const t = f.tiles[n];
@@ -190,6 +199,10 @@ export function step(f: Forest, pos: number, m: Move, trip?: BasketState, wolfOu
     return { pos: n, result: 'eaten', cost: 1 };
   }
   if (t === HOME) return { pos: n, result: 'home', cost: 1 };
+  if (trip && t === BERRIES && !trip.picked.includes(n)) {
+    trip.picked.push(n);
+    return { pos: n, result: 'berries', cost: 1, gain: BERRY_ENERGY };
+  }
   if (trip && isItem(t) && !trip.picked.includes(n)) {
     trip.picked.push(n);
     if (t === FLOWERS) trip.basket.flowers++;
@@ -199,12 +212,25 @@ export function step(f: Forest, pos: number, m: Move, trip?: BasketState, wolfOu
   return { pos: n, result: 'moved', cost: stepCost(t) };
 }
 
-/** What she sees: the 8 surrounding tiles. She never sees coordinates. */
-export function viewAt(f: Forest, pos: number): Tile[] {
+/**
+ * What she sees: the 8 surrounding tiles. She never sees coordinates. `eaten` (the trip's
+ * picked tiles): a berry bush she has eaten is bare, so she sees it as path.
+ */
+export function viewAt(f: Forest, pos: number, eaten?: readonly number[]): Tile[] {
   const x = pos % f.size;
   const y = Math.floor(pos / f.size);
-  return VIEW_OFFSETS.map(([dx, dy]) => tileAt(f, x + dx, y + dy));
+  return VIEW_OFFSETS.map(([dx, dy]) => {
+    const t = tileAt(f, x + dx, y + dy);
+    return t === BERRIES && eaten?.includes((y + dy) * f.size + x + dx) ? PATH : t;
+  });
 }
+
+/**
+ * Energy after a step: its cost off, then the berries' gain, at most the starting energy `budget`.
+ * Never below 0; at 0 she is out of energy (unless the step took her home).
+ */
+export const energyAfter = (left: number, budget: number, cost: number, gain = 0): number =>
+  Math.min(budget, Math.max(0, left - cost) + gain);
 
 /** Rough direction home in 8 compass sectors (0 = east, counter-clockwise). */
 export function homeSector(f: Forest, pos: number): number {

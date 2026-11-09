@@ -62,7 +62,7 @@ describe('her story', () => {
         const grabbed = rec.results.includes('grabbed');
         const endings = { home: grabbed ? STORY.endings.homeNoCake : STORY.endings.home, eaten: STORY.endings.eaten, lost: STORY.endings.lost }[rec.outcome!];
         expect(endings).toContain(ending.text);
-        expect(story.filter((s) => s.part === 'basket').length).toBe(rec.results.filter((r, k) => r === 'grabbed' || (r === 'empty' && k === rec.results.indexOf('empty')) || r === 'flowers' || r === 'treasure').length);
+        expect(story.filter((s) => s.part === 'basket').length).toBe(rec.results.filter((r, k) => r === 'grabbed' || (r === 'empty' && k === rec.results.indexOf('empty')) || r === 'flowers' || r === 'treasure' || r === 'berries').length);
         // Every event she stepped on is told, as it turned out.
         for (const e of rec.met) {
           const kind = eventKind(e.kind)!;
@@ -110,7 +110,7 @@ describe('her story', () => {
   it('stays short: at most 7 sentences before the closing line, unless what must be told is longer', () => {
     recs.forEach((rec, k) => {
       const story = tellStory(rec, 2.5, mulberry32(k));
-      const must = 2 + rec.results.filter((r, k) => r === 'grabbed' || (r === 'empty' && k === rec.results.indexOf('empty')) || r === 'flowers' || r === 'treasure').length
+      const must = 2 + rec.results.filter((r, k) => r === 'grabbed' || (r === 'empty' && k === rec.results.indexOf('empty')) || r === 'flowers' || r === 'treasure' || r === 'berries').length
         + rec.met.filter((e) => eventKind(e.kind)!.trigger === 'step').length;
       expect(story.length - 1).toBeLessThanOrEqual(Math.max(MAX_SENTENCES, must + 1));
     });

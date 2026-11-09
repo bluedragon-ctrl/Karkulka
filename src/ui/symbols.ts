@@ -1,5 +1,5 @@
 /** Simple symbolic SVG shapes, drawn for this project. Shape plus colour, never colour alone. */
-import { Basket, DX, DY, FLOWERS, HOME, Move, PATH, SWAMP, Seen, TREASURE, TREE, Tile, WALKER, WOLF } from '../world';
+import { BERRIES, Basket, DX, DY, FLOWERS, HOME, Move, PATH, SWAMP, Seen, TREASURE, TREE, Tile, WALKER, WOLF } from '../world';
 import { s } from './dom';
 
 export const COLORS = {
@@ -42,7 +42,46 @@ export const COLORS = {
   magpie: '#2d6cdf',
   /** The huntsman's olive coat. */
   huntsman: '#6b8e23',
+  /** A berry bush: a round leafy bush with indigo berries (never red: red is hers and danger's). */
+  bush: '#4f8a3a',
+  bushInk: '#2f5a24',
+  berry: '#3d3f9e',
+  /** The hedgehog's brown spines. */
+  hedgehog: '#8d6e63',
+  spines: '#5d4037',
+  /** The energy token's battery. */
+  battery: '#3f8f4f',
 };
+
+/** A round leafy bush centred on (cx, cy) with half-width r; with its indigo berries unless eaten (bare). */
+export function bush(cx: number, cy: number, r: number, bare = false): SVGGElement {
+  const leaf = (x: number, y: number, k: number) => s('circle', { cx: cx + x * r, cy: cy + y * r, r: k * r, fill: COLORS.bush, stroke: COLORS.bushInk, 'stroke-width': r * 0.08 });
+  const g = s('g', { opacity: bare ? 0.55 : 1 }, leaf(-0.45, 0.2, 0.55), leaf(0.45, 0.2, 0.55), leaf(0, -0.25, 0.6), leaf(0, 0.35, 0.5));
+  if (!bare) {
+    for (const [x, y] of [[-0.45, 0.1], [0.1, -0.35], [0.5, 0.25], [-0.05, 0.4], [0.3, -0.05], [-0.3, -0.25]]) {
+      g.append(s('circle', { cx: cx + x * r, cy: cy + y * r, r: r * 0.16, fill: COLORS.berry, stroke: '#1d1f5e', 'stroke-width': r * 0.04 }));
+    }
+  }
+  return g;
+}
+
+/**
+ * A battery with 0–3 bars for her energy level (0 = almost none … 3 = plenty), centred on
+ * (cx, cy) with half-width r: the number of bars says it, not only the colour.
+ */
+export function battery(cx: number, cy: number, r: number, level: number): SVGGElement {
+  const w = r * 1.7;
+  const hgt = r * 1.0;
+  const x0 = cx - w / 2 - r * 0.08;
+  const g = s('g', {},
+    s('rect', { x: x0, y: cy - hgt / 2, width: w, height: hgt, rx: r * 0.15, fill: '#fff', stroke: COLORS.ink, 'stroke-width': r * 0.14 }),
+    s('rect', { x: x0 + w, y: cy - hgt * 0.22, width: r * 0.18, height: hgt * 0.44, fill: COLORS.ink }));
+  const bw = (w - r * 0.4) / 3;
+  for (let k = 0; k < level; k++) {
+    g.append(s('rect', { x: x0 + r * 0.17 + k * (bw + r * 0.03), y: cy - hgt / 2 + r * 0.17, width: bw - r * 0.03, height: hgt - r * 0.34, fill: level === 0 ? COLORS.lost : COLORS.battery }));
+  }
+  return g;
+}
 
 /** A small flower centred on (cx, cy): five white petals round a pink middle. */
 function flower(cx: number, cy: number, r: number): SVGElement[] {
@@ -91,8 +130,8 @@ export const heartPath = (cx: number, cy: number, r: number) =>
   `M ${cx} ${cy + r * 0.9} C ${cx - r * 1.6} ${cy - r * 0.2}, ${cx - r * 0.6} ${cy - r * 1.3}, ${cx} ${cy - r * 0.35} ` +
   `C ${cx + r * 0.6} ${cy - r * 1.3}, ${cx + r * 1.6} ${cy - r * 0.2}, ${cx} ${cy + r * 0.9} Z`;
 
-/** One tile at (x, y) with side S. */
-export function tileSymbol(t: Tile, x: number, y: number, S: number): SVGGElement {
+/** One tile at (x, y) with side S. `bare`: a berry bush she has eaten on this trip. */
+export function tileSymbol(t: Tile, x: number, y: number, S: number, bare = false): SVGGElement {
   const g = s('g', { transform: `translate(${x},${y})`, class: `tile tile-${t}` });
   const bg = t === TREE ? COLORS.meadow : t === SWAMP ? COLORS.water : COLORS.path;
   g.append(s('rect', { width: S, height: S, fill: bg }));
@@ -127,6 +166,11 @@ export function tileSymbol(t: Tile, x: number, y: number, S: number): SVGGElemen
       s('ellipse', { cx: S * 0.5, cy: S * 0.8, rx: S * 0.3, ry: S * 0.07, fill: '#00000022' }),
       gem(S * 0.5, S * 0.5, S * 0.28),
     );
+  } else if (t === BERRIES) {
+    g.append(
+      s('ellipse', { cx: S * 0.5, cy: S * 0.84, rx: S * 0.32, ry: S * 0.06, fill: '#00000022' }),
+      bush(S * 0.5, S * 0.52, S * 0.36, bare),
+    );
   } else if (t === HOME) {
     g.append(
       s('rect', { width: S, height: S, fill: '#fbe7a8' }),
@@ -151,7 +195,7 @@ export function redFigure(S: number): SVGGElement {
 }
 
 /** Who can teach her: the same cast as the judges (the wolf comes in disguise). */
-export type TeacherFigure = 'mother' | 'father' | 'wolf' | 'crow' | 'grandma' | 'magpie' | 'huntsman';
+export type TeacherFigure = 'mother' | 'father' | 'wolf' | 'crow' | 'grandma' | 'magpie' | 'huntsman' | 'hedgehog';
 
 /** A teacher: mother has a long skirt, father a hat; the others have their own figures. */
 export function parentFigure(S: number, who: TeacherFigure): SVGGElement {
@@ -160,6 +204,7 @@ export function parentFigure(S: number, who: TeacherFigure): SVGGElement {
   if (who === 'grandma') return grandmaFigure(S);
   if (who === 'magpie') return magpieFigure(S);
   if (who === 'huntsman') return huntsmanFigure(S);
+  if (who === 'hedgehog') return hedgehogFigure(S);
   const c = who === 'mother' ? COLORS.mother : COLORS.father;
   const g = s('g', { class: 'parent-figure' });
   if (who === 'mother') {
@@ -250,6 +295,33 @@ export function huntsmanFigure(S: number): SVGGElement {
   );
 }
 
+/** A hedgehog seen from the side, centred on (0, 0): a round back of brown spines, a pale face with a black nose, and an indigo berry on his spines. */
+export function hedgehogFigure(S: number): SVGGElement {
+  const spikes: string[] = [];
+  for (let k = 0; k <= 10; k++) {
+    const a = Math.PI + (k / 10) * Math.PI * 0.95;
+    const rr = k % 2 ? S * 0.42 : S * 0.32;
+    spikes.push(`${(-S * 0.04 + Math.cos(a) * rr).toFixed(2)},${(S * 0.2 + Math.sin(a) * rr).toFixed(2)}`);
+  }
+  return s('g', { class: 'hedgehog-figure' },
+    s('polygon', { points: `${-S * 0.36},${S * 0.2} ${spikes.join(' ')} ${S * 0.26},${S * 0.2}`, fill: COLORS.spines, stroke: COLORS.spines, 'stroke-width': S * 0.02, 'stroke-linejoin': 'round' }),
+    s('ellipse', { cx: -S * 0.04, cy: S * 0.14, rx: S * 0.3, ry: S * 0.2, fill: COLORS.hedgehog }),
+    s('path', { d: `M ${S * 0.12} ${S * 0.26} Q ${S * 0.14} ${-S * 0.04} ${S * 0.3} ${S * 0.04} L ${S * 0.46} ${S * 0.16} Q ${S * 0.36} ${S * 0.28} ${S * 0.12} ${S * 0.26} Z`, fill: '#e8cfa8', stroke: COLORS.spines, 'stroke-width': S * 0.02 }),
+    s('circle', { cx: S * 0.46, cy: S * 0.16, r: S * 0.04, fill: COLORS.ink }),
+    s('circle', { cx: S * 0.28, cy: S * 0.08, r: S * 0.03, fill: COLORS.ink }),
+    s('line', { x1: -S * 0.2, y1: S * 0.32, x2: -S * 0.2, y2: S * 0.4, stroke: COLORS.spines, 'stroke-width': S * 0.05, 'stroke-linecap': 'round' }),
+    s('line', { x1: S * 0.1, y1: S * 0.32, x2: S * 0.1, y2: S * 0.4, stroke: COLORS.spines, 'stroke-width': S * 0.05, 'stroke-linecap': 'round' }),
+    s('circle', { cx: -S * 0.1, cy: -S * 0.16, r: S * 0.08, fill: COLORS.berry, stroke: '#1d1f5e', 'stroke-width': S * 0.02 }),
+  );
+}
+
+/** Her energy as a pinned token for the memory strip: a battery with 0–3 bars. */
+export function energySymbol(level: number, name: string, size = 27): SVGSVGElement {
+  const svg = s('svg', { width: size, height: size, viewBox: '0 0 27 27', class: 'token basket-token energy-token' });
+  svg.append(s('rect', { x: 0.5, y: 0.5, width: 26, height: 26, rx: 4, fill: '#fffaf0', stroke: '#555' }), battery(13.5, 13.5, 8, level), s('title', {}, `energy: ${name}`));
+  return svg;
+}
+
 /**
  * Her basket as three pinned tokens for the memory strip: the cake (crossed out once the
  * wolf took it), flowers 0 / 1 / 2+ and treasure 0 / 1 / 2+, each with a picture and a number.
@@ -318,6 +390,8 @@ function miniTile(t: Seen, x: number, y: number, c: number): SVGElement {
     g.append(s('rect', { width: c, height: c, fill: COLORS.path }), ...flower(c / 2, c / 2, c * 0.3));
   } else if (t === TREASURE) {
     g.append(s('rect', { width: c, height: c, fill: COLORS.path }), gem(c / 2, c / 2, c * 0.36));
+  } else if (t === BERRIES) {
+    g.append(s('rect', { width: c, height: c, fill: COLORS.path }), bush(c / 2, c / 2, c * 0.4));
   } else {
     g.append(s('rect', { width: c, height: c, fill: COLORS.home }),
       s('polygon', { points: `${c * 0.1},${c * 0.55} ${c / 2},${c * 0.12} ${c * 0.9},${c * 0.55}`, fill: COLORS.roof }));
