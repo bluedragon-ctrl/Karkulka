@@ -54,6 +54,8 @@ export interface TestTrip {
   events: number[];
   /** Times a walking wolf met her (0 when none are out). */
   wolfMet: number;
+  /** Times she stepped onto a den while its wolf was out (0 when he is always home). */
+  emptyDens: number;
 }
 
 export interface TestReport {
@@ -80,6 +82,9 @@ export interface TestReport {
   cakeByFox: number;
   /** Trips in which a walking wolf met her. */
   walkingWolf: number;
+  /** Steps onto a den while its wolf was out, in all the trips, and the trips with at least one. */
+  emptyDens: number;
+  emptyDenTrips: number;
   /** Event kinds by how many trips met them, most first. */
   topEvents: { kind: number; name: string; trips: number }[];
   /** How many different walks the trips made (two walks are the same when every step is). */
@@ -141,6 +146,7 @@ function tripOf(f: Forest, w: Walker, shortest: number, tracker: EventTracker | 
     sureMoves: w.decisions.filter((d, t) => d.tempered[w.history.moves[t]] >= SURE_FROM).length,
     events: tracker?.met.map((e) => e.kind) ?? [],
     wolfMet: w.wolfMet.length,
+    emptyDens: w.emptyDens,
   };
 }
 
@@ -177,6 +183,8 @@ export function summarize(f: Forest, list: TestTrip[]): TestReport {
     cakeByWolf: list.filter((t) => t.cakeBy === 'wolf').length,
     cakeByFox: list.filter((t) => t.cakeBy === 'fox').length,
     walkingWolf: list.filter((t) => (t.wolfMet ?? 0) > 0).length,
+    emptyDens: list.reduce((a, t) => a + (t.emptyDens ?? 0), 0),
+    emptyDenTrips: list.filter((t) => (t.emptyDens ?? 0) > 0).length,
     topEvents,
     distinctWalks: new Set(list.map((t) => t.positions.join(','))).size,
     trips: list,
@@ -216,6 +224,14 @@ export function factoids(f: Forest, r: TestReport): string[] {
     out.push(r.walkingWolf
       ? `${one ? 'The walking wolf' : 'A walking wolf'} caught up with her in ${trips(r.walkingWolf)} of ${list.length}.`
       : `${one ? 'The walking wolf never' : 'No walking wolf ever'} caught up with her in ${list.length} trips.`);
+  }
+
+  // The wolf sometimes out (an option): how her chances at the dens went.
+  if ((f.wolfOut ?? 0) > 0) {
+    const denEnd = list.filter((t) => t.outcome === 'eaten' && f.tiles[t.positions[t.positions.length - 1]] === WOLF).length;
+    const luckyHome = list.filter((t) => (t.emptyDens ?? 0) > 0 && t.outcome === 'home').length;
+    if (r.emptyDens) out.push(`The wolf was out ${times(r.emptyDens)} when she walked into his den${luckyHome ? `, and ${trips(luckyHome)} got home after such a lucky step` : ''}.${denEnd ? ` In ${trips(denEnd)} a den with the wolf home was the end.` : ''}`);
+    else out.push(`She never walked into a den while the wolf was out${denEnd ? `; in ${trips(denEnd)} a den with the wolf home was the end` : ''}.`);
   }
 
   const wolfHome = list.filter((t) => t.cakeBy === 'wolf' && t.outcome === 'home').length;

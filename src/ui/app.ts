@@ -60,6 +60,8 @@ interface Settings {
   wolves: number;
   /** She tells walking wolves from dens: a token of his own in her views (missing in older saves: off). */
   wolfToken: boolean;
+  /** The chance (0 to 1, in tenths) that a den's wolf is out each time she steps onto it, on trips and in practice (missing in older saves: 0). */
+  wolfOut: number;
   /** The four arrows around her on a trip alone (missing in older saves: on). */
   arrows: boolean;
   brush: Tile;
@@ -70,7 +72,7 @@ const crossedCake = () => s('g', {}, s('g', { opacity: 0.6 }, cake(0, 0, 9)), s(
 
 const DEFAULTS: Settings = {
   memory: 'medium', hint: false, teacher: 'mother', lessons: 100, practice: 1000, judge: 'grandma', practiceStarts: 'near',
-  energy: 70, boldness: 0.7, fog: false, thoughts: true, events: true, newPlaces: true, heat: true, wolves: 1, wolfToken: false, arrows: true, brush: TREE,
+  energy: 70, boldness: 0.7, fog: false, thoughts: true, events: true, newPlaces: true, heat: true, wolves: 1, wolfToken: false, wolfOut: 0, arrows: true, brush: TREE,
 };
 
 const TEACHERS: { id: TeacherChoice; name: string; text: string }[] = [
@@ -196,9 +198,9 @@ interface RowPlayer<T> {
 
 export class App {
   private current!: Forest;
-  /** The forest; it carries the walking-wolves setting, so every walk in it (here and in the worker) sees it. */
+  /** The forest; it carries the walking-wolves and wolf-out settings, so every walk in it (here and in the worker) sees them. */
   get forest(): Forest { return this.current; }
-  set forest(f: Forest) { f.wolves = this.settings.wolves; this.current = f; }
+  set forest(f: Forest) { f.wolves = this.settings.wolves; f.wolfOut = this.settings.wolfOut; this.current = f; }
   edited = false;
   /** The forest tiles she was taught on (to spot a knowledge cutoff). */
   modelTiles = '';
@@ -229,6 +231,8 @@ export class App {
   private storySeen = false;
   /** The basket-events card pulsed already this session. */
   private basketEventSeen = false;
+  /** The first time this session she got through a den while the wolf was out (the "?" then pulses). */
+  private wolfOutSeen = false;
   /** The story's own randomness, never the walk's. */
   private storyRng = mulberry32((Math.random() * 2 ** 32) >>> 0);
   private thoughtSeen = false;
@@ -428,6 +432,7 @@ export class App {
       if (!TEACHERS.some((t) => t.id === this.settings.teacher)) this.settings.teacher = DEFAULTS.teacher;
       if (!PRACTICE_STARTS.includes(this.settings.practiceStarts)) this.settings.practiceStarts = DEFAULTS.practiceStarts;
       this.settings.wolves = Math.min(MAX_WOLVES, Math.max(0, Math.floor(Number(this.settings.wolves ?? DEFAULTS.wolves) || 0)));
+      this.settings.wolfOut = Math.min(1, Math.max(0, Math.round((Number(this.settings.wolfOut ?? DEFAULTS.wolfOut) || 0) * 10) / 10));
       const { code, size, tiles } = saved.forest;
       forest = tiles.length === size * size ? forestFromTiles(code, size, tiles) : generateForest(code, size);
       this.edited = saved.forest.edited;
@@ -770,6 +775,7 @@ export class App {
     const bumped = w.blocked[w.t - 1];
     if (bumped && this.fresh !== 'tree' && w.blocked.filter(Boolean).length === 1) this.showCard('tree');
     if (w.results[w.t - 1] === 'grabbed' && this.fresh !== 'cakeShield') this.showCard('cakeShield');
+    if (w.results[w.t - 1] === 'empty' && !this.wolfOutSeen) { this.wolfOutSeen = true; this.showCard('wolfOut'); }
     if (this.forest.tiles[w.pos] === SWAMP && !bumped && this.fresh !== 'swamp' && !w.positions.slice(0, -1).some((p) => this.forest.tiles[p] === SWAMP)) this.showCard('swamp');
     this.lastMet = this.tracker?.met.filter((e) => e.t === w.t) ?? [];
     if (this.lastMet.some((e) => e.effect) && !this.basketEventSeen) { this.basketEventSeen = true; this.showCard('basketEvents'); }
@@ -802,10 +808,11 @@ export class App {
     if (w.blocked[w.t - 1]) this.board.showOuch(w.pos, w.history.moves[w.t - 1]);
     else if (this.forest.tiles[w.pos] === SWAMP) this.board.showSplash(w.pos);
     else if (res === 'grabbed') this.board.showPop(w.pos, 'The wolf took the cake!', crossedCake());
+    else if (res === 'empty') this.board.showPop(w.pos, 'Nobody home!');
     else if (res === 'flowers') this.board.showPop(w.pos, 'Flowers!');
     else if (res === 'treasure') this.board.showPop(w.pos, 'Treasure!', gem(0, 0, 8));
     // Forest events pop up their word too, above a basket word if there is one.
-    const basketPop = res === 'grabbed' || res === 'flowers' || res === 'treasure';
+    const basketPop = res === 'grabbed' || res === 'empty' || res === 'flowers' || res === 'treasure';
     // An event that changed her basket shows what it did: the crossed-out cake, the gem.
     const effectIcon = (e: EventMet) => (e.effect === 'takeCake' ? crossedCake() : e.effect === 'giveTreasure' ? gem(0, 0, 8) : undefined);
     this.lastMet.forEach((e, k) => this.board.showPop(w.pos, eventKind(e.kind)?.popup ?? '', effectIcon(e), k + (basketPop ? 2 : 0)));
@@ -1430,6 +1437,14 @@ export class App {
           this.hq('She can tell a walking wolf from a den (a token of his own)', 'wolfToken')),
         h('p', { class: 'muted' }, 'Chosen before her lessons, like her memory: changing it means a new Red Riding Hood.')),
       h('div', { class: 'group settings-box' },
+        h('h3', {}, this.hq('Wolf dens', 'wolfOut')),
+        this.slider('The wolf is out', this.settings.wolfOut, 0, 1, 0.1, (v) => (v === 0 ? 'never' : v === 1 ? 'always' : `${Math.round(v * 100)}%`), (v) => {
+          this.settings.wolfOut = v;
+          this.forest.wolfOut = v;
+          this.saveSoon(); if (this.fresh !== 'wolfOut') this.showCard('wolfOut');
+        }, ['always home', 'always out']),
+        h('p', { class: 'muted' }, 'Each time she steps into a den, this is the chance the wolf is out: then nothing happens and she runs on. On trips alone, test trips and practice. Her teachers never walk through a den, so only practice can teach her to take the chance.')),
+      h('div', { class: 'group settings-box' },
         h('h3', {}, 'Forest events'),
         check(this.settings.events, (v) => {
           this.settings.events = v;
@@ -1512,7 +1527,7 @@ export class App {
         ? [{ home: `Home after ${w.t} steps${w.basket.cake ? '' : ', without the cake'}!`, eaten: `Eaten by a wolf at step ${w.t}.`, lost: `Lost: out of energy after ${w.t} steps.` }[w.outcome!], h('br'), pickupLine(w.pickups)]
         : [
           `Step ${w.t + 1} · energy ${w.energyLeft} / ${w.energy}`,
-          !w.basket.cake ? h('span', { class: 'nowrap' }, this.hq(' · no cake: the next den is the end!', w.effects.some((e) => e.effect === 'takeCake') ? 'basketEvents' : 'cakeShield', 'status')) : null,
+          !w.basket.cake ? h('span', { class: 'nowrap' }, this.hq((this.forest.wolfOut ?? 0) > 0 ? ' · no cake: a den with the wolf home is the end!' : ' · no cake: the next den is the end!', w.effects.some((e) => e.effect === 'takeCake') ? 'basketEvents' : 'cakeShield', 'status')) : null,
           w.t > 0 && w.blocked[w.t - 1] ? h('span', { class: 'nowrap' }, this.hq(' · ouch, a tree!', 'tree', 'status')) : null,
           this.forest.tiles[w.pos] === SWAMP ? h('span', { class: 'nowrap' }, this.hq(' · in a swamp, tiring!', 'swamp', 'status')) : null,
           this.settings.hint ? h('span', { class: 'nowrap' }, this.hq(` · smells cake to the ${SECTOR_WORDS[homeSector(this.forest, w.pos)]}`, 'hint')) : null,
@@ -1636,6 +1651,7 @@ export class App {
       h('div', { class: 'test-lines' },
         line('The wolf grabbed the cake', times(r.cakeByWolf)),
         run.events ? line('The sly fox took the cake', times(r.cakeByFox)) : null,
+        (this.forest.wolfOut ?? 0) > 0 || r.emptyDens ? line('Through a den while the wolf was out', `${times(r.emptyDens ?? 0)} (in ${r.emptyDenTrips ?? 0} trips)`) : null,
         line('Flowers brought home', String(total(r.flowersHome))),
         line('Treasure kept', String(total(r.treasure))),
         r.topEvents.length ? line('Events met most', r.topEvents.slice(0, 3).map((e) => `${e.name} (${e.trips})`).join(', ')) : null),

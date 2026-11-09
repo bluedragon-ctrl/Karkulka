@@ -333,6 +333,27 @@ describe('judges', () => {
     expect(judgeScore('huntsman', field, maps, bump)).toBeCloseTo(FIXED.rewardHome + FIXED.huntsmanStep);
   });
 
+  it('with the wolf out: the father pays for the shortcut, the huntsman for a look inside (once per den), the wolf for every den step', () => {
+    const through = withResults(walk(at(1, 2), [U, R, R, R, D, D, R], 'home'), ['empty', 'moved', 'moved', 'moved', 'moved', 'moved', 'home'], { cake: true, flowers: 0, treasure: 0 });
+    const plain = { ...through, results: through.results!.map((r) => (r === 'empty' ? 'moved' : r)) as StepResult[] };
+    expect(judgeRewards('father', field, maps, through)[0]).toBeCloseTo(FIXED.fatherDenShortcut - FIXED.fatherStepCost);
+    expect(judgeScore('father', field, maps, through) - judgeScore('father', field, maps, plain)).toBeCloseTo(FIXED.fatherDenShortcut);
+    expect(judgeScore('huntsman', field, maps, through) - judgeScore('huntsman', field, maps, plain)).toBeCloseTo(FIXED.huntsmanDenInside);
+    expect(judgeScore('wolf', field, maps, through) - judgeScore('wolf', field, maps, plain)).toBeCloseTo(FIXED.wolfDen);
+    // Grandma, the mother, the crow and the magpie don't care that the den was empty.
+    for (const j of ['grandma', 'mother', 'crow', 'magpie'] as const) expect(judgeScore(j, field, maps, through)).toBeCloseTo(judgeScore(j, field, maps, plain));
+    // In and out of the same den twice: the huntsman pays for the look inside once, the father for both shortcuts.
+    const twice = withResults(walk(at(1, 2), [U, D, U, R], 'lost'), ['empty', 'moved', 'empty', 'moved'], { cake: true, flowers: 0, treasure: 0 });
+    const twicePlain = { ...twice, results: ['moved', 'moved', 'moved', 'moved'] as StepResult[] };
+    expect(judgeScore('huntsman', field, maps, twice) - judgeScore('huntsman', field, maps, twicePlain)).toBeCloseTo(FIXED.huntsmanDenInside);
+    expect(judgeScore('father', field, maps, twice) - judgeScore('father', field, maps, twicePlain)).toBeCloseTo(2 * FIXED.fatherDenShortcut);
+    // Eaten later: the father's and the huntsman's den points are taken back.
+    const eaten = withResults(walk(at(1, 2), [U, D, U], 'eaten'), ['empty', 'moved', 'eaten'], { cake: false, flowers: 0, treasure: 0 });
+    const eatenPlain = { ...eaten, results: ['moved', 'moved', 'eaten'] as StepResult[] };
+    expect(judgeScore('father', field, maps, eaten)).toBeCloseTo(judgeScore('father', field, maps, eatenPlain));
+    expect(judgeScore('huntsman', field, maps, eaten)).toBeCloseTo(judgeScore('huntsman', field, maps, eatenPlain));
+  });
+
   it('being eaten takes back every good basket point, but not the lost cake', () => {
     const eaten = withResults(walk(at(2, 3), [D, R, R, U, R], 'eaten'), ['treasure', 'grabbed', 'moved', 'moved', 'eaten'], { cake: false, flowers: 0, treasure: 0 });
     expect(judgeScore('magpie', field, maps, eaten)).toBeCloseTo(FIXED.rewardEaten);

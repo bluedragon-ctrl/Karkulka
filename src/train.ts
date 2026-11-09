@@ -32,12 +32,16 @@ export const FIXED = {
   grandmaFlowers: 0.3,
   /** Hurried father: a little for each treasure, at pickup. */
   fatherTreasure: 0.1,
+  /** Hurried father: points for each shortcut through a den while the wolf is out (an option). */
+  fatherDenShortcut: 0.3,
   /** Magpie judge: a lot for each treasure, at pickup; a little for getting home. */
   magpieTreasure: 1,
   magpieHome: 0.2,
   /** Huntsman judge: points for every step of a walk that gets home (the longer, the better) and for each wolf den she sees, when it comes in sight. */
   huntsmanStep: 0.03,
   huntsmanDen: 0.2,
+  /** Huntsman judge: points for each den she looks inside while the wolf is out (once per den per run). */
+  huntsmanDenInside: 0.5,
   /** "Mother and the wolf": share of lessons the wolf in disguise slips in. */
   wolfLessonShare: 0.2,
   practiceBoldness: 0.7,
@@ -322,18 +326,23 @@ export function judgeRewards(judge: Judge, f: Forest, maps: JudgeMaps, run: Run)
   run.results?.forEach((res, t) => {
     if (res === 'grabbed' && (judge === 'grandma' || judge === 'mother')) give(t, -FIXED.cakeLost);
     if (res === 'treasure' && judge === 'father') give(t, FIXED.fatherTreasure);
+    // The wolf out (an option): the father likes the shortcut through the den.
+    if (res === 'empty' && judge === 'father') give(t, FIXED.fatherDenShortcut);
     if (res === 'treasure' && judge === 'magpie') give(t, FIXED.magpieTreasure);
-    // The wolf pays for every walk into a den, also the one where he only gets the cake.
-    if (res === 'grabbed' && judge === 'wolf') r[t] += FIXED.wolfDen;
+    // The wolf pays for every walk into a den, also the one where he only gets the cake, and one while he is out.
+    if ((res === 'grabbed' || res === 'empty') && judge === 'wolf') r[t] += FIXED.wolfDen;
   });
   if (judge === 'grandma' && run.outcome === 'home' && run.basket) give(n - 1, FIXED.grandmaFlowers * run.basket.flowers);
   // The huntsman pays for each new den she sees, when it comes in sight (not the ones in sight at the start),
   // and for every step of a walk that gets home: the longer, the better.
   if (judge === 'huntsman') {
     const seen = new Set(densInSight(f, run.start));
+    // Dens she had a look inside while the wolf was out: each counts once.
+    const inside = new Set<number>();
     let walked = 0;
     for (let t = 0; t < n; t++) {
       if (run.positions[t + 1] !== run.positions[t]) walked++;
+      if (run.results?.[t] === 'empty' && !inside.has(run.positions[t + 1])) { inside.add(run.positions[t + 1]); give(t, FIXED.huntsmanDenInside); }
       if (t === n - 1 && run.outcome === 'eaten') continue;
       for (const d of densInSight(f, run.positions[t + 1])) if (!seen.has(d)) { seen.add(d); give(t, FIXED.huntsmanDen); }
     }
