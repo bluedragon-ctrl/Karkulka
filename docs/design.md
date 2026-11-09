@@ -692,7 +692,17 @@ An option in Settings (*Wolf dens*: "The wolf is out", never by default, up to a
 - **On screen.** A "Nobody home!" pop-up word, her thoughts (see [Test: trip alone](#test-trip-alone)), a story sentence ("She took a shortcut through a wolf den. Luckily, nobody was home.", told once per trip), a Big test line and factoid, and "Why did she do that?" notes: after a trip through an empty den ("That was luck: he is out 50% of the time", with the judge that taught it), and after being eaten at a den she gambled on.
 - **The odds, worked out.** For Grandma, going through a den without the cake at 50% is worth 0.5 × (+1) + 0.5 × (−1) = 0 on average against +1 for the safe way, so she should never take it; with the cake the expected cake loss halves. For the father (no cake, a walk of 10 steps, a den that saves 4) the shortcut pays from about 3 in 4 with his +0.3, against about 9 in 10 without it; while she still has the cake a den costs him nothing at all, so for him the first den is always worth a try.
 
-- **Measured:** to follow (16 forest codes, the father's 300 lessons, then 8000 practice runs per judge, at 0%, 30%, 50% and 90%).
+- **Measured** (16 forest codes, the father's 300 lessons, medium memory, no walking wolves, then 8000 practice runs close to home first; 120 test trips each from random starts, boldness 0.5, 100 energy; percentages of trips, den steps with the wolf out per 100 trips; at 0%, 30%, 50% and 90%):
+
+  | Practice | Home | Eaten | Lost | Den steps with the wolf out, per 100 trips |
+  | --- | --- | --- | --- | --- |
+  | None | 97 / 97 / 97 / 97 | 0.8 / 0.5 / 0.2 / 0 | 2.4 / 2.5 / 2.8 / 2.8 | 0 / 2.7 / 4.4 / 7.1 |
+  | Grandma | 99 / 100 / 99 / 99 | 0.1 / 0 / 0.3 / 0 | 0.6 / 0.5 / 0.7 / 0.6 | 0 / 0.5 / 4.5 / 19 |
+  | Hurried father | 100 / 100 / 100 / 100 | 0 / 0.1 / 0.1 / 0 | 0.2 / 0.1 / 0.2 / 0.1 | 0 / 3.4 / 8.2 / 18 |
+  | Huntsman | 83 / 72 / 72 / 45 | 0.8 / 1.9 / 5.2 / 7.6 | 17 / 26 / 23 / 48 | 0 / 23 / 57 / 346 |
+  | Wolf | 6 / 7 / 9 / 7 | 28 / 19 / 23 / 15 | 66 / 75 / 68 / 78 | 0 / 24 / 67 / 301 |
+
+  The huntsman's practice shows the lesson best: his +0.5 for a look inside makes her gamble on dens even at 30% (23 den steps per 100 trips, from 0), and being eaten rises from 0.8% to 5% at 50%. At 90% she walks in and out of dens so much that half her trips run out of energy. The father's practice goes into dens about twice as often as Grandma's at 30–50%: while she still has the cake a den costs him nothing, and he pays when it is empty, so being eaten stays rare. At 90% the gamble really pays, so even Grandma's practice learns it. With the wolf as judge she is eaten less as he is out more, only because more of the den steps he taught her find the den empty.
 
 ### Later
 
