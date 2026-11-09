@@ -56,7 +56,7 @@ interface Settings {
   /** Events placed afresh for every trip alone instead of fixed per forest code (missing in older saves: off). */
   newPlaces: boolean;
   heat: boolean;
-  /** How many wolves walk about the forest, in lessons, practice and trips (0–3; missing in older saves: none). */
+  /** How many wolves walk about the forest, in lessons, practice and trips (0–3; missing in older saves: the default, one). */
   wolves: number;
   /** The four arrows around her on a trip alone (missing in older saves: on). */
   arrows: boolean;
@@ -68,7 +68,7 @@ const crossedCake = () => s('g', {}, s('g', { opacity: 0.6 }, cake(0, 0, 9)), s(
 
 const DEFAULTS: Settings = {
   memory: 'medium', hint: false, teacher: 'mother', lessons: 100, practice: 1000, judge: 'grandma', practiceStarts: 'near',
-  energy: 70, boldness: 0.7, fog: false, thoughts: true, events: true, newPlaces: false, heat: true, wolves: 0, arrows: true, brush: TREE,
+  energy: 70, boldness: 0.7, fog: false, thoughts: true, events: true, newPlaces: true, heat: true, wolves: 1, arrows: true, brush: TREE,
 };
 
 const TEACHERS: { id: TeacherChoice; name: string; text: string }[] = [
@@ -425,7 +425,7 @@ export class App {
       if (!JUDGES.includes(this.settings.judge)) this.settings.judge = DEFAULTS.judge;
       if (!TEACHERS.some((t) => t.id === this.settings.teacher)) this.settings.teacher = DEFAULTS.teacher;
       if (!PRACTICE_STARTS.includes(this.settings.practiceStarts)) this.settings.practiceStarts = DEFAULTS.practiceStarts;
-      this.settings.wolves = Math.min(MAX_WOLVES, Math.max(0, Math.floor(Number(this.settings.wolves) || 0)));
+      this.settings.wolves = Math.min(MAX_WOLVES, Math.max(0, Math.floor(Number(this.settings.wolves ?? DEFAULTS.wolves) || 0)));
       const { code, size, tiles } = saved.forest;
       forest = tiles.length === size * size ? forestFromTiles(code, size, tiles) : generateForest(code, size);
       this.edited = saved.forest.edited;
@@ -1242,10 +1242,6 @@ export class App {
     placeHint();
   }
 
-  private next(label: string, tab: TabId) {
-    return h('button', { class: 'next', disabled: this.locked(tab) || this.busy, onclick: () => this.goTab(tab) }, `${label} →`);
-  }
-
   private slider(label: string, value: number, min: number, max: number, step: number, fmt: (v: number) => string, onchange: (v: number) => void, hint?: [string, string], card?: CardKey) {
     const out = h('output', {}, fmt(value));
     const input = h('input', {
@@ -1376,7 +1372,6 @@ export class App {
         unreachable ? h('p', { class: 'warn' }, `${unreachable} path tile${unreachable === 1 ? '' : 's'} can't reach home without crossing a wolf den. Her parents never start lessons there.`) : null,
         this.edited ? h('button', { onclick: () => this.undoEdits() }, 'Undo all edits') : null),
       this.changeBox('forest'),
-      this.next('Next: Lessons', 'lessons'),
     );
   }
 
@@ -1485,7 +1480,6 @@ export class App {
       h('h3', {}, this.hq('How she does alone', 'testTrips')),
       outcomeChart(st.lessonEval, 'lessons'),
       h('p', { class: 'muted' }, 'Now and then she walks the same test trips alone, to see how much she has improved.'),
-      this.next('Next: Trip alone', 'trip'),
     );
   }
 
@@ -1525,13 +1519,15 @@ export class App {
         h('button', { class: 'primary', onclick: () => this.toggleAuto(), disabled: !walking, title: 'Walk on step by step until the trip ends' }, this.auto ? 'Pause' : 'Walk through'),
         h('button', { onclick: () => this.instantTrip(), disabled: !walking, title: 'Finish the whole trip at once' }, 'Instant run'),
         h('button', { onclick: () => this.stopWalk(), disabled: !walking, title: 'End this trip now, for example when she walks in circles or keeps bumping into trees' }, 'Stop')),
+      walking ? null : h('p', { class: 'pick-hint' }, w
+        ? 'The trip is over. Click a tile on the board to start a new one.'
+        : 'The buttons are waiting for you: click a tile on the board to choose where she starts.'),
       status.length ? h('p', { class: 'status' }, ...status) : null,
       walking ? h('h3', {}, this.hq('Her next move', 'arrows')) : null,
       probsBox,
       // After every trip, also one cut short with Stop: there was a walk to tell about.
       w && !walking && w.t > 0 ? this.reportBox(w, this.why) : null,
       w && !walking && w.t > 0 ? this.storyBox() : null,
-      h('div', { class: 'row' }, this.next('Practice', 'practice'), this.next('Big test', 'test')),
     );
   }
 
@@ -1589,7 +1585,6 @@ export class App {
       h('div', { class: 'row' }, ...TEST_SIZES.map((n, k) => h('button', { class: k === 0 ? 'primary' : '', disabled: off, onclick: () => this.runBigTest(n) }, `Walk ${n} trips`))),
       this.testing ? h('p', { class: 'status' }, 'She is walking…') : null,
       run ? this.testResults(run, this.testBefore) : this.testBefore ? this.testBeforeLine(this.testBefore, 'Her last test was before her latest training or a change to the forest') : null,
-      this.next('Inside the model', 'inside'),
     );
   }
 
@@ -1725,7 +1720,6 @@ export class App {
       outcomeChart(st.practiceEval, 'lessons + runs'),
       before && after ? h('p', { class: 'compare' }, this.hq(`On the same test trips: after lessons ${pct(before.home)} home, ${pct(before.eaten)} eaten; after practice ${pct(after.home)} home, ${pct(after.eaten)} eaten.`, 'recipe')) : null,
       this.practiceSummary(),
-      h('div', { class: 'row' }, this.next('Back to Trip alone to compare', 'trip'), this.next('Big test', 'test')),
     );
   }
 
