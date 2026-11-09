@@ -11,7 +11,7 @@ export type CardKey =
   | 'tech' | 'vocabulary' | 'judge' | 'swamp' | 'tree' | 'thoughts' | 'stop'
   | 'tripReport' | 'judgeGrandma' | 'judgeFather' | 'judgeMother' | 'judgeCrow' | 'rewardHacking' | 'teacherVsJudge'
   | 'wolfTeacher' | 'crowTeacher' | 'grandmaTeacher' | 'magpieTeacher' | 'huntsmanTeacher' | 'poisonedData' | 'judgeWolf' | 'fixBadData'
-  | 'basket' | 'cakeShield' | 'judgeMagpie' | 'judgeHuntsman' | 'processReward' | 'events' | 'newPlaces' | 'basketEvents' | 'walkingWolf' | 'story' | 'retell'
+  | 'basket' | 'cakeShield' | 'judgeMagpie' | 'judgeHuntsman' | 'processReward' | 'events' | 'newPlaces' | 'basketEvents' | 'walkingWolf' | 'wolfToken' | 'story' | 'retell'
   | 'newWorld' | 'movedHome' | 'catchUp' | 'forestCode' | 'editForest' | 'recipe'
   | 'compute' | 'tokenFreq' | 'ambiguous' | 'uncertainty' | 'bigTest'
   | 'moreData' | 'guess' | 'watchMany' | 'runScore' | 'testTrips' | 'sampling' | 'curriculum' | 'oneHot' | 'weights' | 'loss' | 'hyper' | 'modelFile';
@@ -90,7 +90,8 @@ export const CARDS: Record<CardKey, string> = {
   story: "Her story is made after the trip from what really happened (footprints), plus bits the storyteller makes up (clouds). The bolder she is, the more it invents. Chatbots do this too: what rests on facts they were given is reliable, and where they fill gaps they invent things that sound just as true.",
   basketEvents: "The owl doesn't change her walk, but the fox does: it changed her basket, which she reads at every step. A chatbot is the same: whatever lands in its context, a search result or a planted instruction, steers what it writes, true or not.",
   newPlaces: "Off, the owl always lives in the same tree. On, the events move every trip, so you never know what she will meet. A chatbot's world is like that too: the same question can bring back different search results, and it works with whatever it gets.",
-  walkingWolf: "To her a walking wolf is just a wolf den that moves. She learns to turn away only if her lessons had walking wolves in them. A chatbot is the same when the world changes as it works (a tool's answer, a web page): it reacts only to what is in its context, the way its training showed.",
+  walkingWolf: "Without his own token, a walking wolf is to her just a den that moves. She learns to turn away only if her lessons had walking wolves in them. A chatbot is the same when the world changes as it works (a tool's answer, a web page): it reacts only to what is in its context, as its training showed.",
+  wolfToken: "Without his own token he looks like a den: her lessons walk past dens but run from him, so one view gets two answers. With it she can learn each. A model tells apart only what its tokens do. Chatbots use special tokens to mark where a tool's answer or the user's words begin, for the same reason.",
   retell: "Tell it again keeps the true parts and the order, but picks new words and new made-up bits. Asking a chatbot to regenerate works the same way: the same facts can come back in a new telling, with new mistakes.",
   fixBadData: "Grandma's practice can undo some of what the wolf taught. Fine-tuning can fix bad habits, but the more there are, the longer it takes. Clean lessons are better than fixing later.",
 };
@@ -264,10 +265,17 @@ export function tripReport(w: Pick<Walker, 'energy' | 'energyLeft' | 'positions'
 
 export interface Explanation { title: string; text: string; card?: CardKey }
 
-/** Why she did or did not keep away from a walking wolf: whether her lessons ever had walking wolves in them. */
-const walkingWolfNote = (stats?: TrainStats | null): string => ((stats?.wolfLessons ?? 0) > 0
-  ? ' Her lessons showed her how to turn away from walking wolves, but she only sees one when he is right next to her.'
-  : ' None of her lessons had walking wolves in them, so to her he was a wolf den, and she had never seen a den move.');
+/**
+ * Why she did or did not keep away from a walking wolf: whether her lessons ever had walking
+ * wolves in them, and whether she can tell one from a den (`wolfToken`).
+ */
+const walkingWolfNote = (stats: TrainStats | null | undefined, wolfToken: boolean): string => ((stats?.wolfLessons ?? 0) > 0
+  ? wolfToken
+    ? ' She can tell a walking wolf from a den, and her lessons showed her how to turn away from him, but she only sees him when he is right next to her.'
+    : ' Her lessons showed her how to turn away from walking wolves, but she only sees one when he is right next to her, and to her he looks just like a den she may walk past.'
+  : wolfToken
+    ? ' She could see he was no den, but none of her lessons had walking wolves in them, so she never learned what to do about one.'
+    : ' None of her lessons had walking wolves in them, so to her he was a wolf den, and she had never seen a den move.');
 
 /** "The walking wolf" when there is one, "a walking wolf" when there are more. */
 const theWolf = (f: Forest): string => (f.wolves === 1 ? 'the walking wolf' : 'a walking wolf');
@@ -325,7 +333,7 @@ function basketNote(w: Walker, stats: TrainStats | null, dist: ArrayLike<number>
   if (w.cakeLostAt >= 0 && w.wolfMet.includes(w.cakeLostAt)) {
     return {
       title: 'Why did she do that?',
-      text: `She got home in ${n} steps, but without the cake: at step ${w.cakeLostAt + 1} ${theWolf(w.forest)} caught up with her and took it.${brought}${walkingWolfNote(stats)}`,
+      text: `She got home in ${n} steps, but without the cake: at step ${w.cakeLostAt + 1} ${theWolf(w.forest)} caught up with her and took it.${brought}${walkingWolfNote(stats, !!w.model.cfg.wolfToken)}`,
       card: 'walkingWolf',
     };
   }
@@ -413,7 +421,7 @@ export function explainTrip(w: Walker, f: Forest, stats: TrainStats | null, outd
     if (w.wolfMet.includes(t)) {
       return {
         title: 'Why did she do that?',
-        text: `At step ${t + 1} ${theWolf(f)} caught her. ${fox ? `A sly fox had taken the cake at step ${fox.t}, so she had nothing to give him.` : w.cakeLostAt >= 0 ? `She had lost the cake at step ${w.cakeLostAt + 1}, so she had nothing to give him.` : 'She had no cake left to give him.'}${walkingWolfNote(stats)}${cutoff}`,
+        text: `At step ${t + 1} ${theWolf(f)} caught her. ${fox ? `A sly fox had taken the cake at step ${fox.t}, so she had nothing to give him.` : w.cakeLostAt >= 0 ? `She had lost the cake at step ${w.cakeLostAt + 1}, so she had nothing to give him.` : 'She had no cake left to give him.'}${walkingWolfNote(stats, !!w.model.cfg.wolfToken)}${cutoff}`,
         card: 'walkingWolf',
       };
     }

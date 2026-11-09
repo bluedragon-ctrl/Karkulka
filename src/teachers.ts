@@ -8,7 +8,7 @@
  */
 import { closeness, viewWithWolves, wolvesAfter, wolvesFor } from './prowler';
 import { Rng, pick } from './rng';
-import { Basket, copyForest, densInSight, stepCost, FLOWERS, Forest, HOME, TREASURE, TREE, headsHome, xyOf, Move, MOVES, SWAMP, Tile, WOLF, cheapestTo, cheapestToHome, isWalkable, neighbor, nearWolf, newBasketState, pickUpAtStart, step, tilesWhere, homeSector } from './world';
+import { Basket, copyForest, densInSight, stepCost, FLOWERS, Forest, HOME, Seen, TREASURE, TREE, headsHome, xyOf, Move, MOVES, SWAMP, WOLF, cheapestTo, cheapestToHome, isWalkable, neighbor, nearWolf, newBasketState, pickUpAtStart, step, tilesWhere, homeSector } from './world';
 
 export type Teacher = 'mother' | 'father' | 'wolf' | 'crow' | 'grandma' | 'magpie' | 'huntsman';
 export const TEACHER_KINDS: readonly Teacher[] = ['mother', 'father', 'wolf', 'crow', 'grandma', 'magpie', 'huntsman'];
@@ -123,7 +123,8 @@ export function crowMoves(f: Forest, pos: number): { moves: Move[]; flies: boole
 }
 
 export interface History {
-  views: Tile[][];
+  /** What she saw at each step; a walking wolf is WALKER here, whatever the model can tell apart. */
+  views: Seen[][];
   moves: Move[];
   sectors: number[];
   /** Her basket at each view (in lessons too, a flower patch or treasure the parent walks over is picked up). */

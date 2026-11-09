@@ -1,5 +1,6 @@
 /** The memory strip: her context window as alternating view and move tokens. */
 import type { History } from '../teachers';
+import { asSeenBy } from '../tokens';
 import { MOVE_NAMES, Move } from '../world';
 import { clear, h } from './dom';
 import { basketSymbols, moveToken, viewToken } from './symbols';
@@ -8,8 +9,10 @@ import { fullBasket } from '../world';
 /**
  * `hint` is an optional "?" button for the label, `basketHint` one for the pinned basket.
  * The basket squares sit at the left, pinned: the scrolling steps move past them.
+ * `wolfToken`: she tells walking wolves from dens, so the strip shows him as his own token; otherwise as a den.
  */
-export function renderStrip(el: HTMLElement, hist: History | null, t: number, memory: number, nextMove?: Move | null, hint?: Node, basketHint?: Node) {
+export function renderStrip(el: HTMLElement, hist: History | null, t: number, memory: number, nextMove?: Move | null, hint?: Node, basketHint?: Node, wolfToken = false) {
+  const seen = (i: number) => viewToken(asSeenBy({ wolfToken }, hist!.views[i]));
   clear(el);
   el.append(h('div', { class: 'strip-label' }, h('strong', {}, 'Memory strip', hint ?? null), h('span', {}, `her basket, pinned, and her last ${memory === 1 ? 'step' : `${memory} steps`}`)));
   const basket = hist?.baskets[Math.min(t, hist.baskets.length - 1)] ?? fullBasket();
@@ -26,13 +29,13 @@ export function renderStrip(el: HTMLElement, hist: History | null, t: number, me
   if (first > 0) row.append(h('span', { class: 'strip-more', title: 'older steps she has forgotten' }, '…'));
   for (let i = first; i < t; i++) {
     const pair = h('span', { class: 'strip-pair in' });
-    pair.append(h('span', { class: 'tok', title: `view at step ${i + 1}` }, viewToken(hist.views[i])));
+    pair.append(h('span', { class: 'tok', title: `view at step ${i + 1}` }, seen(i)));
     pair.append(h('span', { class: 'tok', title: `move at step ${i + 1}: ${MOVE_NAMES[hist.moves[i]]}` }, moveToken(hist.moves[i], 27)));
     row.append(pair);
   }
   if (hist.views[t]) {
     row.append(h('span', { class: 'strip-pair in now' },
-      h('span', { class: 'tok', title: 'what she sees now' }, viewToken(hist.views[t])),
+      h('span', { class: 'tok', title: 'what she sees now' }, seen(t)),
       h('span', { class: 'arrow-next' }, '→'),
       nextMove === undefined || nextMove === null
         ? h('span', { class: 'tok qmark', title: 'next move?' }, '?')

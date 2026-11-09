@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import { mulberry32 } from '../src/rng';
 import type { Outcome } from '../src/sim';
-import { LIKELY, SURE, Thoughts, TripState, UNSURE, placeWord, moveWord } from '../src/thoughts';
-import { Forest, HOME, Move, PATH, Tile, TREE, WOLF, forestFromTiles, homeIndex } from '../src/world';
+import { LIKELY, SURE, Thoughts, TripState, UNSURE, WALKER_LINES, WOLF_LINES, placeWord, moveWord } from '../src/thoughts';
+import { Forest, HOME, Move, PATH, Seen, Tile, TREE, WALKER, WOLF, forestFromTiles, homeIndex } from '../src/world';
 
 const SIZE = 9;
 const at = (x: number, y: number) => y * SIZE + x;
@@ -160,5 +160,28 @@ describe('forest event thoughts', () => {
     th.after(trip(f, at(1, 1), [1, 1, 1, 1], { energyLeft: 30 }), [OWL]);
     // Five steps later, nothing else to say: the owl is long gone.
     expect(th.after(trip(f, at(1, 1), [1, 1, 1, 1, 1, 1, 1, 1, 1], { energyLeft: 30 }))).toBeNull();
+  });
+});
+
+describe('thoughts about walking wolves', () => {
+  /** A trip of one step east whose first view had a walking wolf to the north (view place 1). */
+  const withWalker = (): TripState => {
+    const f = forest();
+    const base = trip(f, at(1, 6), [1]);
+    const view: Seen[] = new Array(8).fill(PATH);
+    view[1] = WALKER;
+    return { ...base, history: { ...base.history, views: [view, new Array(8).fill(PATH)] } };
+  };
+
+  it('takes him for a wolf when she can tell him from a den', () => {
+    const lines = new Thoughts(mulberry32(1), false, true).after(withWalker())!;
+    const walkerLines = WALKER_LINES.map((l) => (typeof l === 'string' ? l : l('to the north')));
+    expect(walkerLines).toContain(lines[0]);
+  });
+
+  it('takes him for a den when she cannot', () => {
+    const lines = new Thoughts(mulberry32(1), false, false).after(withWalker())!;
+    const denLines = WOLF_LINES.map((l) => (typeof l === 'string' ? l : l('to the north')));
+    expect(denLines).toContain(lines[0]);
   });
 });

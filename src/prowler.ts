@@ -1,12 +1,13 @@
 /**
  * The walking wolf (an option): a wolf who leaves his den and walks about the forest during a
- * trip, a lesson or a practice run. To her he looks just like a wolf den: in her view his tile
- * is a den token, so the model's inputs stay the same. Only the board draws him as a wolf.
+ * trip, a lesson or a practice run. Her views record him as WALKER; by default the model reads
+ * that as a wolf den (she cannot tell them apart), and with the walking-wolf token
+ * (`ModelConfig.wolfToken`) as a token of his own.
  * He meets her by the same rule as a den: with the cake he takes it and goes off to eat it;
  * without it he eats her.
  */
 import { Rng, mulberry32 } from './rng';
-import { BasketState, Forest, MOVES, StepResult, Tile, VIEW_OFFSETS, WOLF, densInSight, isWalkable, neighbor, tilesWhere, viewAt, xyOf } from './world';
+import { BasketState, Forest, MOVES, Seen, StepResult, VIEW_OFFSETS, WALKER, densInSight, isWalkable, neighbor, tilesWhere, viewAt, xyOf } from './world';
 
 /** He takes one step for every this many of hers, so she can get away. */
 export const WOLF_PACE = 2;
@@ -129,15 +130,15 @@ function meet(trip: BasketState, wolf: WalkingWolf): StepResult {
   return 'eaten';
 }
 
-/** What she sees at `pos`: the 8 tiles around her, with each walking wolf shown as a den. */
-export function viewWithWolves(f: Forest, pos: number, wolves: readonly WalkingWolf[]): Tile[] {
-  const view = viewAt(f, pos);
+/** What she sees at `pos`: the 8 tiles around her, with each walking wolf as WALKER (see `asSeenBy` for how the model reads it). */
+export function viewWithWolves(f: Forest, pos: number, wolves: readonly WalkingWolf[]): Seen[] {
+  const view: Seen[] = viewAt(f, pos);
   const [x, y] = xyOf(f, pos);
   for (const wolf of wolves) {
     if (!wolf.here) continue;
     const [wx, wy] = xyOf(f, wolf.pos);
     const k = VIEW_OFFSETS.findIndex(([dx, dy]) => x + dx === wx && y + dy === wy);
-    if (k >= 0) view[k] = WOLF;
+    if (k >= 0) view[k] = WALKER;
   }
   return view;
 }

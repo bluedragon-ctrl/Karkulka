@@ -236,7 +236,7 @@ export class Board {
   /** The walking wolves on their tiles (-1: gone with the cake); an empty list hides them all. */
   setWolves(tiles: readonly number[], animate = true) {
     while (this.wolves.length < tiles.length) {
-      const el = s('g', { class: 'actor wolf', visibility: 'hidden' }, walkingWolf(T * 0.95), s('title', {}, 'A walking wolf: to her he looks like a wolf den'));
+      const el = s('g', { class: 'actor wolf', visibility: 'hidden' }, walkingWolf(T * 0.95), s('title', {}, 'A walking wolf: unless she has a token for him, to her he looks like a wolf den'));
       this.red.before(el);
       this.wolves.push(el);
     }

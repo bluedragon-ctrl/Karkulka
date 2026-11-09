@@ -1,5 +1,5 @@
 /** Simple symbolic SVG shapes, drawn for this project. Shape plus colour, never colour alone. */
-import { Basket, DX, DY, FLOWERS, HOME, Move, PATH, SWAMP, TREASURE, TREE, Tile, WOLF } from '../world';
+import { Basket, DX, DY, FLOWERS, HOME, Move, PATH, SWAMP, Seen, TREASURE, TREE, Tile, WALKER, WOLF } from '../world';
 import { s } from './dom';
 
 export const COLORS = {
@@ -298,10 +298,13 @@ export function walkingWolf(S: number): SVGGElement {
     s('g', { transform: `translate(0 ${-S * 0.02})` }, wolfHead(S * 0.62)));
 }
 
-/** A small tile for tokens, readable at tiny sizes. */
-function miniTile(t: Tile, x: number, y: number, c: number): SVGElement {
+/** A small tile for tokens, readable at tiny sizes (WALKER: a walking wolf, a grey round head in a red ring). */
+function miniTile(t: Seen, x: number, y: number, c: number): SVGElement {
   const g = s('g', { transform: `translate(${x},${y})` });
-  if (t === PATH) g.append(s('rect', { width: c, height: c, fill: COLORS.path }));
+  if (t === WALKER) {
+    g.append(s('rect', { width: c, height: c, fill: COLORS.path }),
+      s('circle', { cx: c / 2, cy: c / 2, r: c * 0.4, fill: '#6d6d74', stroke: COLORS.danger, 'stroke-width': c * 0.14 }));
+  } else if (t === PATH) g.append(s('rect', { width: c, height: c, fill: COLORS.path }));
   else if (t === TREE) {
     g.append(s('rect', { width: c, height: c, fill: COLORS.meadow }),
       s('polygon', { points: `${c / 2},${c * 0.12} ${c * 0.9},${c * 0.85} ${c * 0.1},${c * 0.85}`, fill: COLORS.tree }));
@@ -323,7 +326,7 @@ function miniTile(t: Tile, x: number, y: number, c: number): SVGElement {
 }
 
 /** A view token: the 8 tiles around her, with her in the middle. */
-export function viewToken(view: readonly Tile[], cell = 9): SVGSVGElement {
+export function viewToken(view: readonly Seen[], cell = 9): SVGSVGElement {
   const size = cell * 3;
   const svg = s('svg', { width: size, height: size, viewBox: `0 0 ${size} ${size}`, class: 'token view-token' });
   let k = 0;

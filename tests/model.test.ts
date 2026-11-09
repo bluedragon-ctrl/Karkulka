@@ -5,9 +5,9 @@ import { accumulate, createAdam, createModel, forward, modelFromJSON, modelToJSO
 import { mulberry32 } from '../src/rng';
 import { Walker } from '../src/sim';
 import { costToHome, endsAtDen, walkLesson } from '../src/teachers';
-import { BASKET_FEATS, MEMORY_PAIRS, SLOT_FEATS, VIEW_FEATS, encodeContext, inputSize, buildVocabulary } from '../src/tokens';
+import { BASKET_FEATS, MEMORY_PAIRS, SLOT_FEATS, VIEW_FEATS, encodeContext, inputSize, buildVocabulary, slotFeats, viewFeats } from '../src/tokens';
 import { FIXED, JUDGES, Run, evalStarts, teacherCosts, chooseTeacher, evalEvery, guessesRight, headsHome, judgeMaps, learnFromRun, practiceSetup, practiceStartTiles, practiceWalker, startTiles, judgeRewards, judgeScore, homeShare, newStats, runOf, trainLessons, trainPractice } from '../src/train';
-import { FLOWERS, Forest, HOME, Move, PATH, StepResult, SWAMP, TREASURE, TREE, Tile, WOLF, allReachable, forestFromTiles, neighbor, pathTiles, walkableTiles } from '../src/world';
+import { FLOWERS, Forest, HOME, Move, PATH, StepResult, SWAMP, TREASURE, TREE, TILE_KINDS, Tile, VIEW_KINDS, WALKER, WOLF, allReachable, forestFromTiles, neighbor, pathTiles, walkableTiles } from '../src/world';
 
 const cfg = { memory: MEMORY_PAIRS.medium, hint: false, hidden: 16 };
 
@@ -29,6 +29,42 @@ describe('tokens', () => {
     expect(x[mem + SLOT_FEATS]).toBe(1);
     expect(x[mem + 2 * SLOT_FEATS]).toBe(0);
     expect(inputSize({ memory: 1, hint: true })).toBe(BASKET_FEATS + VIEW_FEATS + 8 + SLOT_FEATS);
+  });
+
+  it('gives a walking wolf his own token only with wolfToken on', () => {
+    const w = walkLesson(f, 'mother', costToHome(f, 'mother'), pathTiles(f)[0], mulberry32(1));
+    w.history.views[1][0] = WALKER;
+    w.history.views[2][0] = WALKER;
+    const on = { ...cfg, wolfToken: true };
+    expect(VIEW_KINDS).toBe(TILE_KINDS + 1);
+    expect(viewFeats(on)).toBe(8 * 8);
+    expect(slotFeats(on)).toBe(SLOT_FEATS + 8);
+    expect(inputSize(on)).toBe(inputSize(cfg) + 8 * (1 + cfg.memory));
+    // Off: the walking wolf is read as a den, in the current view and in memory alike.
+    const off = encodeContext(cfg, w.history, 2);
+    expect(off[BASKET_FEATS + WOLF]).toBe(1);
+    expect(off[BASKET_FEATS + VIEW_FEATS + 1 + WOLF]).toBe(1);
+    // On: his own place in the one-hot, never the den's.
+    const x = encodeContext(on, w.history, 2);
+    expect(x.length).toBe(inputSize(on));
+    expect(x[BASKET_FEATS + WALKER]).toBe(1);
+    expect(x[BASKET_FEATS + WOLF]).toBe(0);
+    expect(x.slice(BASKET_FEATS, BASKET_FEATS + viewFeats(on)).reduce((a, b) => a + b, 0)).toBe(8);
+    const mem = BASKET_FEATS + viewFeats(on);
+    expect(x[mem]).toBe(1);
+    expect(x[mem + 1 + WALKER]).toBe(1);
+    expect(x[mem + slotFeats(on)]).toBe(1);
+  });
+
+  it('loads older models, saved before the walking-wolf token, as models without it', () => {
+    const m = createModel(cfg, mulberry32(3));
+    const json = JSON.parse(JSON.stringify(modelToJSON(m)));
+    delete json.cfg.wolfToken;
+    const back = modelFromJSON(json);
+    expect(back.nIn).toBe(inputSize(cfg));
+    expect(!!back.cfg.wolfToken).toBe(false);
+    const withToken = createModel({ ...cfg, wolfToken: true }, mulberry32(3));
+    expect(modelFromJSON(JSON.parse(JSON.stringify(modelToJSON(withToken)))).nIn).toBe(inputSize({ ...cfg, wolfToken: true }));
   });
 
   it('pins her basket at the front, however far back the pickup was', () => {
