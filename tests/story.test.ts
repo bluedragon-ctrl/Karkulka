@@ -3,7 +3,7 @@ import { generateForest } from '../src/forest';
 import { createAdam, createModel } from '../src/model';
 import { mulberry32 } from '../src/rng';
 import { Walker } from '../src/sim';
-import { MAX_SENTENCES, TripRecord, fantasyShare, madeUpExpected, shapedBy, storyCount, tellStory } from '../src/story';
+import { MAX_SENTENCES, TripRecord, cakeAtEnd, fantasyShare, madeUpExpected, shapedBy, storyCount, tellStory } from '../src/story';
 import { CAST, EventTracker, SPOT_COUNT, STORY, eventKind, eventSpotTiles, metText, placeOf, placeStoryEvents, tripSeed } from '../src/storyEvents';
 import { FIXED, newStats, trainLessons } from '../src/train';
 import { FLOWERS } from '../src/world';
@@ -60,7 +60,7 @@ describe('her story', () => {
         expect(story[0].part).toBe('opening');
         expect(STORY.openings[placeOf(rec.forest, rec.start)]).toContain(story[0].text);
         const ending = story.find((s) => s.part === 'ending')!;
-        const grabbed = rec.results.includes('grabbed') || rec.met.some((e) => e.effect === 'takeCake');
+        const grabbed = !cakeAtEnd(rec);
         const endings = { home: grabbed ? STORY.endings.homeNoCake : STORY.endings.home, eaten: STORY.endings.eaten, lost: STORY.endings.lost }[rec.outcome!];
         expect(endings).toContain(ending.text);
         expect(story.filter((s) => s.part === 'basket').length).toBe(rec.results.filter((r, k) => r === 'grabbed' || (r === 'empty' && k === rec.results.indexOf('empty')) || r === 'flowers' || r === 'treasure' || r === 'berries').length);
@@ -132,5 +132,18 @@ describe('her story', () => {
     expect(shapedBy({ magpie: 300, grandma: 100 }, { mother: 50 })).toEqual({ by: 'judge', who: 'magpie' });
     expect(shapedBy(undefined, { mother: 50, father: 80 })).toEqual({ by: 'teacher', who: 'father' });
     expect(shapedBy({}, {})).toBeNull();
+  });
+});
+
+describe('the cake at the end of her story', () => {
+  const met = (t: number, effect: 'takeCake' | 'giveCake') => ({ spot: 0, kind: effect === 'giveCake' ? 56 : 19, t, version: 0, effect });
+  it('follows every change in order: packed, grabbed, taken, and the baker\'s new one', () => {
+    expect(cakeAtEnd({ results: ['moved'], met: [] })).toBe(true);
+    expect(cakeAtEnd({ results: ['moved'], met: [], packed: { cake: false, flowers: 0, treasure: 0 } })).toBe(false);
+    expect(cakeAtEnd({ results: ['grabbed', 'moved'], met: [] })).toBe(false);
+    expect(cakeAtEnd({ results: ['grabbed', 'moved', 'moved'], met: [met(3, 'giveCake')] })).toBe(true);
+    expect(cakeAtEnd({ results: ['moved', 'moved'], met: [met(1, 'takeCake'), met(2, 'giveCake')] })).toBe(true);
+    expect(cakeAtEnd({ results: ['moved', 'moved', 'grabbed'], met: [met(1, 'takeCake'), met(2, 'giveCake')] })).toBe(false);
+    expect(cakeAtEnd({ results: ['moved'], met: [met(1, 'giveCake')], packed: { cake: false, flowers: 0, treasure: 0 } })).toBe(true);
   });
 });

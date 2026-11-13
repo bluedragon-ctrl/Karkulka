@@ -827,7 +827,7 @@ export class App {
     // Forest events pop up their word too, above a basket word if there is one.
     const basketPop = res === 'grabbed' || res === 'empty' || res === 'flowers' || res === 'treasure' || res === 'berries';
     // An event that changed her basket shows what it did: the crossed-out cake, the gem.
-    const effectIcon = (e: EventMet) => (e.effect === 'takeCake' ? crossedCake() : e.effect === 'giveTreasure' ? gem(0, 0, 8) : undefined);
+    const effectIcon = (e: EventMet) => (e.effect === 'takeCake' ? crossedCake() : e.effect === 'giveTreasure' ? gem(0, 0, 8) : e.effect === 'giveCake' ? cake(0, 0, 8) : undefined);
     this.lastMet.forEach((e, k) => this.board.showPop(w.pos, eventKind(e.kind)?.popup ?? '', effectIcon(e), k + (basketPop ? 2 : 0)));
     // Her first thought of the session makes the "?" by "Her thoughts" pulse, unless something else just did.
     if (thought && this.settings.thoughts && !this.thoughtSeen && this.fresh === fresh) { this.thoughtSeen = true; this.showCard('thoughts'); }
@@ -1468,7 +1468,7 @@ export class App {
           this.saveSoon(); this.showCard('events'); this.renderBoard(); this.renderPanel();
         }, this.hq('Things happen in the forest', 'events')),
         this.settings.events ? h('p', { class: 'muted' }, 'An owl, a frog, an empty hut… She can\'t see them, but she meets them on her trips alone, and her story tells about them. ',
-          this.hq('A few change her basket or her energy: a sly fox, a kind neighbour, a magpie, a hungry cow, a slippery swamp bank, an apple tree.', 'basketEvents')) : null,
+          this.hq('A few change her basket or her energy: a sly fox, a kind neighbour, a magpie, a hungry cow, a slippery swamp bank, a tree root, an apple tree, a baker.', 'basketEvents')) : null,
         this.settings.events ? check(this.settings.newPlaces, (v) => {
           this.settings.newPlaces = v; this.saveSoon(); this.showCard('newPlaces'); this.renderBoard(); this.renderPanel();
         }, this.hq('New places every trip', 'newPlaces')) : null,
@@ -1702,6 +1702,7 @@ export class App {
         run.events ? line('A forest event took the cake', times(r.cakeByEvent)) : null,
         run.events && r.flowersGiven ? line('Flowers given to a hungry cow', times(r.flowersGiven)) : null,
         run.events && r.apples ? line('Apples eaten', String(r.apples)) : null,
+        run.events && r.cakesGiven ? line('New cakes from a baker', times(r.cakesGiven)) : null,
         (this.forest.wolfOut ?? 0) > 0 || r.emptyDens ? line('Through a den while the wolf was out', `${times(r.emptyDens ?? 0)} (in ${r.emptyDenTrips ?? 0} trips)`) : null,
         line('Flowers brought home', String(total(r.flowersHome))),
         line('Treasure kept', String(total(r.treasure))),
@@ -1759,7 +1760,7 @@ export class App {
     // Always say how many she found, out of how many the forest has.
     // Tile pickups first, then what forest events gave her ("plus a bunch of flowers from Grandma's neighbour at step 9").
     // What was packed comes first ("packed a treasure; picked …"), and a cow taking flowers last ("; she gave …").
-    const gifts = w.effects.filter((e) => e.effect === 'giveFlowers' || e.effect === 'giveTreasure').map(effectWords);
+    const gifts = w.effects.filter((e) => e.effect === 'giveFlowers' || e.effect === 'giveTreasure' || e.effect === 'giveCake').map(effectWords);
     const given = w.effects.filter((e) => e.effect === 'takeFlowers').map(effectWords);
     const pack = usualBasket(w.packed) ? '' : `packed ${packedWords(w.packed)}; `;
     const picked = pack + pickupLine(w.pickups).replace(/^Picked/, 'picked').replace(/\.$/, '') + (gifts.length ? `, plus ${gifts.join(' and ')}` : '') + given.map((g) => `; ${g}`).join('');
@@ -1768,7 +1769,7 @@ export class App {
     const detail = w.outcome === 'eaten'
       ? `${picked}; ${fox ? `${cakeGone}, and ` : ''}the wolf has the whole basket`
       : cakeGone
-        ? `${picked}; ${cakeGone}${w.outcome === 'home' ? '' : '; flowers only count at Grandma\'s'}`
+        ? `${picked}; ${cakeGone}${w.outcome === 'home' ? (b.cake ? '; the new cake delivered to Grandma' : '') : '; flowers only count at Grandma\'s'}`
         : w.outcome === 'home' ? `${picked}; ${things ? 'all delivered' : 'the cake delivered'} to Grandma` : `${picked}; flowers only count at Grandma's`;
     return h('div', { class: 'report-row' }, icon(cake(0, 1, 10)),
       h('span', {}, h('strong', {}, this.hq(`Basket: ${word}`, 'processReward', 'basketReport')), h('br'), h('small', {}, detail)));

@@ -14,9 +14,9 @@ const REL = 'src/data/storyEvents.json';
 const PORT = Number(process.env.PORT) || 5174;
 const PLACES = ['anywhere', 'swamp', 'den', 'home', 'deadEnd', 'corridor', 'crossing', 'open'];
 const TRIGGERS = ['step', 'hear'];
-const EFFECTS = ['takeCake', 'giveFlowers', 'giveTreasure', 'takeFlowers', 'giveEnergy'];
-// Effects that can find nothing to change (no cake, no flowers, energy full) and so need quiet versions.
-const QUIET_EFFECTS = ['takeCake', 'takeFlowers', 'giveEnergy'];
+const EFFECTS = ['takeCake', 'giveFlowers', 'giveTreasure', 'takeFlowers', 'giveEnergy', 'giveCake'];
+// Effects that can find nothing to change (no cake, no flowers, energy full, a cake already there) and so need quiet versions.
+const QUIET_EFFECTS = ['takeCake', 'takeFlowers', 'giveEnergy', 'giveCake'];
 
 // The file keeps its hand-made layout: one event is a few compact lines.
 const q = JSON.stringify;

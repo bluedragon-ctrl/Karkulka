@@ -116,8 +116,8 @@
       "popup": "A fox!"
     },
     {
-      "id": 20, "name": "Grandma's neighbour", "fits": "home", "trigger": "step", "chance": 0.5, "effect": "giveFlowers", "deed": "a bunch of flowers from Grandma's neighbour",
-      "versions": ["Grandma's neighbour waved from her garden and gave her a bunch of flowers.", "A kind old neighbour picked some flowers for Grandma and put them in her basket."],
+      "id": 20, "name": "Grandma's neighbour", "fits": "open", "trigger": "step", "chance": 0.5, "effect": "giveFlowers", "deed": "a bunch of flowers from Grandma's neighbour",
+      "versions": ["In a sunny meadow, Grandma's neighbour was picking flowers, and she gave her a bunch for Grandma.", "A kind old neighbour of Grandma's met her in a clearing and put some flowers in her basket."],
       "thoughts": ["Thank you! Flowers for Grandma.", "Flowers from the neighbour!"],
       "popup": "Flowers!"
     },
@@ -327,6 +327,20 @@
       "quiet": ["An apple fell at her feet, but she wasn't hungry, so she left it for the birds.", "She passed an apple tree, but she still felt fresh and walked on."],
       "thoughts": ["An apple! Crunch!", "Yum, an apple. I feel better!"],
       "popup": "Crunch!"
+    },
+    {
+      "id": 55, "name": "Tree root", "fits": "crossing", "trigger": "step", "chance": 0.15, "effect": "takeCake", "deed": "the cake rolled away at a crossing",
+      "versions": ["Where the paths met, she tripped over a tree root, and the cake rolled away down a slope.", "She stumbled over a root at a crossing, and the cake tumbled into a ditch."],
+      "quiet": ["She tripped over a root at a crossing, but there was no cake left to lose.", "She stumbled over a root, but her basket had no cake to drop."],
+      "thoughts": ["Oops! My cake rolled away!", "Oh no, the cake!"],
+      "popup": "Oops!"
+    },
+    {
+      "id": 56, "name": "Baker", "fits": "corridor", "trigger": "step", "chance": 0.3, "effect": "giveCake", "deed": "a new cake from a baker",
+      "versions": ["A baker with a cart full of cakes saw her empty basket and gave her a fresh cake for Grandma.", "A friendly baker stopped his cart and put a new cake into her empty basket."],
+      "quiet": ["A baker's cart rattled past, but she still had her cake, so she just waved.", "She met a baker on the path, but her basket already held a cake."],
+      "thoughts": ["A new cake! Thank you!", "Hooray, a cake for Grandma again!"],
+      "popup": "Fresh cake!"
     }
   ],
   "fantasy": [

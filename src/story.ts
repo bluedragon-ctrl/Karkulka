@@ -136,13 +136,26 @@ export function tellStory(rec: TripRecord, boldness: number, rng: Rng): StorySen
   const body = middle.map((m) => m.s);
   for (const m of made) body.splice(Math.floor(rng() * (body.length + 1)), 0, m);
 
-  const lostCake = rec.results.includes('grabbed') || rec.met.some((e) => e.effect === 'takeCake') || rec.packed?.cake === false;
+  const lostCake = !cakeAtEnd(rec);
   const ending = rec.outcome === 'home' ? (lostCake ? STORY.endings.homeNoCake : STORY.endings.home)
     : rec.outcome === 'eaten' ? STORY.endings.eaten : rec.outcome === 'lost' ? STORY.endings.lost : STORY.endings.stopped;
   const out = [truth(pickFrom(rng, STORY.openings[placeOf(f, rec.start)]), 'opening'), ...packed, ...body, truth(pickFrom(rng, ending), 'ending')];
   const closing = rec.shapedBy && STORY.shapedBy[rec.shapedBy.by][rec.shapedBy.who];
   if (closing) out.push(truth(closing, 'closing'));
   return out;
+}
+
+/**
+ * Whether she still had the cake at the end, from the record: what was packed, then every change
+ * in order (the wolf grabbing it, an event taking it, the baker's new one). On one step the step's
+ * own result comes before the events it sets off.
+ */
+export function cakeAtEnd(rec: Pick<TripRecord, 'results' | 'met' | 'packed'>): boolean {
+  const changes: [number, boolean][] = [];
+  rec.results.forEach((r, k) => { if (r === 'grabbed') changes.push([k + 1, false]); });
+  for (const e of rec.met) if (e.effect === 'takeCake' || e.effect === 'giveCake') changes.push([e.t, e.effect === 'giveCake']);
+  changes.sort((a, b) => a[0] - b[0]); // stable: a step's own result stays before its events
+  return changes.length ? changes[changes.length - 1][1] : rec.packed?.cake ?? true;
 }
 
 /** What was packed, when it was not the cake alone ("Besides the cake, her basket held a treasure."). */
