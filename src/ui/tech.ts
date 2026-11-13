@@ -3,15 +3,15 @@ import type { CardKey } from '../explain';
 import { Model, N_OUT, parameterCount, softmax } from '../model';
 import type { Walker } from '../sim';
 import { FIXED, TrainStats } from '../train';
-import { BASKET_FEATS, ENERGY_FEATS, ENERGY_LEVELS, HINT_FEATS, PINNED_FEATS, ViewToken, buildVocabulary, slotFeats, viewFeats, viewKinds } from '../tokens';
-import { Forest, MOVE_ARROWS, MOVE_NAMES, MOVES, SWAMP_COST } from '../world';
+import { BASKET_FEATS, ENERGY_FEATS, ENERGY_LEVELS, ENERGY_NAMES, HINT_FEATS, PINNED_FEATS, ViewToken, slotFeats, viewFeats, viewKinds } from '../tokens';
+import { Forest, MOVE_ARROWS, MOVE_NAMES, MOVES, SECTOR_NAMES, SWAMP_COST } from '../world';
 import { HUNTSMAN_ENERGY, SWAMP_PENALTY, WOLF_PENALTY } from '../teachers';
 import {
-  Ambiguous, BIG_MODEL, OPS_PER_WEIGHT, RARE, ambiguityByTeacher, chanceText, frequencySummary, sci, sup, tokenCounts, trainingCompute, tripMeasures,
+  Ambiguous, BIG_MODEL, OPS_PER_WEIGHT, RARE, VocabToken, ambiguityByTeacher, chanceText, frequencySummary, fullVocabulary, sci, sup, trainingCompute, tripMeasures,
 } from '../measures';
 import { lineChart, rankChart } from './charts';
 import { h } from './dom';
-import { COLORS, moveToken, viewToken } from './symbols';
+import { COLORS, basketSymbols, energySymbol, moveToken, viewToken } from './symbols';
 
 export interface TechContext {
   forest: Forest;
@@ -132,6 +132,14 @@ function trainingData(counts: number[], stats: TrainStats, hint: (key: CardKey) 
     h('div', { class: 'charts-2 one' }, rankChart(counts, COLORS.mother, 'lesson predictions per input token, most common first')));
 }
 
+/** A pinned token for the vocabulary list. */
+function pinItem(icon: SVGSVGElement, label: string): HTMLElement {
+  return h('span', { class: 'vocab-item' }, icon, h('code', {}, label));
+}
+
+/** Arrows for the home hint's 8 compass sectors (0 = east, counter-clockwise). */
+const SECTOR_ARROWS = ['→', '↗', '↑', '↖', '←', '↙', '↓', '↘'] as const;
+
 function arrowsOf(moves: readonly number[]) { return moves.map((m) => MOVE_ARROWS[m]).join('/'); }
 
 /** Look-alike tokens where the teacher's best move depends on the place. */
@@ -193,9 +201,14 @@ function computeSection(model: Model | null, stats: TrainStats, hint: (key: Card
 
 export function renderTech(el: HTMLElement, ctx: TechContext) {
   const { forest, model, stats } = ctx;
-  const vocab = buildVocabulary(forest);
-  const counts = tokenCounts(vocab, stats.coverage);
-  const amb = ambiguityByTeacher(forest, vocab);
+  const cfg: { wolfToken?: boolean } = model?.cfg ?? {};
+  const vocab = fullVocabulary(forest, stats, cfg, ctx.walker);
+  const inForest = vocab.filter((v) => !v.onTheWay);
+  // The views of the forest as it starts are plain tiles, as `buildVocabulary` makes them.
+  const forestViews = inForest as unknown as ViewToken[];
+  const onTheWay = vocab.filter((v) => v.onTheWay);
+  const counts = vocab.map((v) => v.lessons);
+  const amb = ambiguityByTeacher(forest, forestViews);
   const parents = parentsTaught(stats);
   const isAmb = (id: number) => parents.some((t) => amb[t].has(id));
   el.replaceChildren();
@@ -203,15 +216,33 @@ export function renderTech(el: HTMLElement, ctx: TechContext) {
 
   // Vocabulary
   const outToks = h('div', { class: 'vocab' }, ...MOVES.map((m) => h('span', { class: 'vocab-item' }, moveToken(m, 27), h('code', {}, `#${m}`), MOVE_NAMES[m])));
-  const inToks = h('div', { class: 'vocab' }, ...vocab.map((v, i) => h('span', {
-    class: `vocab-item ${counts[i] < RARE ? 'unseen' : ''}`,
-    title: `${v.places.length} place${v.places.length === 1 ? '' : 's'} look like this; seen ${counts[i]} time${counts[i] === 1 ? '' : 's'} in lessons${isAmb(v.id) ? '; the right move depends on the place' : ''}`,
+  const viewItem = (v: VocabToken) => h('span', {
+    class: `vocab-item ${v.lessons < RARE ? 'unseen' : ''}`,
+    title: (v.onTheWay ? `read at ${v.places.length} place${v.places.length === 1 ? '' : 's'}` : `${v.places.length} place${v.places.length === 1 ? '' : 's'} look like this`) +
+      `; seen ${v.lessons} time${v.lessons === 1 ? '' : 's'} in lessons, ${v.practice} in practice${isAmb(v.id) ? '; the right move depends on the place' : ''}`,
   }, viewToken(v.view, 8), h('code', {}, `#${v.id}`),
-  v.places.length > 1 ? h('small', {}, `×${v.places.length}`, isAmb(v.id) ? h('span', { class: 'amb-mark', 'aria-label': 'right move depends on the place' }, ' ≠') : null) : null,
-  h('span', { class: 'seen' }, String(counts[i])))));
-  el.append(section('Vocabulary', ctx.hint('vocabulary'), `${N_OUT} output tokens (moves) and ${vocab.length} input tokens (every view that occurs in this forest). "×n" marks look-alike views that occur in n places, "≠" those where the right move depends on the place. The number under each token is how often it came up in lessons; dashed ones were seen fewer than ${RARE} times.`,
-    h('h4', {}, 'Output tokens'), outToks, h('h4', {}, 'Input tokens'), inToks));
-  el.append(trainingData(counts, stats, ctx.hint), lookAlikes(vocab, counts, amb, parents, !!model?.cfg.hint, ctx.hint));
+  !v.onTheWay && v.places.length > 1 ? h('small', {}, `×${v.places.length}`, isAmb(v.id) ? h('span', { class: 'amb-mark', 'aria-label': 'right move depends on the place' }, ' ≠') : null) : null,
+  h('span', { class: 'seen' }, String(v.lessons)));
+  const inToks = h('div', { class: 'vocab' }, ...inForest.map(viewItem));
+  const wayToks = onTheWay.length ? h('div', { class: 'vocab' }, ...onTheWay.map(viewItem)) : null;
+  // The pinned tokens and the home hint: always in her context, whatever she sees.
+  const pinned = h('div', { class: 'vocab' },
+    ...[true, false].map((c) => pinItem(basketSymbols({ cake: c, flowers: 0, treasure: 0 })[0], c ? 'cake: yes' : 'cake: no')),
+    ...[0, 1, 2].map((n) => pinItem(basketSymbols({ cake: true, flowers: n, treasure: 0 })[1], `flowers: ${n >= 2 ? '2+' : n}`)),
+    ...[0, 1, 2].map((n) => pinItem(basketSymbols({ cake: true, flowers: 0, treasure: n })[2], `treasure: ${n >= 2 ? '2+' : n}`)),
+    ...ENERGY_NAMES.map((name, k) => pinItem(energySymbol(k, name), `energy: ${name}`)));
+  const hintToks = model?.cfg.hint ? h('div', { class: 'vocab' }, ...SECTOR_NAMES.map((n, k) => h('span', { class: 'vocab-item' }, h('span', { class: 'sector-token', 'aria-hidden': 'true' }, SECTOR_ARROWS[k]), h('code', {}, n)))) : null;
+  const wolfNote = cfg.wolfToken ? 'a walking wolf next to her, grey with a red ring' : 'a walking wolf next to her, which she reads as a den';
+  el.append(section('Vocabulary', ctx.hint('vocabulary'),
+    `Everything she reads. ${N_OUT} output tokens (moves), which come back as inputs in her memory, and ${vocab.length} view tokens: ${inForest.length} views of the forest as it starts, ` +
+    `and ${onTheWay.length} more she has read on the way, in lessons, practice or her latest trip (an eaten berry bush, which looks like path, or ${wolfNote}). ` +
+    `"×n" marks look-alike views that occur in n places, "≠" those where the right move depends on the place. The number under each view is how often it came up in lessons; dashed ones were seen fewer than ${RARE} times.`,
+    h('h4', {}, 'Output tokens'), outToks,
+    h('h4', {}, 'Pinned tokens (basket and energy, always in her context)'), pinned,
+    hintToks ? h('h4', {}, 'Home hint (the smell of cake: direction home)') : null, hintToks,
+    h('h4', {}, 'Views of the forest'), inToks,
+    h('h4', {}, 'Views only on the way'), wayToks ?? h('p', { class: 'muted' }, 'None yet. They come with berry bushes she has eaten or walking wolves next to her.')));
+  el.append(trainingData(counts, stats, ctx.hint), lookAlikes(forestViews, counts, amb, parents, !!model?.cfg.hint, ctx.hint));
 
   el.append(currentInput(ctx), latestTrip(ctx.walker, ctx.hint));
 

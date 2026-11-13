@@ -7,8 +7,8 @@ import type { Model } from './model';
 import { parameterCount } from './model';
 import { Teacher, costToHome, teacherMoves } from './teachers';
 import type { TrainStats } from './train';
-import type { ViewToken } from './tokens';
-import { Forest, Move } from './world';
+import { ModelConfig, ViewToken, asSeenBy, buildVocabulary, viewKey } from './tokens';
+import { BERRIES, Forest, Move, PATH, Seen, WALKER, viewAt } from './world';
 
 /** Operations per weight per training prediction: about 2 for the forward pass and 4 for the backward pass. */
 export const OPS_PER_WEIGHT = 6;
@@ -44,6 +44,70 @@ export function trainingCompute(model: Model, stats: TrainStats): Compute {
  */
 export function tokenCounts(vocab: readonly ViewToken[], coverage: readonly number[]): number[] {
   return vocab.map((v) => v.places.reduce((a, p) => a + (coverage[p] ?? 0), 0));
+}
+
+/** One input token of the full vocabulary, with how often it was read in training. */
+export interface VocabToken extends Omit<ViewToken, 'view'> {
+  /** The view as the model reads it (it may show a walking wolf). */
+  view: Seen[];
+  /** Lesson predictions made from it. */
+  lessons: number;
+  /** Practice predictions made from it. */
+  practice: number;
+  /**
+   * Not a view of the forest as it starts, but one she read on the way: an eaten berry bush
+   * (bare, so it looks like path) or a walking wolf next to her. Its places are where she read it.
+   */
+  onTheWay: boolean;
+}
+
+/**
+ * Every input view the model has read, in vocabulary order: first every view of the forest as it
+ * starts (`buildVocabulary`, same IDs), then the views read only on the way, in lessons, practice
+ * or `trip` (her latest trip alone). Views are taken as the model reads them (`asSeenBy`): without
+ * the walking-wolf token a wolf next to her is a den, so it may fall on a view of the forest.
+ * Lesson counts come from the heatmap for older saves without view counts.
+ */
+export function fullVocabulary(
+  f: Forest, stats: TrainStats, cfg: Pick<ModelConfig, 'wolfToken'>, trip?: { positions: readonly number[]; history: { views: readonly (readonly Seen[])[] } } | null,
+): VocabToken[] {
+  const base = buildVocabulary(f);
+  const fromMap = !stats.lessonViews;
+  const counts = fromMap ? tokenCounts(base, stats.coverage) : null;
+  const vocab: VocabToken[] = base.map((v, i) => ({ ...v, lessons: counts ? counts[i] : 0, practice: 0, onTheWay: false }));
+  const byKey = new Map(vocab.map((v) => [v.key, v]));
+  const tokenFor = (pos: number, raw: readonly Seen[]): VocabToken => {
+    const view = asSeenBy(cfg, raw);
+    const key = viewKey(view);
+    let tok = byKey.get(key);
+    if (!tok) {
+      tok = { id: 4 + vocab.length, key, view, places: [], lessons: 0, practice: 0, onTheWay: true };
+      vocab.push(tok);
+      byKey.set(key, tok);
+    }
+    if (tok.onTheWay && !tok.places.includes(pos)) tok.places.push(pos);
+    return tok;
+  };
+  const atPlace = new Map<number, VocabToken>();
+  for (const v of vocab) for (const p of v.places) atPlace.set(p, v);
+  // A view read before the forest was changed (small or big change) is counted under the place's view now, as the heatmap does.
+  const fits = (pos: number, raw: readonly Seen[]) => {
+    const now = viewAt(f, pos);
+    return raw.length === 8 && raw.every((r, k) => r === now[k] || r === WALKER || (now[k] === BERRIES && r === PATH));
+  };
+  const add = (rec: Record<string, number> | undefined, field: 'lessons' | 'practice') => {
+    for (const [k, n] of Object.entries(rec ?? {})) {
+      const colon = k.indexOf(':');
+      const pos = Number(k.slice(0, colon));
+      const raw = [...k.slice(colon + 1)].map(Number) as Seen[];
+      const tok = fits(pos, raw) ? tokenFor(pos, raw) : atPlace.get(pos);
+      if (tok) tok[field] += n;
+    }
+  };
+  add(stats.lessonViews, 'lessons');
+  add(stats.practiceViews, 'practice');
+  trip?.history.views.forEach((v, t) => tokenFor(trip.positions[t], v));
+  return vocab;
 }
 
 export interface FrequencySummary {

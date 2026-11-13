@@ -383,6 +383,8 @@ export class App {
       this.forest = generateForest(randomCode(this.rng));
       this.edited = false;
       this.stats.coverage = new Array(this.forest.tiles.length).fill(0); // she was taught nowhere here
+      this.stats.lessonViews = {};
+      this.stats.practiceViews = {};
       this.board.setForest(this.forest);
       this.logCheck('Brand new forest');
       this.showCard('newWorld');

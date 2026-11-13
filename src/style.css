@@ -182,6 +182,7 @@ input[type="text"] { font: inherit; font-size: 0.92rem; padding: 0.35em 0.5em; b
 .vocab-item .seen { color: var(--muted); font-variant-numeric: tabular-nums; }
 .vocab-item.unseen { border: 1px dashed #b9a77a; opacity: 0.6; }
 .vocab-item .amb-moves { font-size: 0.75rem; letter-spacing: 0.05em; }
+.vocab-item .sector-token { font-size: 1.1rem; line-height: 27px; width: 27px; text-align: center; border: 1px solid #555; border-radius: 4px; background: #fffaf0; }
 .step-cells { display: flex; flex-wrap: wrap; gap: 2px; margin-top: 0.4em; max-width: 760px; }
 .step-cell { width: 10px; height: 10px; border: 1.5px solid #e07b00; border-radius: 2px; box-sizing: border-box; }
 .step-cell.step-top { background: #e07b00; }
