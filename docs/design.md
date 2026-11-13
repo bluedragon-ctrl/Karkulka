@@ -2,7 +2,7 @@
 
 This file is the source of truth for the game's design. Update it in the same pull request as any change to how the game behaves. It started as a design spec written on claude.ai, which is now kept only as a historical reference.
 
-**Status:** version 1, her basket, the [forest events and her story](#forest-events-and-her-story), the [events that change her basket](#events-that-change-her-basket) and [her energy and berry bushes](#her-energy-and-berry-bushes) are built and live at https://bluedragon-ctrl.github.io/Karkulka/. The [Later](#later) list and the [Open questions](#open-questions) at the end are what's next.
+**Status:** version 1, her basket, the [forest events and her story](#forest-events-and-her-story), the [events that change her basket](#events-that-change-her-basket), [her energy and berry bushes](#her-energy-and-berry-bushes) and [packing her basket](#packing-her-basket-her-prompt) are built and live at https://bluedragon-ctrl.github.io/Karkulka/. The [Later](#later) list and the [Open questions](#open-questions) at the end are what's next.
 
 ## Purpose and audience
 
@@ -10,7 +10,7 @@ A browser game that teaches how language models work: Red Riding Hood learns to 
 
 - **Audience:** older kids and adults without a technical background. A final tab serves technical users.
 - **Setting:** a classroom projector or a personal laptop, in a desktop browser. The UI is in English.
-- **Goal:** after one session, a non-technical person can explain tokens, context window, next-token probabilities, temperature, training data, hallucination and fine-tuning in their own words, using the game as the example.
+- **Goal:** after one session, a non-technical person can explain tokens, context window, prompts, next-token probabilities, temperature, training data, hallucination and fine-tuning in their own words, using the game as the example.
 - **Not a goal:** pathfinding. She never sees the whole forest, so the demo is about prediction from limited context, not planning.
 - **Not a goal:** a perfect model. Defaults are tuned so the language-model ideas show, not so she always gets home: mistakes, wasted energy and trips that run out are part of the lesson.
 
@@ -84,6 +84,11 @@ Every feature should map to a language-model idea. This table is the map:
 | Look-alike tokens where the right move depends on the place | Words whose meaning depends on context |
 | Uncertainty and top-move squares for her latest trip | Entropy of next-token predictions; sampling sometimes picks a less likely token |
 | Basket squares pinned at the front of her memory | The system prompt and the state an app puts back in every turn: they never scroll out of the context |
+| Picking where she starts on a trip alone | The prompt: the question ("get home from here") that the model answers one token at a time |
+| Packing her basket before a trip alone or a big test (cake, flowers, treasure) | Instructions and facts in the prompt that stay for the whole answer: they change the input, never the weights |
+| Packed flowers send her home only after Grandma's lessons | A prompt works only if the model learned to read it: chatbots follow instructions because they were trained on instructions |
+| No cake packed: she walks her usual way, but the first den is the end | Telling a model something its training never taught it to use changes little, though the facts still count |
+| Two big tests, one with another basket | Testing a prompt on many answers before trusting it |
 | The father lets the wolf have the cake for a shortcut | What the reward does not measure, the model gives up |
 | The magpie: treasure instead of grandma's house | A reward that values a side goal above the task: the model drops the task |
 | The hedgehog judge: points for every berry bush she eats from, needed or not | Rewarding the use of a tool instead of using it well: a chatbot paid for calling a tool calls it all the time |
@@ -95,6 +100,9 @@ Every feature should map to a language-model idea. This table is the map:
 | Made-up events borrowed from this forest | Believable hallucinations, built from things the model knows |
 | "Tell it again" | Regenerating an answer: the same facts, a new telling |
 | A fox takes the cake, a neighbour gives flowers: events that change her pinned basket, so her next steps change | Text that lands in a chatbot's context (a search result, a tool's answer, a prompt injection) steers what it writes, true or not |
+| A hungry cow takes her flowers; after Grandma's lessons she mostly walks on home without them | Context that changes in the middle of an answer: one changed token often does not turn a model round when everything before it points one way |
+| The cake falls into the swamp (a slippery bank) | A cost the training data never showed: the world can punish a step the examples treated as safe |
+| An apple gives energy back, and her battery token shows it | Being told mid-answer that there is more room left |
 | Walking wolves (an option, up to 3): to her each is a wolf den that moves; only the board draws them as wolves | The world changing while the model works (a tool's result, a web page, another program's move): it can only react to what lands in its context |
 | "She can tell a walking wolf from a den" (an option): a token of his own in her views, so lessons that walk past dens and lessons that run from him no longer give the same view two answers | A model can only tell apart what its tokens tell apart; special tokens mark where a tool's answer or the user's words begin |
 | The wolf sometimes out (an option, 0–100%): each step onto a den is a gamble she cannot see coming; the father, the huntsman and the wolf pay for den steps, and they only pay when she gets lucky | A judge that scores results rewards lucky guesses: a chatbot marked only right or wrong learns to guess boldly instead of saying "I don't know". Also noisy rewards and uncertainty no training removes |
@@ -240,7 +248,7 @@ One small neural network learns in two phases, mirroring how real LLMs are built
 
 ### Test: trip alone
 
-- The user clicks a starting tile: any tile she can walk on (path, swamp, flowers or treasure). Starting on flowers or treasure, she picks them up before her first move (they are in her basket from the start, and her story tells it first). Lessons and practice start the same way; only the test trips keep to path tiles. The panel reads top to bottom: a one-line instruction ("Click a tile to pick where she starts (a path, swamp, flowers or treasure), then let her walk to grandma's house alone."), the buttons (Next step, Walk through, Instant run, Stop), the status line, her next move while walking, and the trip report when it ends. Energy, boldness, fog, her thoughts and "Arrows around her" are on the Settings tab; a line under the trip panel names them, with a ⚙ Settings button.
+- The user clicks a starting tile: any tile she can walk on (path, swamp, flowers or treasure). Starting on flowers or treasure, she picks them up before her first move (they are in her basket from the start, and her story tells it first). Lessons and practice start the same way; only the test trips keep to path tiles. The panel reads top to bottom: a line saying that where she starts and what she carries is your prompt (the prompt card), the [Pack her basket](#packing-her-basket-her-prompt) box, a one-line instruction ("Click a tile to pick where she starts (a path, swamp, flowers or treasure), then let her walk to grandma's house alone."), the buttons (Next step, Walk through, Instant run, Stop), the status line, her next move while walking, and the trip report when it ends. Energy, boldness, fog, her thoughts and "Arrows around her" are on the Settings tab; a line under the trip panel names them, with a ⚙ Settings button.
 - At each step the model gives probabilities; the **boldness** dial (temperature) reshapes them, and one move is sampled.
 - The trip ends at home, eaten or lost (energy reached zero).
 - **Her thoughts** (on by default, "Her thoughts (just for fun)" checkbox): after some moves a thought bubble over her head says a line or two. Each thought is made up *after* the move is sampled, from the view she had and the move she took, so it can pair what she saw with what she did: "Scary wolf to the south! Let's go south." She speaks in compass words, as on a map: up the screen is north, down is south, left is west and right is east. A den is "to the north", "to the west" or "to the south-east", and she goes "north" or "east". Her confidence words follow the boldness-adjusted probability of the move she took: "definitely" from 75%, "probably" from 40%, "maybe" below. Code: `src/thoughts.ts`.
@@ -249,19 +257,19 @@ One small neural network learns in two phases, mirroring how real LLMs are built
   - **Said before the move.** A thought about the move itself ("Let's go north.", "Scary wolf to the south! Let's go south.", the cake smell) is shown over her where she still stands, for 1.1 s, and only then does she make the move. The thought is still made up from the sampled move (the move comes first in the model, the bubble just shows it earlier). Reactions (Ouch!, flowers, a wolf taking the cake, the trip's end) still come after the move.
   - Walk through goes at an easy pace (about 0.26 s a move when she says nothing, just longer than her glide) so you can follow her, and after a thought she waits until it is read (from 1.8 s for a short line to 4.5 s for a long one) before she moves on. A thought is about one move only, so her next move (Walk through or Next step) takes the bubble away: "Definitely north." never stays up while she walks east. The last thought of a trip stays until the next trip. Instant run shows no thoughts at all. Thoughts use their own randomness, so they never change her walk.
 
-- **Forest events and her story.** On the way she meets hidden forest events (an owl, a frog…): a pop-up word and a thought, but no change to her walk, except three that change her basket (a fox takes the cake, Grandma's neighbour gives flowers, a magpie a treasure; see [Events that change her basket](#events-that-change-her-basket)). After every trip, also one cut short with Stop, a "Her story" box under the trip report retells it, with true sentences (footprints) and made-up ones (clouds), more of them the bolder she is, and a "Tell it again" button. See [Forest events and her story](#forest-events-and-her-story).
+- **Forest events and her story.** On the way she meets hidden forest events (an owl, a frog…): a pop-up word and a thought, but no change to her walk, except six that change her basket or energy (a fox takes the cake, Grandma's neighbour gives flowers, a magpie a treasure, a hungry cow takes flowers, a slippery swamp bank spoils the cake, an apple gives energy back; see [Events that change her basket](#events-that-change-her-basket)). After every trip, also one cut short with Stop, a "Her story" box under the trip report retells it, with true sentences (footprints) and made-up ones (clouds), more of them the bolder she is, and a "Tell it again" button. See [Forest events and her story](#forest-events-and-her-story).
 
 ### Big test: many trips alone
 
 The Big test tab (tab 5, after Practice) walks 100 or 500 trips alone in one go ("Walk 100 trips", "Walk 500 trips") and counts them up, because one trip is one roll of the dice. Code: `src/testRuns.ts` (no DOM, tested), panel `testPanel` in `src/ui/app.ts`.
 
-- **Settings:** the energy, boldness and forest events (and "New places every trip") from the Settings tab. The tabs have no links to Settings; the tab bar is enough.
+- **Settings:** the energy, boldness and forest events (and "New places every trip") from the Settings tab. The tabs have no links to Settings; the tab bar is enough. What is packed in her basket is set on the tab itself, in the same [Pack her basket](#packing-her-basket-her-prompt) box as on Trip alone (one setting for both), so a prompt can be tested on many trips.
 - **Starts:** each trip from a random tile she can walk on, at least 2 steps from home; or click a tile on the map to start every trip there (marked with the start flag; click it again, or "Random spots instead", to go back).
 - **Randomness:** each test draws a new seed, and each trip has its own walk randomness, so one trip never shifts the next and events (their own randomness) never change a walk unless they change her basket. Two tests in a row differ a little by chance alone, which the panel shows.
 - **The board** shows the trails of all trips of the latest test, coloured by how each ended.
-- **How her trips ended:** home with the cake, home without it, eaten, lost, each with an icon (cake, crossed-out cake, wolf head, empty battery), a bar and a percentage. The test before is shown in brackets, with what was different about it (before her latest training, in the forest before it changed, other starts, other energy or boldness).
+- **How her trips ended:** home with the cake, home without it, eaten, lost, each with an icon (cake, crossed-out cake, wolf head, empty battery), a bar and a percentage. The test before is shown in brackets, with what was different about it (before her latest training, in the forest before it changed, other starts, other energy or boldness, another basket packed). When something other than the cake alone was packed, a line under the bars says what ("Packed for every trip: no cake, a bunch of flowers.").
 - **On an average trip:** steps to get home (with the shortest way from the same starts), energy used, bumps into trees, swamp steps, wolves seen (dens and walking wolves together), forest events met.
-- **In all the trips:** how often the wolf (at a den or walking) grabbed the cake and the fox took it, how often she went through a den while the wolf was out (when the option is on, with a factoid on how it went), flowers brought home, treasure kept, berry bushes eaten from (when the forest has any, with a factoid on how many of those trips got home), and the three events met on most trips.
+- **In all the trips:** how often the wolf (at a den or walking) grabbed the cake and a forest event (the fox or the swamp bank) took it, flowers given to a hungry cow and apples eaten (when any were), how often she went through a den while the wolf was out (when the option is on, with a factoid on how it went), flowers brought home, treasure kept, berry bushes eaten from (when the forest has any, with a factoid on how many of those trips got home), and the three events met on most trips.
 - **Did you know?** Up to six short, true factoids, the most telling first: how sure she was (the share of moves with a boldness-adjusted chance of 75% or more), how many different walks one start gave, trips that found the shortest way exactly, her longest way round (10 or more steps over the shortest), the cake lost and whether she still got home, the den that ended the most trips, her bumpiest trip, trips in circles (coming to one tile 3 times or more; bumps do not count), treasure picked up and lost.
 - A test of an older model or forest is not shown as hers: after more training or a change to the forest, the last test becomes "the test before".
 - 500 trips take well under a second, so the test runs on the main thread, after the page shows "She is walking…".
@@ -280,9 +288,9 @@ The app is a row of tabs that tells the story in order: Forest, Lessons, Trip al
 | --- | --- | --- |
 | 1. Forest | Generate or edit the forest; home is fixed | New forest, a forest code to type in and Generate, all on one line (the page link always carries the forest too), tile editing (path, tree, swamp, wolf den, flowers, treasure); after lessons: small change, big change, new forest with the same Red Riding Hood |
 | 2. Lessons | Parents walk her home; the model trains per step | Teacher (mother / father / both / wolf in disguise / mother and sometimes the wolf / crow / Grandma / magpie / huntsman), lessons to add, watch them or give them all at once; after a change: 30 / 100 / 300 catch-up lessons |
-| 3. Trip alone | She walks from a chosen start using the model | Click the start tile (until she has one, a dashed hint says the buttons are waiting for it), Next step, Walk through (pause any time), Instant run or Stop (end the trip now, when she goes in circles or keeps bumping into trees); after a trip, "Tell it again" under her story |
+| 3. Trip alone | She walks from a chosen start using the model | Pack her basket (cake, flowers 0–2, treasure 0–2), click the start tile (until she has one, a dashed hint says the buttons are waiting for it), Next step, Walk through (pause any time), Instant run or Stop (end the trip now, when she goes in circles or keeps bumping into trees); after a trip, "Tell it again" under her story |
 | 4. Practice (optional) | Her own runs, scored by a judge; then back to Trip alone to compare | Judge (Grandma / father / mother / crow / magpie / huntsman / wolf), number of practice runs |
-| 5. Big test | Many trips alone at once, counted up: how they ended, averages, totals and a few factoids | Walk 100 trips or Walk 500 trips; click a tile to start every trip there, or Random spots instead |
+| 5. Big test | Many trips alone at once, counted up: how they ended, averages, totals and a few factoids | Pack her basket, Walk 100 trips or Walk 500 trips; click a tile to start every trip there, or Random spots instead |
 | 6. Inside the model | Numbers and model details for technical users | Read-only views, export or import the model |
 | ⚙ Settings | All the options, in four boxes; the board shows the forest, not editable | *Her memory*: memory size (short / medium / long), home-hint toggle, Start over with a new Red Riding Hood (the model reset). *Trip alone*: energy (step budget, 60 by default), boldness dial, fog, her thoughts, arrows around her. *Lessons*: the heatmap toggle. *Walking wolves*: none, 1, 2 or 3, and "She can tell a walking wolf from a den". *Wolf dens*: "The wolf is out", never (default) to always in 10% steps. *Forest events*: "Things happen in the forest", "New places every trip" and "Show events (for testing)" |
 
@@ -364,13 +372,15 @@ Where the "?" buttons are, and what makes them pulse:
 | 2. Lessons | "The crow flew on over a tree…" (after a watched crow lesson that ends at a tree) | Copying moves she cannot make | That lesson |
 | 2. Lessons | "How she does alone" | Test trips as a benchmark | |
 | 3. Trip alone | Title | A view is an input token | Entering the tab |
+| 3. Trip alone | "Where she starts and what she carries is your prompt…" | The prompt: the start is the question, the basket the instructions that stay; it changes the input, never the weights | |
+| 3. Trip alone, 5. Big test | "Pack her basket" | A prompt works only if the model learned to read it | Changing what is packed; a "Why did she do that?" note about what was packed |
 | 3. Trip alone | Instruction ("Click a tile to pick where she starts…"); the card says how a move is picked by chance | Sampling | |
 | 3. Trip alone | "In a swamp" in the status line (while she stands in one) | Swamp eats the energy budget | Her first swamp step on a trip |
 | 3. Trip alone | "Energy 31 / 60 (she feels: some)" in the status line | Her energy token | |
 | 3. Trip alone | "Berries, energy back!" in the status line (right after she ate) | Berry bushes | |
 | 3. Trip alone | "Ouch, a tree!" in the status line (right after she walks into a tree) | A wrong guess wastes a step | Her first bump into a tree on a trip |
 | 3. Trip alone | "Smells cake" in the status line | More useful input | |
-| 3. Trip alone | "No cake: the next den is the end!" in the status line ("…a den with the wolf home is the end!" when he is sometimes out) | The cake and the dens: what the judge doesn't measure is given up | The wolf grabbing the cake |
+| 3. Trip alone | "No cake: the next den is the end!" in the status line ("…a den with the wolf home is the end!" when he is sometimes out) | The cake and the dens: what the judge doesn't measure is given up (the basket-events card after the fox or the swamp bank; the packing card when no cake was packed) | The wolf grabbing the cake |
 | 3. Trip alone | "Basket: …" in the trip report | Process rewards (treasure at pickup) versus outcome rewards (flowers at home) | |
 | 3. Trip alone | "Stopped after N steps." in the status line | Models can get stuck repeating themselves; chatbots have a Stop button and a length limit | Pressing Stop |
 | 3. Trip alone | "Why did she do that?" | The card that fits the trip: home, hallucination, temperature, repetition, energy, swamp, reward hacking, the crow's lessons (she keeps walking into trees towards home), the wolf's lessons or practice, the cake given up, the magpie (as judge or teacher), the huntsman (as judge or teacher: a walk home at least 10 steps longer than the shortest way, or energy run out, with the dens she saw), Grandma's lessons (home with flowers), or process versus outcome rewards | The trip ends |
@@ -390,6 +400,7 @@ Where the "?" buttons are, and what makes them pulse:
 | 5. Big test | Title | One trip is one roll of the dice: only many show what she usually does, as chatbots are tested on thousands of questions | Entering the tab; finishing a test |
 | 5. Big test | "On an average trip" | Answers are rated on more than being right | |
 | 5. Big test | "Did you know?"; what the earlier test was, in brackets | Sampling | |
+| 5. Big test | "Packed for every trip: …" (when not the cake alone) | A prompt works only if the model learned to read it | |
 | 6. Inside the model | Title | The real numbers | Entering the tab |
 | 6. Inside the model | Vocabulary, Training data, Look-alike tokens, Current input, Her latest trip, Network, Loss curves, Training compute, Fixed settings, Export and import | Vocabulary, token frequency, context-dependent tokens, one-hot inputs, uncertainty and sampling, weights, loss, training cost, hyperparameters, shared model files | |
 | ⚙ Settings | "Her memory" | Context window | |
@@ -399,7 +410,7 @@ Where the "?" buttons are, and what makes them pulse:
 | ⚙ Settings | "She can tell a walking wolf from a den" | A model can only tell apart what its tokens tell apart; special tokens in chatbots | Toggling it |
 | ⚙ Settings | "Wolf dens" and "The wolf is out" | Lucky guesses get rewarded: a judge that scores results pays for risks that happened to work | Moving the slider; the first time a trip alone finds a den empty; a "Why did she do that?" note after a trip through an empty den, or one that ended at a den she gambled on |
 | ⚙ Settings | "Things happen in the forest" | Hidden events never change her walk: only input and reward steer a model | Toggling it |
-| ⚙ Settings | "A few change her basket" (under "Things happen in the forest"); also on the status line's "no cake" after the fox | Text that lands in a chatbot's context steers it, true or not (search results, tool answers, prompt injection) | The first basket event in a session |
+| ⚙ Settings | "A few change her basket or her energy" (under "Things happen in the forest"); also on the status line's "no cake" after the fox or the swamp bank | Text that lands in a chatbot's context steers it, true or not (search results, tool answers, prompt injection) | The first basket event in a session |
 | ⚙ Settings | "New places every trip" | The same question can bring back different search results, and a chatbot works with whatever it gets | Toggling it |
 | ⚙ Settings | Heatmap checkbox | What the training data covered | Toggling it; after lessons from one parent |
 | ⚙ Settings | Fog checkbox | A view is an input token | Toggling it |
@@ -580,7 +591,7 @@ This is the game's clearest hallucination lesson. The storyteller is like a chat
 **The story after the trip**
 
 - A "Her story" box under "How was the trip for her?", with a "?" for the story card, on every trip end (home, eaten, lost, or Stop).
-- Built from the trip record, in order: an opening (where she set out: "by a muddy swamp", "from a quiet dead end", "not far from a wolf den"), one sentence for each event she met, in the version that happened, her basket (flowers, treasure, the wolf grabbing the cake), at most one sentence each about swamps and bumps, made-up sentences slipped in anywhere in between, and the ending ("And at last she knocked on Grandma's door.", "…sat down under a tree for a long nap.", the wolf, nothing graphic, or "And there the story stops, somewhere in the forest." after Stop). It closes with one line naming who shaped her: the judge she practised with most if she had practice, otherwise the teacher she had most lessons from ("The magpie had taught her that shiny things matter most.").
+- Built from the trip record, in order: an opening (where she set out: "by a muddy swamp", "from a quiet dead end", "not far from a wolf den"), what was [packed](#packing-her-basket-her-prompt) when it was not the cake alone ("Besides the cake, her basket held a treasure.", "There was no cake in her basket this time."; from the data file's `packed` lists, and it counts towards the 7 sentences), one sentence for each event she met, in the version that happened, her basket (flowers, treasure, the wolf grabbing the cake), at most one sentence each about swamps and bumps, made-up sentences slipped in anywhere in between, and the ending ("And at last she knocked on Grandma's door.", "…sat down under a tree for a long nap.", the wolf, nothing graphic, or "And there the story stops, somewhere in the forest." after Stop). A trip home without the cake (the wolf grabbed it, the fox or the swamp bank took it, or none was packed) ends with a no-cake line. It closes with one line naming who shaped her: the judge she practised with most if she had practice, otherwise the teacher she had most lessons from ("The magpie had taught her that shiny things matter most.").
 - At most 7 sentences before the closing line. When there is more to tell, the sound events go first (the last ones first), then the bumps, then the swamp, leaving room for the made-up parts expected at this boldness, so a retelling keeps the same true parts; if it is still too long, fewer made-up parts (at least one). The ending, the basket, the wolf and the events she stepped on always stay, even if that makes it longer.
 - **Marks.** Each true sentence starts with a small brown footprint, each made-up one with a grey dashed cloud and is set in italics (shape plus colour, plus the type). A line under the story counts them ("7 true, 1 made up"; the closing line counts as true).
 - **What may be made up.** Only extra happenings in the middle. The start, the basket, the wolf and the ending always come from the record, so a made-up part never changes how the trip ended.
@@ -594,10 +605,10 @@ This is the game's clearest hallucination lesson. The storyteller is like a chat
 
 **The event data file.** The cast will grow, so it lives in its own data file, `src/data/storyEvents.json`, not in code: adding an event means adding an entry there, with no code change, as long as it uses a place and a trigger the code already knows. The code imports it (Vite reads JSON directly; `tsconfig.json` has `resolveJsonModule`), so it is built into the page and the game still needs no server.
 
-- Each entry: `id` (the kind number), `name`, `fits` (one of the places below), `trigger` (`step` or `hear`), `versions` (2 or more story sentences), `thoughts` (1 or more lines in her voice), `popup` (one short word or two), and for a [basket event](#events-that-change-her-basket) `effect` (`takeCake`, `giveFlowers` or `giveTreasure`; step events only) and, for `takeCake`, `quiet` versions for when there is no cake to take. The file also holds the `fantasy` sentences and all other story wording (`openings` per place, `basket`, `swamp`, `bumps`, `endings`, and the `shapedBy` closing lines per teacher and judge), so all story wording is in one place.
+- Each entry: `id` (the kind number), `name`, `fits` (one of the places below), `trigger` (`step` or `hear`), `versions` (2 or more story sentences), `thoughts` (1 or more lines in her voice), `popup` (one short word or two), and for a [basket event](#events-that-change-her-basket) `effect` (`takeCake`, `giveFlowers`, `giveTreasure`, `takeFlowers` or `giveEnergy`; step events only), its `deed` (the trip report's words for it, "the fox took the cake"; the step is added) and, for `takeCake`, `takeFlowers` and `giveEnergy`, `quiet` versions for when there is nothing to change (no cake, no flowers, energy already full). The file also holds the `fantasy` sentences and all other story wording (`openings` per place, `basket`, `packed`, `swamp`, `bumps`, `endings`, and the `shapedBy` closing lines per teacher and judge), so all story wording is in one place.
 - Places the code knows: `anywhere`, `swamp` (a swamp, or a path next to one), `den` (within 2 steps of a den, counted along the grid), `home` (within 4 steps of home, walking), `deadEnd` (one way out, or a quiet corner off both parents' routes: true dead ends are rare, about 0.3 per forest, so the quiet corners the basket items use count too), `corridor` (two ways out, straight), `crossing` (3–4 ways out, not in a meadow), `open` (3–4 ways out, crossings and meadows). A way out is any neighbour that is not a tree or the map edge. The story's opening uses the first place that fits her start, in the order den, swamp, home, dead end, crossing, open, corridor, anywhere. A new place needs a few lines of code (`placeTests` in `src/storyEvents.ts`), an `openings` entry and a line here.
 - **Kind numbers are permanent.** A new event takes the next free number; numbers are never reused or renumbered, so the number "Show events" draws always means the same event. A removed event leaves a gap.
-- A test checks the file (`checkStoryData`): unique ids, a known place and trigger for each, at least 2 versions and 1 thought, short pop-ups (16 characters at most), no empty strings, every story list filled, and a known effect on a step event (with quiet versions for `takeCake`, and quiet versions only there). A wrong entry fails `npm test`, not the game.
+- A test checks the file (`checkStoryData`): unique ids, a known place and trigger for each, at least 2 versions and 1 thought, short pop-ups (16 characters at most), no empty strings, every story list filled, and a known effect on a step event, with a `deed` (and a `deed` only there), and quiet versions for `takeCake`, `takeFlowers` and `giveEnergy` (and only there). A wrong entry fails `npm test`, not the game.
 - Later, if it ever helps: a `weight` for rare events, and events that only some versions of the forest offer.
 
 **The cast.** Numbers are the kind numbers "Show events" draws.
@@ -666,9 +677,46 @@ Fantasy sentences (from boldness 1.2): "A dragon asked her the way to the sea." 
 - `src/thoughts.ts`: says an event's thought line. `src/explain.ts`: the events, new places, story and "Tell it again" cards. `src/ui/app.ts`: the checkboxes ("Show events" among them), the pop-up words and the story box; `src/ui/board.ts`: the event numbers layer; `src/ui/symbols.ts`: the footprint and cloud marks.
 - Settings: `events: true` and `newPlaces: true` by default. "Show events" is not saved.
 
+### Packing her basket (her prompt)
+
+On a trip alone the user asks her one question, "get home from here", by picking where she starts; everything after that is her answer, one move at a time. What she carries is the other half of her prompt: the pinned basket tokens are read before every move, like the instructions a chatbot reads before every word. **Pack her basket** lets the user write that half. Same model, another prompt, another walk, and her weights never change: this is the difference between prompting and training.
+
+**Rules**
+
+- **What can be packed:** the cake (yes or no), flowers (0, 1 or 2) and treasure (0, 1 or 2), in a small "Pack her basket" box near the top of the Trip alone and Big test tabs (one setting for both, kept in the browser save with the other settings; a missing setting means the cake alone, so no save-version bump). Her energy, the other pinned token, is already set on the Settings tab. The tile kinds and the model's inputs are unchanged: packing only sets the tokens she already reads.
+- **Real, not pretend.** What is packed is really in her basket: packed flowers count for Grandma, and without the cake the first den with the wolf home is the end. She cannot tell where the flowers came from; she only sees the token, as a model only sees its prompt. (A basket that lies to her is on the [Later](#later) list.)
+- **Shown before she sets off.** On the Trip alone and Big test tabs, before a trip, the memory strip's pinned squares show what is packed, so the user sees the prompt as she will read it.
+- **When it counts.** Packing is read when she sets off. Changed before her first step, the trip starts afresh from the same tile; during a trip the box is locked and says a change counts from her next trip. An item on her start tile goes on top of what was packed (packed 1 bunch and starting on flowers: 2).
+- **Trips alone and the big test only.** Lessons, practice and the test trips always set off with the cake alone, so her training data and the charts stay comparable: like a chatbot trained once and then prompted many ways.
+- **Told everywhere a trip is told.** The trip report's basket row starts with what was packed ("packed no cake, a bunch of flowers; picked 0 of 3 flower patches…"). Her story says it after the opening (see [Forest events and her story](#forest-events-and-her-story)). The Big test names it under the bars and in the brackets of the test before ("with only the cake packed"), so two tests in a row compare two prompts.
+- **Why did she do that?** Home with no cake packed: "none was packed", and that she hardly reads that part of her basket. Eaten at a den with no cake packed: the den was the end because no cake was packed. Home after Grandma's lessons with packed flowers, picking none, by about the shortest way: "your prompt told her the errand was done". All with the packing card.
+- **Cards.** *Prompt* ("Where she starts is your question to her…"), by a line under the Trip alone title. *Pack her basket* ("Packing her basket changes her prompt, not her training. It helps only if her lessons taught her to read it…"), by the box; it pulses when the packing changes and with the notes above.
+
+**Measured** (16 forest codes, medium memory, 300 lessons from one teacher, then a big test of 200 trips from random starts with each basket, energy 60, boldness 0.7, events off; flower patches and treasures picked from 60 more trips):
+
+| Teacher | Packed | Home (with cake) | Eaten | Lost | Steps home | Flower patches picked | Treasures picked |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| Grandma | the cake alone | 92.5% (87.3%) | 1.0% | 6.5% | 25.1 | 0.67 | 0.05 |
+| Grandma | + 1 bunch of flowers | 90.8% (83.7%) | 1.0% | 8.2% | 22.3 | 0.39 | 0.06 |
+| Grandma | + 2 bunches of flowers | 92.8% (87.9%) | 1.2% | 6.1% | 24.5 | 0.60 | 0.05 |
+| Grandma | no cake | 87.3% (0%) | 7.2% | 5.5% | 24.2 | 0.62 | 0.04 |
+| Mother | the cake alone | 94.8% (87.9%) | 2.2% | 3.1% | 17.9 | 0.04 | 0.05 |
+| Mother | + 1 bunch of flowers | 93.9% (86.7%) | 2.3% | 3.8% | 18.2 | 0.04 | 0.06 |
+| Mother | no cake | 86.8% (0%) | 10.3% | 2.9% | 17.2 | 0.03 | 0.04 |
+| Father | the cake alone | 96.6% (90.8%) | 0.9% | 2.5% | 13.7 | 0.03 | 0.06 |
+| Father | + 1 bunch of flowers | 97.0% (90.5%) | 0.7% | 2.3% | 13.7 | 0.03 | 0.06 |
+| Father | no cake | 90.4% (0%) | 7.8% | 1.8% | 13.2 | 0.03 | 0.05 |
+| Magpie | the cake alone | 88.4% (82.8%) | 1.2% | 10.4% | 24.3 | 0.07 | 0.90 |
+| Magpie | + 1 treasure | 90.2% (84.7%) | 1.4% | 8.3% | 22.0 | 0.06 | 0.75 |
+| Magpie | + 2 treasures | 90.6% (85.7%) | 2.1% | 7.4% | 19.6 | 0.05 | 0.55 |
+
+- **A prompt works only if she learned to read it.** After Grandma's lessons one packed bunch of flowers cuts the flower patches she visits by 42% and her walks by 3 steps; after the parents' lessons packed flowers change nothing. Packed treasure shortens the magpie-taught walks the same way (2 treasures: 39% fewer picked, 5 steps shorter).
+- **An unusual prompt does little.** Two packed bunches of flowers barely change Grandma-taught walks (0.60 patches against 0.67): her lessons fetch one bunch, so "2 or more flowers" never came up in them. The magpie's lessons do pick 2 or more treasures, and there 2 packed treasures work better than 1.
+- **What she never learned to read changes little, but the facts still count.** With no cake she walks as usual (the same steps within a step), and being eaten rises from 1–2% to 7–10%: the cake shield is gone and she does not know it matters.
+
 ### Events that change her basket
 
-Three forest events do something to her basket on a trip alone: a sly fox takes the cake, Grandma's neighbour gives her flowers, a magpie drops a treasure. Every other event stays harmless. The two kinds side by side make one lesson from both ends: the owl is not in her input, so her walk does not change; the fox changes what is pinned in her memory (the basket tokens), so her next steps change. Without the cake, the next den is the end.
+Six forest events do something to her basket or her energy on a trip alone: a sly fox takes the cake, Grandma's neighbour gives her flowers, a magpie drops a treasure, a hungry cow gets a bunch of her flowers, a slippery swamp bank spoils the cake, and an apple tree by the path gives her energy back. Every other event stays harmless. The two kinds side by side make one lesson from both ends: the owl is not in her input, so her walk does not change; the fox changes what is pinned in her memory (the basket tokens), so her next steps change. Without the cake, the next den is the end.
 
 This is a chatbot reading whatever lands in its context: a search result, a pasted text, a tool's answer. It acts on it, true or not, and a planted instruction (prompt injection) steers it the same way.
 
@@ -681,17 +729,21 @@ This is a chatbot reading whatever lands in its context: a search result, a past
   - `takeCake`: the cake is gone (the basket's cake token turns to no), exactly as when the wolf grabs it, so the next den eats her. Without the cake there is nothing to take: the event still happens, told with one of its `quiet` versions ("The fox sniffed her empty basket and trotted off."), with no thought and no change.
   - `giveFlowers`: one bunch of flowers into her basket (the flowers token counts up, 0 / 1 / 2+), as if she had picked a patch.
   - `giveTreasure`: one treasure into her basket.
-- **When it takes effect.** Right after the step that sets it off, before her next move: `Walker` calls its `events` (the trip's `EventTracker`) after each step, before the basket snapshot, so the basket she reads at the next step already shows it (in the memory strip's pinned squares too). Changes are kept in `Walker.effects` (step, kind, effect).
+  - `takeFlowers` (the hungry cow, on open ground): one bunch of flowers out of her basket. With no flowers there is nothing to give: a quiet version ("A cow sniffed her basket, found no flowers and went back to the grass.").
+  - `takeCake` again (the slippery bank, on or next to a swamp): the same effect as the fox, told as the cake falling into the swamp. A second kind with one effect: the effect belongs to the kind, and each kind's `deed` names it in the report ("the cake fell into the swamp at step 4").
+  - `giveEnergy` (the apple tree, on a corridor, always when she steps there): 10 energy back (`APPLE_ENERGY`), never above her starting energy, like a small berry bush she cannot see coming. With her energy full, a quiet version ("…she wasn't hungry, so she left it for the birds."). It is applied after the step's cost, as berries are, so an apple can save her on the step that would have emptied her energy; her energy token shows it at the next step.
+- **When it takes effect.** Right after the step that sets it off (and after the step's energy cost), before her next move: `Walker` calls its `events` (the trip's `EventTracker`) after each step with her basket and energy, before the basket snapshot, so the basket she reads at the next step already shows it (in the memory strip's pinned squares too). Changes are kept in `Walker.effects` (step, kind, effect).
 - **Placement.** The same spots and rules as the other events: the new kinds only change which events sit on some spots, never the spots themselves. Adding them changed the events of existing forest codes.
 - **No save-version bump.** No new tile kind and no new model input: the cake, flowers and treasure tokens already exist.
 
 **On a trip alone**
 
-- Pop-up words as for the other events; the fox's with the crossed-out cake, the magpie's with the gem.
-- Thoughts in her voice: "Hey! My cake!", "Thank you! Flowers for Grandma.", "Ooh, shiny!".
-- The status line's "no cake: the next den is the end!" also after the fox, with the basket-events "?" instead of the cake-shield one.
-- The trip report's basket row names the source: "the fox took the cake at step 7", "picked 1 of 3 flower patches and 0 of 2 treasures, plus a bunch of flowers from Grandma's neighbour at step 9". The "picked … of …" counts stay pickups from tiles only.
-- **Why did she do that?** Eaten after the fox took the cake: "At step 7 a sly fox took the cake. Without the cake, the next den at step 12 was the end." Home without the cake after the fox: it says so. Home after the neighbour's flowers, after Grandma's lessons, with no flowers of her own, when she went straight home after the gift (at most 2 steps more than the shortest way): the flowers told her the errand was done, though she never picked any. The magpie and Grandma notes about her own pickups count tile pickups only.
+- Pop-up words as for the other events; the fox's and the swamp bank's with the crossed-out cake, the magpie's with the gem.
+- Thoughts in her voice: "Hey! My cake!", "Thank you! Flowers for Grandma.", "Ooh, shiny!", "Here you go, cow. Now I need new flowers!", "Oh no! The cake fell in!", "An apple! Crunch!".
+- The status line's "no cake: the next den is the end!" also after the fox or the swamp bank, with the basket-events "?" instead of the cake-shield one.
+- The trip report's basket row names the source, from each kind's `deed`: "the fox took the cake at step 7", "picked 1 of 3 flower patches and 0 of 2 treasures, plus a bunch of flowers from Grandma's neighbour at step 9; she gave a bunch of flowers to a hungry cow at step 14". The "picked … of …" counts stay pickups from tiles only. The Tired row counts an apple with the berries ("counting what a berry bush and an apple gave back").
+- The Big test counts cakes lost to a forest event (the fox and the swamp bank together), flowers given to the cow and apples eaten.
+- **Why did she do that?** Eaten after the fox took the cake: "The fox took the cake at step 7. Without the cake, the next den at step 12 was the end." (the swamp bank the same way). Home without the cake after the fox or the bank: it says so. Home after Grandma's lessons when the cow took her flowers: that she went and picked more, or, as usual, that she walked on home without them because her memory of the last steps all pointed home. Home after the neighbour's flowers, after Grandma's lessons, with no flowers of her own, when she went straight home after the gift (at most 2 steps more than the shortest way): the flowers told her the errand was done, though she never picked any. The magpie and Grandma notes about her own pickups count tile pickups only.
 - **Her story.** A basket event she met is always told, as it turned out (the quiet version when the fox found no cake). A made-up part is never a basket event: a borrowed "the fox stole her cake" would contradict how she arrived, and made-up parts never change the basket or the ending.
 - **Card.** *Basket events*: by "A few change her basket" under "Things happen in the forest", and on the status line after the fox; it pulses at the first basket event in a session.
 
@@ -707,7 +759,26 @@ This is a chatbot reading whatever lands in its context: a search result, a past
 - After Grandma's lessons, the 3 steps after the neighbour's flowers go towards home 59% of the time (145 steps), against 46% in the first 3 steps of a trip and 91% after flowers she picked herself. So the gift does push her homewards, but much less than her own flowers: the neighbour stands near the house, where she is often still on her way to a flower patch, and a gift in a place her lessons never had flowers is new to her. That is why the note is shown only when she really went straight home.
 - With the new kinds 17.7 of the 18 spots get a kind (16.2 before). Left out of the 32 forests: the mole 25, the hut 23, Grandma's cat 15 and the neighbour 10 (both want the few tiles near home), the frog, squirrel, mitten and echo 4, the mushroom ring and woodpecker 3, the owl, growl, butterflies 2, the paw prints, rain, fox and magpie 1.
 
-**Not built.** Events that change her energy (a snack, a stumble): energy is not in her input, so she cannot react to them, and on short trips ±5 energy rarely changes how a trip ends. They fit better with the berry bush below, once energy is a pinned token she can sense.
+**The cow, the swamp bank and the apple, measured** (32 forest codes, 100 lessons from one teacher, medium memory, the 40 test-trip starts, energy 60, boldness 0.7, fixed places; each trip walked with events off, with the first 51 kinds, and with all 54, from the same walk randomness):
+
+| Teacher | Cast | Events met per trip | Walks changed | Home with cake, without, eaten, lost | Cow / swamp bank / apple met per trip |
+| --- | --- | --- | --- | --- | --- |
+| Mother | events off | 0 | — | 74.4%, 11.8%, 5.3%, 8.5% | — |
+| Mother | 51 kinds | 1.56 | 0.5% | 73.9%, 12.2%, 5.3%, 8.6% | — |
+| Mother | 54 kinds | 1.53 | 1.9% | 73.7%, 12.9%, 5.2%, 8.2% | 0.031 / 0.009 / 0.101 |
+| Father | events off | 0 | — | 82.6%, 7.1%, 5.3%, 5.0% | — |
+| Father | 51 kinds | 1.24 | 0.8% | 81.7%, 7.6%, 5.7%, 5.0% | — |
+| Father | 54 kinds | 1.23 | 1.4% | 80.9%, 8.5%, 5.5%, 5.1% | 0.015 / 0.007 / 0.038 |
+| Grandma | events off | 0 | — | 76.6%, 8.2%, 3.7%, 11.6% | — |
+| Grandma | 51 kinds | 2.02 | 1.0% | 75.6%, 9.1%, 3.8%, 11.5% | — |
+| Grandma | 54 kinds | 1.98 | 4.8% | 75.6%, 9.5%, 3.9%, 10.9% | 0.055 / 0.009 / 0.140 |
+
+(Met counts the quiet versions too: most cows after the parents' lessons find no flowers, most apples early in a trip find her full.) In the 32 forests the cow is placed in 11, the swamp bank in 6 and the apple tree in 20; the fox in 8, the neighbour in 7 and the magpie in 10 (11, 8 and 12 before). The apple tree first fitted "anywhere", with a chance of 0.5, and was placed in only 2 forests (the many "anywhere" kinds share those spots), so it moved to corridors and always happens.
+
+- **The cow does not turn her round.** After Grandma's lessons the cow took her flowers on 30 of 1280 trips. Only 2 of those went to pick flowers again; 19 got home without flowers and 9 still had flowers (she had picked 2). Her lessons fetch flowers when the basket has none, but she meets the cow on her way home, and her memory of the last steps all points home: one changed token is not enough. This was expected to work the other way (an empty basket is a state her lessons know well), and it is told the way it turned out.
+- **The apple helps a little.** Out of energy drops by half a point to 0.7 points (Grandma 11.6% → 10.9%), where trips are long.
+- **The swamp bank is rare** (on or next to swamps, chance 0.4), and costs the cake like the fox.
+- Adding the three kinds changed the events of existing forest codes (their spots stay; some spots got a new kind).
 
 ### Walking wolves
 
@@ -765,7 +836,11 @@ An option in Settings (*Wolf dens*: "The wolf is out", never by default, up to a
 - Two models side by side for comparison
 - Phone layout
 - Practice that finds berries on its own: with the default energy, practice runs rarely run low, so no judge ever rewards a detour for berries (the mother's lessons, then 1000 Grandma runs from anywhere: 1% home on tight trips). A tight-energy practice option would let fine-tuning discover a behaviour no lesson showed
-- Forest events that change her energy (a snack, a stumble): now that energy is pinned, she could sense them
+- A stumble that costs energy (the apple tree gives it back; a cost would be its mirror)
+- A basket that lies to her: a "note" that changes her pinned tokens but not what she really carries, like a prompt that states something false
+- Lead her first steps: the user clicks her first 2–4 moves, then she carries on (prefilling a chatbot's answer); with short memory those steps scroll out while the pinned basket stays
+- A "Which start works?" map on the Big test tab: a few trips from every tile, each coloured by how often she got home (prompt sensitivity: neighbouring starts can do very differently)
+- Few-shot prompting has no counterpart: her network cannot learn from examples in her memory during a trip, as big models can. Say so on a card rather than invent a mechanic
 - A pickup action: a fifth output, "pick up", instead of picking items up just by stepping on them. It is like a chatbot choosing to call a tool instead of writing the next word, and each pickup becomes a choice a judge can reward on its own. Costs: the model's outputs, vocabulary and save files change (a save-version bump), and it needs an energy cost per pickup, a decision whether the parents ever demonstrate it, and the judges' basket points measured again
 
 ### Open questions
@@ -777,4 +852,4 @@ An option in Settings (*Wolf dens*: "The wolf is out", never by default, up to a
 
 ## Event editor (tool)
 
-`npm run events:edit` (or double-click `events-editor.bat` on Windows, which also opens the browser) starts a local page (http://localhost:5174, `tools/event-editor/`) for editing the forest events in `src/data/storyEvents.json`: name, place, trigger, chance, basket effect, story versions, thoughts and pop-up word. "Save and open PR" checks the data, then in a temporary git worktree from `origin/main` writes the file (the rest of the file and its layout stay as they were), runs the story tests, commits to a new `events-edit-…` branch, pushes it and opens a PR with `gh`. It needs `git` and a logged-in `gh` on your machine; your own checkout is never touched. It is not part of the game or the build.
+`npm run events:edit` (or double-click `events-editor.bat` on Windows, which also opens the browser) starts a local page (http://localhost:5174, `tools/event-editor/`) for editing the forest events in `src/data/storyEvents.json`: name, place, trigger, chance, basket effect and its report phrase, story versions, quiet versions, thoughts and pop-up word. "Save and open PR" checks the data, then in a temporary git worktree from `origin/main` writes the file (the rest of the file and its layout stay as they were), runs the story tests, commits to a new `events-edit-…` branch, pushes it and opens a PR with `gh`. It needs `git` and a logged-in `gh` on your machine; your own checkout is never touched. It is not part of the game or the build.

@@ -4,7 +4,7 @@ import { createAdam, createModel } from '../src/model';
 import { mulberry32 } from '../src/rng';
 import { Walker } from '../src/sim';
 import { MAX_SENTENCES, TripRecord, fantasyShare, madeUpExpected, shapedBy, storyCount, tellStory } from '../src/story';
-import { CAST, EventTracker, STORY, eventKind, eventSpotTiles, metText, placeOf, placeStoryEvents } from '../src/storyEvents';
+import { CAST, EventTracker, SPOT_COUNT, STORY, eventKind, eventSpotTiles, metText, placeOf, placeStoryEvents, tripSeed } from '../src/storyEvents';
 import { FIXED, newStats, trainLessons } from '../src/train';
 import { FLOWERS } from '../src/world';
 
@@ -14,9 +14,10 @@ function trips(n = 30): TripRecord[] {
   const rng = mulberry32(5);
   const model = createModel({ memory: 3, hint: false, hidden: FIXED.hidden }, rng);
   trainLessons(model, createAdam(model), f, 'father', 60, newStats(f), rng);
-  const spots = placeStoryEvents(f);
   const starts = eventSpotTiles(f, 60);
   return Array.from({ length: n }, (_, k) => {
+    // New places every trip, so the trips meet the basket events too.
+    const spots = placeStoryEvents(f, CAST, SPOT_COUNT, tripSeed(k));
     const w = new Walker(f, model, starts[k % starts.length], 80, 1.2, mulberry32(k));
     const tr = new EventTracker(f, spots, mulberry32(50 + k));
     w.events = tr; // basket events act on her basket too
@@ -59,7 +60,7 @@ describe('her story', () => {
         expect(story[0].part).toBe('opening');
         expect(STORY.openings[placeOf(rec.forest, rec.start)]).toContain(story[0].text);
         const ending = story.find((s) => s.part === 'ending')!;
-        const grabbed = rec.results.includes('grabbed');
+        const grabbed = rec.results.includes('grabbed') || rec.met.some((e) => e.effect === 'takeCake');
         const endings = { home: grabbed ? STORY.endings.homeNoCake : STORY.endings.home, eaten: STORY.endings.eaten, lost: STORY.endings.lost }[rec.outcome!];
         expect(endings).toContain(ending.text);
         expect(story.filter((s) => s.part === 'basket').length).toBe(rec.results.filter((r, k) => r === 'grabbed' || (r === 'empty' && k === rec.results.indexOf('empty')) || r === 'flowers' || r === 'treasure' || r === 'berries').length);

@@ -1,9 +1,10 @@
 /** The "Why did she do that?" note after a trip, and the LM corner cards. */
 import type { EffectDone, Walker } from './sim';
+import { eventKind } from './storyEvents';
 import { FIXED, TrainStats, headsHome } from './train';
 import { ENERGY_LEVELS, ENERGY_NAMES, buildVocabulary, energyLevel, viewKey } from './tokens';
 import { ENERGY_MARGIN, ERRAND_SPARE, HEDGEHOG_ENERGY, HUNTSMAN_ENERGY, LESSON_SPARE, SWAMP_PENALTY, WOLF_PENALTY } from './teachers';
-import { BERRIES, BERRY_ENERGY, Forest, MOVE_NAMES, densInSight, SWAMP, SWAMP_COST, VIEW_OFFSETS, WOLF, tileAt, walkingDistances, xyOf } from './world';
+import { BERRIES, BERRY_ENERGY, Basket, Effect, Forest, MOVE_NAMES, densInSight, SWAMP, SWAMP_COST, VIEW_OFFSETS, WOLF, tileAt, walkingDistances, xyOf } from './world';
 
 export type CardKey =
   | 'forest' | 'view' | 'memory' | 'memorySize' | 'hint' | 'lessons' | 'teacher' | 'motherTeacher' | 'fatherTeacher' | 'bothTeachers' | 'coverage' | 'arrows'
@@ -14,6 +15,7 @@ export type CardKey =
   | 'basket' | 'energyToken' | 'berries' | 'cakeShield' | 'judgeMagpie' | 'judgeHuntsman' | 'judgeHedgehog' | 'processReward' | 'events' | 'newPlaces' | 'basketEvents' | 'walkingWolf' | 'wolfToken' | 'wolfOut' | 'story' | 'retell'
   | 'newWorld' | 'movedHome' | 'catchUp' | 'forestCode' | 'editForest' | 'recipe'
   | 'compute' | 'tokenFreq' | 'ambiguous' | 'uncertainty' | 'bigTest'
+  | 'prompt' | 'packBasket'
   | 'moreData' | 'guess' | 'watchMany' | 'runScore' | 'testTrips' | 'sampling' | 'curriculum' | 'oneHot' | 'weights' | 'loss' | 'hyper' | 'modelFile';
 
 export const CARDS: Record<CardKey, string> = {
@@ -92,6 +94,8 @@ export const CARDS: Record<CardKey, string> = {
   processReward: "Treasure counts the moment she picks it up; Grandma's flowers count only if she brings them home. A judge can reward each step on the way or only the finished task. Chatbots are trained both ways: points for each step of the working, or only for the final answer.",
   events: "The forest is full of little events, but she cannot see them and no judge scores them, so most never change her walk. A chatbot is the same: only what is in its input and what its training rewarded steer what it writes.",
   story: "Her story is made after the trip from what really happened (footprints), plus bits the storyteller makes up (clouds). The bolder she is, the more it invents. Chatbots do this too: what rests on facts they were given is reliable, and where they fill gaps they invent things that sound just as true.",
+  prompt: "Where she starts is your question to her: \"get home from here\". What you pack is the instructions she carries all the way. A chatbot gets both: your message, and instructions it reads before every word. That is the prompt: it changes the input, never the weights.",
+  packBasket: "Packing her basket changes her prompt, not her training. It helps only if her lessons taught her to read it: after Grandma's, one packed bunch of flowers often sends her home; after the parents', she doesn't notice. A chatbot also follows only what its training taught it to use.",
   basketEvents: "The owl doesn't change her walk, but the fox does: it changed her basket, which she reads at every step. A chatbot is the same: whatever lands in its context, a search result or a planted instruction, steers what it writes, true or not.",
   newPlaces: "Off, the owl always lives in the same tree. On, the events move every trip, so you never know what she will meet. A chatbot's world is like that too: the same question can bring back different search results, and it works with whatever it gets.",
   walkingWolf: "Without his own token, a walking wolf is to her just a den that moves. She learns to turn away only if her lessons had walking wolves in them. A chatbot is the same when the world changes as it works (a tool's answer, a web page): it reacts only to what is in its context, as its training showed.",
@@ -332,14 +336,31 @@ export function basketWords(b: { flowers: number; treasure: number }): string {
   return parts.join(' and ');
 }
 
-/** What a forest event did to her basket, for the trip report and the notes: "the fox took the cake at step 7". */
+/** Report phrases for effects whose event kind has none (the kinds in the data file all do). */
+const DEEDS: Record<Effect, string> = {
+  takeCake: 'a forest event took the cake',
+  giveFlowers: 'a bunch of flowers from a forest event',
+  giveTreasure: 'a treasure from a forest event',
+  takeFlowers: 'she gave away a bunch of flowers',
+  giveEnergy: 'she got energy back',
+};
+
+/** What a forest event did to her basket or energy, for the trip report and the notes: "the fox took the cake at step 7". */
 export function effectWords(e: EffectDone): string {
-  return {
-    takeCake: `the fox took the cake at step ${e.t}`,
-    giveFlowers: `a bunch of flowers from Grandma's neighbour at step ${e.t}`,
-    giveTreasure: `a treasure from a magpie at step ${e.t}`,
-  }[e.effect];
+  return `${eventKind(e.kind)?.deed ?? DEEDS[e.effect]} at step ${e.t}`;
 }
+
+/** The same, starting a sentence: "The fox took the cake at step 7". */
+const EffectWords = (e: EffectDone): string => { const s = effectWords(e); return s[0].toUpperCase() + s.slice(1); };
+
+/** What was packed besides the usual cake, in words ("no cake, a bunch of flowers"); empty when it was the cake alone. */
+export function packedWords(b: Basket): string {
+  const things = basketWords(b);
+  return [b.cake ? '' : 'no cake', things].filter(Boolean).join(', ');
+}
+
+/** Whether a basket is the usual one: the cake and nothing else. */
+export const usualBasket = (b: Basket): boolean => b.cake && !b.flowers && !b.treasure;
 
 /**
  * "Picked 1 of 3 flowers and 0 of 2 treasures": always both counts, out of how many the
@@ -369,9 +390,13 @@ function basketNote(w: Walker, stats: TrainStats | null, dist: ArrayLike<number>
   const n = w.decisions.length;
   const things = basketWords(w.basket);
   const brought = things ? ` She brought ${things}.` : '';
+  const packed = w.packed;
+  if (!packed.cake) {
+    return { title: 'Why did she do that?', text: `She got home in ${n} steps, without the cake: none was packed.${brought} Every lesson set off with the cake, so a basket without one is new to her, and she hardly reads that part of it: she walked her usual way, and a wolf den would have been the end.`, card: 'packBasket' };
+  }
   const fox = w.effects.find((e) => e.effect === 'takeCake');
   if (fox) {
-    return { title: 'Why did she do that?', text: `She got home in ${n} steps, but without the cake: at step ${fox.t} a sly fox took it.${brought}`, card: 'basketEvents' };
+    return { title: 'Why did she do that?', text: `She got home in ${n} steps, but without the cake: ${effectWords(fox)}.${brought}`, card: 'basketEvents' };
   }
   const empty = w.results.indexOf('empty');
   if (empty >= 0) {
@@ -383,10 +408,37 @@ function basketNote(w: Walker, stats: TrainStats | null, dist: ArrayLike<number>
       card: 'wolfOut',
     };
   }
+  // Flowers packed before she set off (not picked on the start tile): after Grandma's lessons, they say the errand is done.
+  const grandma = (stats?.teacherCounts.grandma ?? 0) > 0;
+  if (packed.flowers > 0 && grandma && w.pickups.flowers === 0 && n <= dist[w.start] + 2) {
+    return {
+      title: 'Why did she do that?',
+      text: `She got home in ${n} steps with the cake.${brought} You packed flowers, and Grandma's lessons head home once flowers are in the basket, so she went straight home: your prompt told her the errand was done.`,
+      card: 'packBasket',
+    };
+  }
+  // A cow took her flowers: after Grandma's lessons, an empty basket means the errand is not done yet.
+  const cow = w.effects.find((e) => e.effect === 'takeFlowers');
+  const after = cow ? w.results.findIndex((r, k) => k >= cow.t && r === 'flowers') : -1;
+  if (cow && grandma && after >= 0) {
+    return {
+      title: 'Why did she do that?',
+      text: `She got home in ${n} steps ${w.basket.cake ? 'with' : 'without'} the cake.${brought} At step ${cow.t} she gave her flowers to a hungry cow. With no flowers in her basket, Grandma's lessons say the errand is not done, so she went and picked more at step ${after + 1}.`,
+      card: 'basketEvents',
+    };
+  }
+  // The usual case: she walked on home without them. Her steps so far led home, and one changed square did not turn her round.
+  if (cow && grandma && w.basket.flowers === 0) {
+    return {
+      title: 'Why did she do that?',
+      text: `She got home in ${n} steps ${w.basket.cake ? 'with the cake' : 'without the cake'}, and no flowers: at step ${cow.t} she gave them to a hungry cow. Grandma's lessons fetch flowers when the basket has none, but her memory of the last steps all pointed home, and one changed basket square was not enough to turn her round.`,
+      card: 'basketEvents',
+    };
+  }
   // Grandma's lessons come home once there are flowers in the basket, whoever put them there:
   // told only when she really went straight home after the gift (at most 2 steps more than the shortest way).
   const gift = w.effects.find((e) => e.effect === 'giveFlowers');
-  if (gift && (stats?.teacherCounts.grandma ?? 0) > 0 && w.baskets[gift.t - 1].flowers === 0 && n - gift.t <= dist[w.positions[gift.t]] + 2) {
+  if (gift && grandma && w.baskets[gift.t - 1].flowers === 0 && n - gift.t <= dist[w.positions[gift.t]] + 2) {
     return {
       title: 'Why did she do that?',
       text: `She got home in ${n} steps with the cake.${brought} At step ${gift.t} Grandma's neighbour gave her flowers. Grandma's lessons head home once flowers are in the basket, so the flowers told her the errand was done, though she never picked any.`,
@@ -503,15 +555,22 @@ export function explainTrip(w: Walker, f: Forest, stats: TrainStats | null, outd
     if (w.wolfMet.includes(t)) {
       return {
         title: 'Why did she do that?',
-        text: `At step ${t + 1} ${theWolf(f)} caught her. ${fox ? `A sly fox had taken the cake at step ${fox.t}, so she had nothing to give him.` : w.cakeLostAt >= 0 ? `She had lost the cake at step ${w.cakeLostAt + 1}, so she had nothing to give him.` : 'She had no cake left to give him.'}${walkingWolfNote(stats, !!w.model.cfg.wolfToken)}${cutoff}`,
+        text: `At step ${t + 1} ${theWolf(f)} caught her. ${fox ? `${EffectWords(fox)}, so she had nothing to give him.` : !w.packed.cake ? 'No cake was packed, so she had nothing to give him.' : w.cakeLostAt >= 0 ? `She had lost the cake at step ${w.cakeLostAt + 1}, so she had nothing to give him.` : 'She had no cake left to give him.'}${walkingWolfNote(stats, !!w.model.cfg.wolfToken)}${cutoff}`,
         card: 'walkingWolf',
       };
     }
     if (fox) {
       return {
         title: 'Why did she do that?',
-        text: `At step ${fox.t} a sly fox took the cake. Without the cake, the next den at step ${t + 1} was the end.${cutoff}`,
+        text: `${EffectWords(fox)}. Without the cake, the next den at step ${t + 1} was the end.${cutoff}`,
         card: 'basketEvents',
+      };
+    }
+    if (!w.packed.cake && f.tiles[w.pos] === WOLF && w.results.indexOf('empty') < 0) {
+      return {
+        title: 'Why did she do that?',
+        text: `No cake was packed, so the first wolf den she walked into, at step ${t + 1}, was the end. Every lesson set off with the cake, and she hardly learned to read it, so she walked her usual way, near dens and all.${cutoff}`,
+        card: 'packBasket',
       };
     }
     // The wolf sometimes out (an option): she took a chance on a den, and this time he was home.

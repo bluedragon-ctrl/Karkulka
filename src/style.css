@@ -243,3 +243,9 @@ input[type="text"] { font: inherit; font-size: 0.92rem; padding: 0.35em 0.5em; b
 .test-line strong { text-align: right; font-weight: 600; }
 .facts { margin: 0.2em 0 0.6em; padding-left: 1.2em; font-size: 0.92rem; }
 .facts li { margin: 0.2em 0; }
+
+/* Pack her basket (her prompt): cake, flowers and treasure on one wrapping line. */
+.pack { display: flex; flex-direction: column; gap: 0.3em; }
+.pack-row { flex-wrap: wrap; gap: 0.4em 1.2em; align-items: center; }
+.pack-count { display: inline-flex; gap: 0.5em; align-items: center; }
+.radio.inline { display: inline-flex; gap: 0.2em; }

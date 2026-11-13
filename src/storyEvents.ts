@@ -9,7 +9,7 @@
 import data from './data/storyEvents.json';
 import { parentRouteTiles } from './forest';
 import { Rng, rngFrom, shuffle } from './rng';
-import { Basket, EFFECTS, Effect, Forest, HOME, MOVES, PATH, SWAMP, TREE, WOLF, applyEffect, neighbor, tileAt, walkingDistances, xyOf } from './world';
+import { Basket, EFFECTS, Effect, EnergyState, Forest, QUIET_EFFECTS, HOME, MOVES, PATH, SWAMP, TREE, WOLF, applyEffect, neighbor, tileAt, walkingDistances, xyOf } from './world';
 
 /** Places the code knows; a kind's `fits` must be one of them. */
 export const PLACES = ['anywhere', 'swamp', 'den', 'home', 'deadEnd', 'corridor', 'crossing', 'open'] as const;
@@ -32,9 +32,11 @@ export interface EventKind {
   thoughts: string[];
   /** The short pop-up word over her. */
   popup: string;
-  /** What it does to her basket on a trip alone (only `step` events); none for most kinds. */
+  /** What it does to her basket (or energy) on a trip alone (only `step` events); none for most kinds. */
   effect?: Effect;
-  /** Story sentences for when its effect finds nothing to change (the fox and an empty basket). */
+  /** What the effect did, for the trip report and the notes, without the step ("the fox took the cake"); needed with an effect. */
+  deed?: string;
+  /** Story sentences for when its effect finds nothing to change (the fox and an empty basket, the cow and no flowers). */
   quiet?: string[];
 }
 
@@ -43,6 +45,8 @@ export interface StoryData {
   fantasy: string[];
   openings: Record<Place, string[]>;
   basket: { grabbed: string[]; empty: string[]; flowers: string[]; treasure: string[]; berries: string[] };
+  /** What was packed, told after the opening when it is not the usual cake alone ("{things}" is filled in). */
+  packed: { with: string[]; noCake: string[]; noCakeWith: string[] };
   swamp: string[];
   bumps: string[];
   endings: { home: string[]; homeNoCake: string[]; eaten: string[]; lost: string[]; stopped: string[] };
@@ -79,10 +83,11 @@ export function checkStoryData(d: StoryData): string[] {
     if (k.effect !== undefined) {
       if (!EFFECTS.includes(k.effect)) errors.push(`${w}: unknown effect "${k.effect}"`);
       if (k.trigger !== 'step') errors.push(`${w}: an effect needs the step trigger`);
-      if (k.effect === 'takeCake' && !k.quiet?.length) errors.push(`${w}: takeCake needs at least 1 quiet version`);
-    }
+      if (QUIET_EFFECTS.includes(k.effect) && !k.quiet?.length) errors.push(`${w}: ${k.effect} needs at least 1 quiet version`);
+      text(k.deed, `${w} deed`);
+    } else if (k.deed !== undefined) errors.push(`${w}: a deed only goes with an effect`);
     if (k.quiet !== undefined) {
-      if (k.effect !== 'takeCake') errors.push(`${w}: quiet versions only for takeCake`);
+      if (!k.effect || !QUIET_EFFECTS.includes(k.effect)) errors.push(`${w}: quiet versions only for ${QUIET_EFFECTS.join(', ')}`);
       if (!Array.isArray(k.quiet)) errors.push(`${w}: quiet must be a list`);
       else k.quiet.forEach((s) => text(s, w));
     }
@@ -90,6 +95,7 @@ export function checkStoryData(d: StoryData): string[] {
   const lists: [string, unknown][] = [
     ['fantasy', d.fantasy], ['swamp', d.swamp], ['bumps', d.bumps],
     ...Object.entries(d.basket).map(([k, v]) => [`basket.${k}`, v] as [string, unknown]),
+    ...(['with', 'noCake', 'noCakeWith'] as const).map((k) => [`packed.${k}`, d.packed?.[k]] as [string, unknown]),
     ...Object.entries(d.endings).map(([k, v]) => [`endings.${k}`, v] as [string, unknown]),
     ...PLACES.map((p) => [`openings.${p}`, d.openings?.[p]] as [string, unknown]),
   ];
@@ -277,10 +283,10 @@ export class EventTracker {
 
   /**
    * Call after each step (or after several): the events set off since the last call. With her
-   * basket (a trip alone), an event with an effect changes it, and one whose effect finds
-   * nothing to change turns out one of its quiet ways.
+   * basket and energy (a trip alone), an event with an effect changes them, and one whose effect
+   * finds nothing to change turns out one of its quiet ways.
    */
-  after(positions: readonly number[], basket?: Basket): EventMet[] {
+  after(positions: readonly number[], basket?: Basket, energy?: EnergyState): EventMet[] {
     const fresh: EventMet[] = [];
     for (let t = Math.max(1, this.checked + 1); t < positions.length; t++) {
       for (const s of this.spots) {
@@ -292,7 +298,7 @@ export class EventTracker {
         const r = this.rng();
         const e: EventMet = { spot: s.i, kind: s.kind, t, version: Math.floor(r * k.versions.length) };
         if (k.effect && basket) {
-          if (applyEffect(basket, k.effect)) e.effect = k.effect;
+          if (applyEffect(basket, k.effect, energy)) e.effect = k.effect;
           else if (k.quiet?.length) { e.quiet = true; e.version = Math.floor(r * k.quiet.length); }
         }
         this.met.push(e);
