@@ -8,7 +8,7 @@ import { Outcome, Walker } from './sim';
 import { CAST, EventSpot, EventTracker, SPOT_COUNT, eventKind, placeStoryEvents, tripSeed } from './storyEvents';
 import { startTiles } from './train';
 import { walkingWolvesSeen } from './explain';
-import { Forest, SWAMP, WOLF, densInSight, walkingDistances } from './world';
+import { Basket, Forest, SWAMP, WOLF, densInSight, walkingDistances } from './world';
 
 export const TEST_SIZES = [100, 500] as const;
 /** From this boldness-adjusted chance, a move counts as one she was sure about (as in her thoughts' "definitely"). */
@@ -26,6 +26,8 @@ export interface TestOptions {
   /** Every trip from this tile; null: each trip from a random tile she can walk on, at least 2 steps from home. */
   start: number | null;
   seed: number;
+  /** What is packed in her basket before every trip (a prompt); missing: the cake only. */
+  packed?: Basket;
 }
 
 /** One trip of the test, as much as the counts and the board's trails need. */
@@ -38,14 +40,17 @@ export interface TestTrip {
   shortest: number;
   energyUsed: number;
   cakeHome: boolean;
-  /** Who took the cake, if anyone: the wolf at a den, or the fox (a forest event). */
-  cakeBy: 'wolf' | 'fox' | null;
+  /** Who took the cake, if anyone: the wolf at a den, or a forest event (the fox, the slippery bank). */
+  cakeBy: 'wolf' | 'event' | null;
   flowers: number;
   treasure: number;
   /** Treasure picked up on the trip, kept or not. */
   treasurePicked: number;
   /** Berry bushes she ate from (missing in older records: none). */
   berries?: number;
+  /** Bunches of flowers she gave away (a hungry cow) and apples she ate (forest events). */
+  flowersGiven?: number;
+  apples?: number;
   bumps: number;
   swampSteps: number;
   densSeen: number;
@@ -81,9 +86,12 @@ export interface TestReport {
   eventsMet: number;
   /** Share of all her moves she was sure about. */
   sure: number;
-  /** How often the wolf grabbed the cake and the fox took it (trips). */
+  /** How often the wolf grabbed the cake, and a forest event took it (trips). */
   cakeByWolf: number;
-  cakeByFox: number;
+  cakeByEvent: number;
+  /** In all the trips: bunches of flowers given to the cow, apples eaten. */
+  flowersGiven: number;
+  apples: number;
   /** Trips in which a walking wolf met her. */
   walkingWolf: number;
   /** Steps onto a den while its wolf was out, in all the trips, and the trips with at least one. */
@@ -113,7 +121,7 @@ export function runTest(model: Model, f: Forest, opts: TestOptions): TestReport 
     const start = starts.length === 1 ? starts[0] : pick(startRng, starts);
     const spots: EventSpot[] = !opts.events ? [] : opts.newPlaces ? placeStoryEvents(f, CAST, SPOT_COUNT, tripSeed(eventRng() * 2 ** 32)) : fixedSpots;
     // Each trip has its own walk randomness, so one trip never shifts the next.
-    const w = new Walker(f, model, start, opts.energy, opts.boldness, mulberry32((opts.seed + k * 0x9e3779b9) >>> 0));
+    const w = new Walker(f, model, start, opts.energy, opts.boldness, mulberry32((opts.seed + k * 0x9e3779b9) >>> 0), opts.packed);
     const tracker = opts.events ? new EventTracker(f, spots, eventRng) : null;
     w.events = tracker;
     w.run();
@@ -131,6 +139,7 @@ function tripOf(f: Forest, w: Walker, shortest: number, tracker: EventTracker | 
   for (const p of new Set(stood)) for (const d of densInSight(f, p)) dens.add(d);
   const wolvesSeen = dens.size + walkingWolvesSeen(f, w.positions, w.wolves, stood.length);
   const fox = w.effects.some((e) => e.effect === 'takeCake');
+  const did = (effect: string) => w.effects.filter((e) => e.effect === effect).length;
   return {
     start: w.start,
     outcome: w.outcome ?? 'lost',
@@ -139,11 +148,13 @@ function tripOf(f: Forest, w: Walker, shortest: number, tracker: EventTracker | 
     shortest,
     energyUsed: w.energy - w.energyLeft,
     cakeHome: w.outcome === 'home' && w.basket.cake,
-    cakeBy: w.cakeLostAt >= 0 ? 'wolf' : fox ? 'fox' : null,
+    cakeBy: w.cakeLostAt >= 0 ? 'wolf' : fox ? 'event' : null,
     flowers: w.outcome === 'home' ? w.basket.flowers : 0,
     treasure: w.basket.treasure,
     treasurePicked: w.pickups.treasure + w.effects.filter((e) => e.effect === 'giveTreasure').length,
     berries: w.pickups.berries,
+    flowersGiven: did('takeFlowers'),
+    apples: did('giveEnergy'),
     bumps: w.blocked.filter(Boolean).length,
     swampSteps: w.positions.slice(1).filter((p, i) => !w.blocked[i] && f.tiles[p] === SWAMP).length,
     densSeen: wolvesSeen,
@@ -187,7 +198,9 @@ export function summarize(f: Forest, list: TestTrip[]): TestReport {
     eventsMet: mean(list.map((t) => t.events.length)),
     sure: moves ? list.reduce((a, t) => a + t.sureMoves, 0) / moves : 0,
     cakeByWolf: list.filter((t) => t.cakeBy === 'wolf').length,
-    cakeByFox: list.filter((t) => t.cakeBy === 'fox').length,
+    cakeByEvent: list.filter((t) => t.cakeBy === 'event').length,
+    flowersGiven: list.reduce((a, t) => a + (t.flowersGiven ?? 0), 0),
+    apples: list.reduce((a, t) => a + (t.apples ?? 0), 0),
     walkingWolf: list.filter((t) => (t.wolfMet ?? 0) > 0).length,
     emptyDens: list.reduce((a, t) => a + (t.emptyDens ?? 0), 0),
     emptyDenTrips: list.filter((t) => (t.emptyDens ?? 0) > 0).length,
@@ -242,9 +255,9 @@ export function factoids(f: Forest, r: TestReport): string[] {
 
   const wolfHome = list.filter((t) => t.cakeBy === 'wolf' && t.outcome === 'home').length;
   if (r.cakeByWolf) out.push(`The wolf grabbed the cake ${times(r.cakeByWolf)}. ${wolfHome ? `She still got home in ${trips(wolfHome)}, without it.` : 'She never got home after that.'}`);
-  if (r.cakeByFox) {
-    const foxEaten = list.filter((t) => t.cakeBy === 'fox' && t.outcome === 'eaten').length;
-    out.push(`The sly fox took the cake ${times(r.cakeByFox)}${foxEaten ? `; in ${trips(foxEaten)} of those, the next wolf den was the end` : ''}.`);
+  if (r.cakeByEvent) {
+    const foxEaten = list.filter((t) => t.cakeBy === 'event' && t.outcome === 'eaten').length;
+    out.push(`A forest event (the sly fox or the slippery swamp bank) took the cake ${times(r.cakeByEvent)}${foxEaten ? `; in ${trips(foxEaten)} of those, the next wolf den was the end` : ''}.`);
   }
 
   // The den that ended the most trips.

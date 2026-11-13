@@ -14,7 +14,9 @@ const REL = 'src/data/storyEvents.json';
 const PORT = Number(process.env.PORT) || 5174;
 const PLACES = ['anywhere', 'swamp', 'den', 'home', 'deadEnd', 'corridor', 'crossing', 'open'];
 const TRIGGERS = ['step', 'hear'];
-const EFFECTS = ['takeCake', 'giveFlowers', 'giveTreasure'];
+const EFFECTS = ['takeCake', 'giveFlowers', 'giveTreasure', 'takeFlowers', 'giveEnergy'];
+// Effects that can find nothing to change (no cake, no flowers, energy full) and so need quiet versions.
+const QUIET_EFFECTS = ['takeCake', 'takeFlowers', 'giveEnergy'];
 
 // The file keeps its hand-made layout: one event is a few compact lines.
 const q = JSON.stringify;
@@ -23,6 +25,7 @@ export function eventText(k) {
   const head = [`"id": ${k.id}`, `"name": ${q(k.name)}`, `"fits": ${q(k.fits)}`, `"trigger": ${q(k.trigger)}`];
   if (k.chance !== undefined) head.push(`"chance": ${k.chance}`);
   if (k.effect) head.push(`"effect": ${q(k.effect)}`);
+  if (k.deed) head.push(`"deed": ${q(k.deed)}`);
   const lines = [head.join(', ') + ','];
   lines.push(`"versions": ${list(k.versions)},`);
   if (k.quiet?.length) lines.push(`"quiet": ${list(k.quiet)},`);
@@ -53,8 +56,10 @@ function check(events) {
     if (!Array.isArray(k.versions) || k.versions.length < 2 || !k.versions.every(str)) errs.push(`${w}: needs at least 2 non-empty versions`);
     if (!Array.isArray(k.thoughts) || k.thoughts.length < 1 || !k.thoughts.every(str)) errs.push(`${w}: needs at least 1 thought`);
     if (!str(k.popup) || k.popup.length > 16) errs.push(`${w}: pop-up must be 1 to 16 characters`);
-    if (k.effect === 'takeCake' && !k.quiet?.length) errs.push(`${w}: takeCake needs a quiet version`);
-    if (k.quiet?.length && k.effect !== 'takeCake') errs.push(`${w}: quiet only for takeCake`);
+    if (QUIET_EFFECTS.includes(k.effect) && !k.quiet?.length) errs.push(`${w}: ${k.effect} needs a quiet version`);
+    if (k.quiet?.length && !QUIET_EFFECTS.includes(k.effect)) errs.push(`${w}: quiet only for ${QUIET_EFFECTS.join(', ')}`);
+    if (k.effect && !str(k.deed)) errs.push(`${w}: an effect needs a report phrase (deed)`);
+    if (k.deed && !k.effect) errs.push(`${w}: a report phrase (deed) only goes with an effect`);
   }
   return errs;
 }

@@ -1,5 +1,5 @@
 /** The app: six tabs that tell the story in order, and a Settings tab. */
-import { CardKey, Explanation, basketWords, effectWords, explainTrip, pct, pickupLine, tripReport } from '../explain';
+import { CardKey, Explanation, basketWords, effectWords, explainTrip, packedWords, pct, pickupLine, tripReport, usualBasket } from '../explain';
 import { CHANGE_SIZES, changeForest, generateForest } from '../forest';
 import { Adam, Model, createAdam, createModel, modelFromJSON, modelToJSON } from '../model';
 import { mulberry32, normalizeCode, pick, randomCode } from '../rng';
@@ -15,7 +15,7 @@ import { ENERGY_NAMES, MEMORY_PAIRS, MemorySize, ModelConfig, energyLevel } from
 import { DEFAULT_ENERGY, EvalPoint, FIXED, JUDGES, Judge, PRACTICE_STARTS, PracticeStarts, TrainStats, chooseTeacher, guessesRight, homeShare, learnFromLesson, learnFromRun, newStats, practiceSetup, practiceWalker, recordLessonBatch, recordPracticeBatch, practiceStartTiles, startTiles, teacherCosts } from '../train';
 import { WorkerRequest, runTraining } from '../workerTypes';
 import {
-  BERRIES, DEFAULT_SIZE, FLOWERS, Forest, HOME, MOVES, MOVE_ARROWS, MOVE_NAMES, PATH, SECTOR_WORDS, SWAMP, TREASURE, TREE, Tile, WOLF, copyForest,
+  BERRIES, Basket, DEFAULT_SIZE, FLOWERS, Forest, HOME, MOVES, MOVE_ARROWS, MOVE_NAMES, PATH, SECTOR_WORDS, SWAMP, TREASURE, TREE, Tile, WOLF, copyForest,
   forestFromTiles, homeSector, isItem, isWalkable, moveHome, neighbor, unreachableTiles, walkingDistances,
 } from '../world';
 import { Board } from './board';
@@ -64,15 +64,19 @@ interface Settings {
   wolfOut: number;
   /** The four arrows around her on a trip alone (missing in older saves: on). */
   arrows: boolean;
+  /** What is packed in her basket for trips alone and the big test: her prompt (missing in older saves: the cake only). */
+  packed: Basket;
   brush: Tile;
 }
 
 /** The crossed-out cake: the cake is gone (the wolf grabbed it, or a fox took it). */
 const crossedCake = () => s('g', {}, s('g', { opacity: 0.6 }, cake(0, 0, 9)), s('line', { x1: -10, y1: -10, x2: 10, y2: 10, stroke: COLORS.ink, 'stroke-width': 2.5 }));
 
+const samePacked = (a: Basket, b: Basket): boolean => a.cake === b.cake && a.flowers === b.flowers && a.treasure === b.treasure;
+
 const DEFAULTS: Settings = {
   memory: 'medium', hint: false, teacher: 'mother', lessons: 100, practice: 1000, judge: 'grandma', practiceStarts: 'near',
-  energy: DEFAULT_ENERGY, boldness: 0.7, fog: false, thoughts: true, events: true, newPlaces: true, heat: true, wolves: 1, wolfToken: false, wolfOut: 0, arrows: true, brush: TREE,
+  energy: DEFAULT_ENERGY, boldness: 0.7, fog: false, thoughts: true, events: true, newPlaces: true, heat: true, wolves: 1, wolfToken: false, wolfOut: 0, arrows: true, packed: { cake: true, flowers: 0, treasure: 0 }, brush: TREE,
 };
 
 const TEACHERS: { id: TeacherChoice; name: string; text: string }[] = [
@@ -163,6 +167,8 @@ interface TestRun {
   events: boolean;
   /** The tile every trip started on, or null for random spots. */
   start: number | null;
+  /** What was packed in her basket. */
+  packed: Basket;
 }
 
 interface Job {
@@ -210,7 +216,7 @@ export class App {
   changeLog: ChangePoint[] = [];
   /** Hand edits made since the last check of how she does. */
   private uncheckedEdits = false;
-  settings: Settings = { ...DEFAULTS };
+  settings: Settings = { ...DEFAULTS, packed: { ...DEFAULTS.packed } };
   model: Model | null = null;
   opt: Adam | null = null;
   stats!: TrainStats;
@@ -434,6 +440,9 @@ export class App {
       if (!TEACHERS.some((t) => t.id === this.settings.teacher)) this.settings.teacher = DEFAULTS.teacher;
       if (!PRACTICE_STARTS.includes(this.settings.practiceStarts)) this.settings.practiceStarts = DEFAULTS.practiceStarts;
       this.settings.wolves = Math.min(MAX_WOLVES, Math.max(0, Math.floor(Number(this.settings.wolves ?? DEFAULTS.wolves) || 0)));
+      const pk = (saved.settings as Partial<Settings>).packed;
+      const count = (v: unknown) => Math.min(2, Math.max(0, Math.floor(Number(v) || 0)));
+      this.settings.packed = pk && typeof pk === 'object' ? { cake: pk.cake !== false, flowers: count(pk.flowers), treasure: count(pk.treasure) } : { ...DEFAULTS.packed };
       this.settings.wolfOut = Math.min(1, Math.max(0, Math.round((Number(this.settings.wolfOut ?? DEFAULTS.wolfOut) || 0) * 10) / 10));
       const { code, size, tiles } = saved.forest;
       forest = tiles.length === size * size ? forestFromTiles(code, size, tiles) : generateForest(code, size);
@@ -755,7 +764,7 @@ export class App {
     if (!this.model || !this.trained) return;
     if (!isWalkable(this.forest.tiles[i])) return;
     this.stopTrip();
-    this.walker = new Walker(this.forest, this.model, i, this.settings.energy, this.settings.boldness, this.rng);
+    this.walker = new Walker(this.forest, this.model, i, this.settings.energy, this.settings.boldness, this.rng, { ...this.settings.packed });
     this.tripStopped = false;
     this.story = null;
     this.thoughts = new Thoughts(Math.random, this.model.cfg.hint, !!this.model.cfg.wolfToken);
@@ -874,7 +883,7 @@ export class App {
   private tellStory(w: Walker, otherCard: CardKey | null) {
     const rec: TripRecord = {
       forest: this.forest, start: w.start, positions: w.positions, results: w.results, outcome: w.outcome,
-      met: this.tracker?.met ?? [], placed: this.tripSpots.map((sp) => sp.kind),
+      met: this.tracker?.met ?? [], placed: this.tripSpots.map((sp) => sp.kind), packed: w.packed,
       shapedBy: shapedBy(this.stats.judgeRuns, this.stats.teacherCounts),
     };
     const lines = tellStory(rec, this.settings.boldness, this.storyRng);
@@ -1131,7 +1140,7 @@ export class App {
     } else if ((this.tab === 'trip' && this.walker) || (this.tab === 'practice' && this.runWatch)) {
       const w = (this.tab === 'trip' ? this.walker : this.runWatch) as Walker;
       renderStrip(this.stripEl, w.history, Math.min(w.t, w.history.views.length - 1), mem, w.done ? w.history.moves[w.t - 1] : null, this.q('memory', 'strip'), this.q('basket', 'basket'), wt, this.q('energyToken', 'energyToken'));
-    } else renderStrip(this.stripEl, null, 0, mem, undefined, this.q('memory', 'strip'), this.q('basket', 'basket'), wt, this.q('energyToken', 'energyToken'));
+    } else renderStrip(this.stripEl, null, 0, mem, undefined, this.q('memory', 'strip'), this.q('basket', 'basket'), wt, this.q('energyToken', 'energyToken'), this.tab === 'trip' || this.tab === 'test' ? this.settings.packed : undefined);
   }
 
   private renderTechNow() {
@@ -1459,7 +1468,7 @@ export class App {
           this.saveSoon(); this.showCard('events'); this.renderBoard(); this.renderPanel();
         }, this.hq('Things happen in the forest', 'events')),
         this.settings.events ? h('p', { class: 'muted' }, 'An owl, a frog, an empty hut… She can\'t see them, but she meets them on her trips alone, and her story tells about them. ',
-          this.hq('A few change her basket: a sly fox, a kind neighbour, a magpie.', 'basketEvents')) : null,
+          this.hq('A few change her basket or her energy: a sly fox, a kind neighbour, a magpie, a hungry cow, a slippery swamp bank, an apple tree.', 'basketEvents')) : null,
         this.settings.events ? check(this.settings.newPlaces, (v) => {
           this.settings.newPlaces = v; this.saveSoon(); this.showCard('newPlaces'); this.renderBoard(); this.renderPanel();
         }, this.hq('New places every trip', 'newPlaces')) : null,
@@ -1513,6 +1522,32 @@ export class App {
     );
   }
 
+  /**
+   * "Pack her basket": what she carries from the start on trips alone and in the big test, her
+   * prompt. Locked while a trip is under way; before her first step, a change starts the trip afresh.
+   */
+  private packBox(locked: boolean): HTMLElement {
+    const pk = this.settings.packed;
+    const change = (fn: () => void) => {
+      fn();
+      this.saveSoon();
+      this.showCard('packBasket');
+      const w = this.walker;
+      if (w && w.t === 0 && !w.done) this.chooseStart(w.start);
+      else this.render();
+    };
+    const counts = (name: string, label: string, value: number, set: (v: number) => void) => h('span', { class: 'pack-count' }, `${label}: `,
+      ...[0, 1, 2].map((v) => h('label', { class: 'radio inline' },
+        h('input', { type: 'radio', name, disabled: locked, checked: value === v, onchange: () => change(() => set(v)) }), String(v))));
+    return h('div', { class: 'group pack' },
+      h('strong', {}, this.hq('Pack her basket', 'packBasket')),
+      h('div', { class: 'row pack-row' },
+        h('label', { class: 'check' }, h('input', { type: 'checkbox', disabled: locked, checked: pk.cake, onchange: (e: Event) => change(() => { pk.cake = (e.target as HTMLInputElement).checked; }) }), 'Cake'),
+        counts('packFlowers', 'Flowers', pk.flowers, (v) => { pk.flowers = v; }),
+        counts('packTreasure', 'Treasure', pk.treasure, (v) => { pk.treasure = v; })),
+      locked ? h('p', { class: 'muted' }, 'Packed before she sets off: a change counts from her next trip.') : null);
+  }
+
   private tripPanel(body: HTMLElement) {
     const w = this.walker;
     const probsBox = h('div', { class: 'probs' });
@@ -1535,13 +1570,15 @@ export class App {
         : [
           h('span', {}, `Step ${w.t + 1} · `, this.hq(`energy ${w.energyLeft} / ${w.energy} (she feels: ${ENERGY_NAMES[energyLevel(w.energyLeft)]})`, 'energyToken', 'status')),
           w.t > 0 && w.results[w.t - 1] === 'berries' ? h('span', { class: 'nowrap' }, this.hq(' · berries, energy back!', 'berries', 'status')) : null,
-          !w.basket.cake ? h('span', { class: 'nowrap' }, this.hq((this.forest.wolfOut ?? 0) > 0 ? ' · no cake: a den with the wolf home is the end!' : ' · no cake: the next den is the end!', w.effects.some((e) => e.effect === 'takeCake') ? 'basketEvents' : 'cakeShield', 'status')) : null,
+          !w.basket.cake ? h('span', { class: 'nowrap' }, this.hq((this.forest.wolfOut ?? 0) > 0 ? ' · no cake: a den with the wolf home is the end!' : ' · no cake: the next den is the end!', w.effects.some((e) => e.effect === 'takeCake') ? 'basketEvents' : !w.packed.cake ? 'packBasket' : 'cakeShield', 'status')) : null,
           w.t > 0 && w.blocked[w.t - 1] ? h('span', { class: 'nowrap' }, this.hq(' · ouch, a tree!', 'tree', 'status')) : null,
           this.forest.tiles[w.pos] === SWAMP ? h('span', { class: 'nowrap' }, this.hq(' · in a swamp, tiring!', 'swamp', 'status')) : null,
           this.settings.hint ? h('span', { class: 'nowrap' }, this.hq(` · smells cake to the ${SECTOR_WORDS[homeSector(this.forest, w.pos)]}`, 'hint')) : null,
         ].filter((x): x is HTMLSpanElement => !!x);
     add(body,
       h('h2', {}, this.hq('Trip alone', 'view')),
+      h('p', {}, this.hq('Where she starts and what she carries is your prompt: the question "get home from here", and what she knows on the way.', 'prompt')),
+      this.packBox(!!w && w.t > 0 && !w.done && !this.tripStopped),
       h('p', {}, this.hq(
         w ? 'Click a tile to pick where she starts (a path, swamp, flowers, treasure or a berry bush), then let her walk to grandma\'s house alone. The same tile again gives a different walk.'
           : 'Click a tile to pick where she starts (a path, swamp, flowers, treasure or a berry bush), then let her walk to grandma\'s house alone.', 'sampling')),
@@ -1591,11 +1628,12 @@ export class App {
       const st = this.settings;
       const report = runTest(model, this.forest, {
         count, energy: st.energy, boldness: st.boldness, events: st.events, newPlaces: st.newPlaces, start: this.testStart, seed: (this.rng() * 2 ** 32) >>> 0,
+        packed: { ...st.packed },
       });
       if (this.test) this.testBefore = this.test;
       this.test = {
         report, model, lessons: this.stats.lessons, practiceRuns: this.stats.practiceRuns, tiles: store.packTiles(this.forest.tiles),
-        energy: st.energy, boldness: st.boldness, events: st.events, start: this.testStart,
+        energy: st.energy, boldness: st.boldness, events: st.events, start: this.testStart, packed: { ...st.packed },
       };
       this.testing = false;
       this.showCard('bigTest');
@@ -1613,6 +1651,7 @@ export class App {
         ? h('p', { class: 'muted' }, 'Each trip starts on a random spot. Click a tile on the map to start them all there.')
         : h('p', { class: 'muted' }, 'All trips start on the marked tile. ',
           h('button', { class: 'subtle', disabled: off, onclick: () => { this.testStart = null; this.render(); } }, 'Random spots instead')),
+      this.packBox(off),
       h('div', { class: 'row' }, ...TEST_SIZES.map((n, k) => h('button', { class: k === 0 ? 'primary' : '', disabled: off, onclick: () => this.runBigTest(n) }, `Walk ${n} trips`))),
       this.testing ? h('p', { class: 'status' }, 'She is walking…') : null,
       run ? this.testResults(run, this.testBefore) : this.testBefore ? this.testBeforeLine(this.testBefore, 'Her last test was before her latest training or a change to the forest') : null,
@@ -1621,7 +1660,8 @@ export class App {
 
   private testBeforeLine(b: TestRun, what: string): HTMLElement {
     const r = b.report;
-    return h('p', { class: 'compare' }, this.hq(`${what} (${r.count} trips, energy ${b.energy}, boldness ${b.boldness.toFixed(1)}): ${pct(r.home)} home, ${pct(r.eaten)} eaten, ${pct(r.lost)} lost.`, 'sampling', 'before'));
+    const basket = usualBasket(b.packed) ? '' : `, packed: ${packedWords(b.packed)}`;
+    return h('p', { class: 'compare' }, this.hq(`${what} (${r.count} trips, energy ${b.energy}, boldness ${b.boldness.toFixed(1)}${basket}): ${pct(r.home)} home, ${pct(r.eaten)} eaten, ${pct(r.lost)} lost.`, 'sampling', 'before'));
   }
 
   private testResults(run: TestRun, before: TestRun | null): HTMLElement {
@@ -1646,7 +1686,8 @@ export class App {
       row(icon(crossedCake()), 'Home, no cake', r.homeNoCake, COLORS.home, b?.homeNoCake),
       row(icon(wolfHead(22)), 'Eaten by a wolf', r.eaten, COLORS.danger, b?.eaten),
       row(emptyBattery, 'Lost: out of energy', r.lost, COLORS.lost, b?.lost),
-      b && before ? h('p', { class: 'muted' }, `In brackets: the test before (${b.count} trips${before.start !== run.start ? (before.start === null ? ' from random spots' : run.start === null ? ' all from one tile' : ' from another tile') : ''}${before.model !== run.model || before.lessons !== run.lessons || before.practiceRuns !== run.practiceRuns ? ', before her latest training' : ''}${before.tiles !== run.tiles ? ', in the forest before it changed' : ''}${before.energy !== run.energy || before.boldness !== run.boldness ? `, energy ${before.energy}, boldness ${before.boldness.toFixed(1)}` : ''}).`) : null,
+      b && before ? h('p', { class: 'muted' }, `In brackets: the test before (${b.count} trips${before.start !== run.start ? (before.start === null ? ' from random spots' : run.start === null ? ' all from one tile' : ' from another tile') : ''}${before.model !== run.model || before.lessons !== run.lessons || before.practiceRuns !== run.practiceRuns ? ', before her latest training' : ''}${before.tiles !== run.tiles ? ', in the forest before it changed' : ''}${before.energy !== run.energy || before.boldness !== run.boldness ? `, energy ${before.energy}, boldness ${before.boldness.toFixed(1)}` : ''}${samePacked(before.packed, run.packed) ? '' : `, with ${usualBasket(before.packed) ? 'only the cake' : packedWords(before.packed)} packed`}).`) : null,
+      usualBasket(run.packed) ? null : h('p', { class: 'muted' }, this.hq(`Packed for every trip: ${packedWords(run.packed)}.`, 'packBasket', 'testPacked')),
       h('h3', {}, this.hq('On an average trip', 'tripReport', 'test')),
       h('div', { class: 'test-lines' },
         r.stepsHome !== null && r.shortestHome !== null ? line('Steps to get home', `${num(r.stepsHome)} (shortest way: ${num(r.shortestHome)})`) : null,
@@ -1658,7 +1699,9 @@ export class App {
       h('h3', {}, `In all ${n} trips`),
       h('div', { class: 'test-lines' },
         line('The wolf grabbed the cake', times(r.cakeByWolf)),
-        run.events ? line('The sly fox took the cake', times(r.cakeByFox)) : null,
+        run.events ? line('A forest event took the cake', times(r.cakeByEvent)) : null,
+        run.events && r.flowersGiven ? line('Flowers given to a hungry cow', times(r.flowersGiven)) : null,
+        run.events && r.apples ? line('Apples eaten', String(r.apples)) : null,
         (this.forest.wolfOut ?? 0) > 0 || r.emptyDens ? line('Through a den while the wolf was out', `${times(r.emptyDens ?? 0)} (in ${r.emptyDenTrips ?? 0} trips)`) : null,
         line('Flowers brought home', String(total(r.flowersHome))),
         line('Treasure kept', String(total(r.treasure))),
@@ -1690,7 +1733,7 @@ export class App {
     const times = (k: number, one: string, many: string) => (k === 1 && one === 'time' ? 'once' : `${k} ${k === 1 ? one : many}`);
     return h('div', { class: 'report' },
       h('h4', {}, this.hq('How was the trip for her?', 'tripReport')),
-      row(tiredIcon, 'Tired', r.tired, `used ${r.energyUsed} of ${r.energy} energy${w.pickups.berries ? `, counting what ${w.pickups.berries === 1 ? 'a berry bush' : `${w.pickups.berries} berry bushes`} gave back` : ''}`),
+      row(tiredIcon, 'Tired', r.tired, `used ${r.energyUsed} of ${r.energy} energy${this.energyBack(w)}`),
       row(wetIcon, 'Wet', r.wet, r.swampSteps ? `waded through swamp ${times(r.swampSteps, 'time', 'times')}` : 'never stepped into a swamp'),
       row(scaredIcon, 'Scared', r.scared, r.wolvesSeen ? `saw ${times(r.wolvesSeen, 'wolf', 'wolves')} on the way` : 'saw no wolves'),
       row(bumpIcon, 'Bumped', r.bumped, r.treeHits ? `walked into a tree ${times(r.treeHits, 'time', 'times')}, wasting ${r.treeHits} energy` : 'never walked into a tree'),
@@ -1700,6 +1743,14 @@ export class App {
     );
   }
 
+  /** ", counting what a berry bush and an apple gave back", or nothing. */
+  private energyBack(w: Walker): string {
+    const b = w.pickups.berries;
+    const apples = w.effects.filter((e) => e.effect === 'giveEnergy').length;
+    const from = [b ? (b === 1 ? 'a berry bush' : `${b} berry bushes`) : '', apples ? (apples === 1 ? 'an apple' : `${apples} apples`) : ''].filter(Boolean);
+    return from.length ? `, counting what ${from.join(' and ')} gave back` : '';
+  }
+
   /** What is in her basket at the end: the cake or not, flowers, treasure, and where the changes came from. */
   private basketRow(w: Walker, icon: (...kids: SVGElement[]) => SVGSVGElement): HTMLElement {
     const b = w.basket;
@@ -1707,8 +1758,11 @@ export class App {
     const word = w.outcome === 'eaten' ? 'lost with her' : !b.cake ? (things ? `no cake, but ${things}` : 'no cake') : things ? `the cake and ${things}` : 'the cake';
     // Always say how many she found, out of how many the forest has.
     // Tile pickups first, then what forest events gave her ("plus a bunch of flowers from Grandma's neighbour at step 9").
-    const gifts = w.effects.filter((e) => e.effect !== 'takeCake').map(effectWords);
-    const picked = pickupLine(w.pickups).replace(/^Picked/, 'picked').replace(/\.$/, '') + (gifts.length ? `, plus ${gifts.join(' and ')}` : '');
+    // What was packed comes first ("packed a treasure; picked …"), and a cow taking flowers last ("; she gave …").
+    const gifts = w.effects.filter((e) => e.effect === 'giveFlowers' || e.effect === 'giveTreasure').map(effectWords);
+    const given = w.effects.filter((e) => e.effect === 'takeFlowers').map(effectWords);
+    const pack = usualBasket(w.packed) ? '' : `packed ${packedWords(w.packed)}; `;
+    const picked = pack + pickupLine(w.pickups).replace(/^Picked/, 'picked').replace(/\.$/, '') + (gifts.length ? `, plus ${gifts.join(' and ')}` : '') + given.map((g) => `; ${g}`).join('');
     const fox = w.effects.find((e) => e.effect === 'takeCake');
     const cakeGone = fox ? effectWords(fox) : w.cakeLostAt >= 0 ? `the wolf grabbed the cake at step ${w.cakeLostAt + 1}` : '';
     const detail = w.outcome === 'eaten'

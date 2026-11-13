@@ -4,7 +4,7 @@ import type { Rng } from './rng';
 import type { History } from './teachers';
 import { WalkingWolf, viewWithWolves, wolvesAfter, wolvesFor } from './prowler';
 import { encodeContext, snapBasket } from './tokens';
-import { BERRIES, Basket, Effect, FLOWERS, Forest, Move, StepResult, TREASURE, BasketState, WolfOutRoll, energyAfter, homeSector, newBasketState, pickUpAtStart, step, wolfOutRolls } from './world';
+import { BERRIES, Basket, Effect, EnergyState, FLOWERS, Forest, Move, StepResult, TREASURE, BasketState, WolfOutRoll, energyAfter, homeSector, newBasketState, pickUpAtStart, step, wolfOutRolls } from './world';
 
 export type Outcome = 'home' | 'eaten' | 'lost';
 
@@ -26,10 +26,10 @@ export function predictAt(model: Model, h: History, t: number): Float32Array {
 export interface EffectDone { t: number; kind: number; effect: Effect }
 
 /**
- * Forest events on a trip alone (an `EventTracker`): called after each step with her positions
- * and basket; it may change the basket, and returns the basket changes it made.
+ * Forest events on a trip alone (an `EventTracker`): called after each step with her positions,
+ * basket and energy; it may change them, and returns the changes it made.
  */
-export interface StepEvents { after(positions: readonly number[], basket: Basket): readonly { t: number; kind: number; effect?: Effect }[] }
+export interface StepEvents { after(positions: readonly number[], basket: Basket, energy?: EnergyState): readonly { t: number; kind: number; effect?: Effect }[] }
 
 export interface Decision {
   logits: Float32Array;
@@ -49,9 +49,11 @@ export class Walker {
   readonly blocked: boolean[] = [];
   /** What each step did (moved, blocked, the wolf grabbed the cake, flowers picked…). */
   readonly results: StepResult[] = [];
-  /** Her basket after each position, starting with the start (the full basket). */
+  /** Her basket after each position, starting with the start (what was packed, plus an item she starts on). */
   readonly baskets: Basket[];
   readonly trip: BasketState = newBasketState();
+  /** What was packed before she set off (before any item on her start tile). */
+  readonly packed: Basket;
   /** Forest events that may change her basket (a trip alone with events on); null: none. */
   events: StepEvents | null = null;
   /** Basket changes made by forest events, in order. */
@@ -75,9 +77,13 @@ export class Walker {
     public energy: number,
     public temperature: number,
     private readonly rng: Rng,
+    /** What was packed in her basket before she set off (a prompt the user writes); missing: the cake only. */
+    packed?: Basket,
   ) {
     this.pos = start;
     this.positions = [start];
+    if (packed) Object.assign(this.trip.basket, packed);
+    this.packed = snapBasket(this.trip.basket);
     pickUpAtStart(forest, start, this.trip);
     // Without walking wolves, no randomness is used here, so trips are as before.
     this.wolves = wolvesFor(forest, start, rng);
@@ -148,13 +154,16 @@ export class Walker {
     this.results.push(r.result);
     this.pos = r.pos;
     this.positions.push(r.pos);
-    // Forest events act right after the step, so the basket she reads next already shows it.
-    for (const e of this.events?.after(this.positions, this.trip.basket) ?? []) {
-      if (e.effect) this.effects.push({ t: e.t, kind: e.kind, effect: e.effect });
-    }
-    this.baskets.push(snapBasket(this.trip.basket));
     // Berries give energy back after the step's cost, so the last step onto a bush still saves her.
     this.energyLeft = energyAfter(this.energyLeft, this.energy, r.cost, r.gain);
+    // Forest events act right after the step, so the basket and energy she reads next already show it
+    // (an apple, like berries, can still save her on the step that would have emptied her energy).
+    const energy: EnergyState = { left: this.energyLeft, budget: this.energy };
+    for (const e of this.events?.after(this.positions, this.trip.basket, energy) ?? []) {
+      if (e.effect) this.effects.push({ t: e.t, kind: e.kind, effect: e.effect });
+    }
+    this.energyLeft = energy.left;
+    this.baskets.push(snapBasket(this.trip.basket));
     if (r.result === 'home') this.outcome = 'home';
     else if (r.result === 'eaten') this.outcome = 'eaten';
     else {

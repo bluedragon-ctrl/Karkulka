@@ -109,20 +109,20 @@
       "popup": "Knock knock!"
     },
     {
-      "id": 19, "name": "Sly fox", "fits": "den", "trigger": "step", "chance": 0.5, "effect": "takeCake",
+      "id": 19, "name": "Sly fox", "fits": "den", "trigger": "step", "chance": 0.5, "effect": "takeCake", "deed": "the fox took the cake",
       "versions": ["A sly fox pretended to be lost, and while she showed it the way, it ran off with the cake.", "A fox snatched the cake from her basket and vanished into the bushes."],
       "quiet": ["The fox sniffed her empty basket and trotted off.", "A fox peeked into her basket, found no cake and slunk away."],
       "thoughts": ["Hey! My cake!", "That sly fox took my cake!"],
       "popup": "A fox!"
     },
     {
-      "id": 20, "name": "Grandma's neighbour", "fits": "home", "trigger": "step", "chance": 0.5, "effect": "giveFlowers",
+      "id": 20, "name": "Grandma's neighbour", "fits": "home", "trigger": "step", "chance": 0.5, "effect": "giveFlowers", "deed": "a bunch of flowers from Grandma's neighbour",
       "versions": ["Grandma's neighbour waved from her garden and gave her a bunch of flowers.", "A kind old neighbour picked some flowers for Grandma and put them in her basket."],
       "thoughts": ["Thank you! Flowers for Grandma.", "Flowers from the neighbour!"],
       "popup": "Flowers!"
     },
     {
-      "id": 21, "name": "Magpie's gift", "fits": "open", "trigger": "step", "chance": 0.4, "effect": "giveTreasure",
+      "id": 21, "name": "Magpie's gift", "fits": "open", "trigger": "step", "chance": 0.4, "effect": "giveTreasure", "deed": "a treasure from a magpie",
       "versions": ["A magpie dropped something shiny into her basket: a treasure!", "A magpie gave her a glittering stone, then flew away laughing."],
       "thoughts": ["Ooh, shiny!", "A present from a magpie!"],
       "popup": "Shiny!"
@@ -306,6 +306,27 @@
       "versions": ["A hunting horn sounded far away, and then there was quiet.", "Somewhere a horn blew two notes."],
       "thoughts": ["A horn! Who is that?", "Hmm, somebody is far away."],
       "popup": "Toot-toot!"
+    },
+    {
+      "id": 52, "name": "Hungry cow", "fits": "open", "trigger": "step", "chance": 0.5, "effect": "takeFlowers", "deed": "she gave a bunch of flowers to a hungry cow",
+      "versions": ["A cow looked at her flowers with big, sad eyes, so she gave it a bunch, and the cow munched them happily.", "A hungry cow mooed at her basket, and she let it have a bunch of flowers."],
+      "quiet": ["A cow sniffed her basket, found no flowers and went back to the grass.", "A cow mooed hopefully, but there were no flowers in her basket."],
+      "thoughts": ["Here you go, cow. Now I need new flowers!", "Bye, flowers! I'd better find more."],
+      "popup": "Moo!"
+    },
+    {
+      "id": 53, "name": "Slippery bank", "fits": "swamp", "trigger": "step", "chance": 0.4, "effect": "takeCake", "deed": "the cake fell into the swamp",
+      "versions": ["She slipped on the muddy bank, and the cake fell into the swamp with a plop.", "The ground by the swamp was slippery, and splash! The cake was soaked and spoiled."],
+      "quiet": ["She slipped on the muddy bank, but there was no cake left to spoil.", "She skidded by the swamp, but her basket had no cake to lose."],
+      "thoughts": ["Oh no! The cake fell in!", "Splash! There goes the cake."],
+      "popup": "Splash!"
+    },
+    {
+      "id": 54, "name": "Apple tree", "fits": "corridor", "trigger": "step", "effect": "giveEnergy", "deed": "she ate an apple and got energy back",
+      "versions": ["An old apple tree by the path dropped a red apple right at her feet, and she ate it with a crunch.", "She found an apple under a tree, crunchy and sweet, and walked on with new strength."],
+      "quiet": ["An apple fell at her feet, but she wasn't hungry, so she left it for the birds.", "She passed an apple tree, but she still felt fresh and walked on."],
+      "thoughts": ["An apple! Crunch!", "Yum, an apple. I feel better!"],
+      "popup": "Crunch!"
     }
   ],
   "fantasy": [
@@ -338,10 +359,15 @@
     "treasure": ["She found a shiny treasure and took it along.", "Something glittered on the path: a treasure!", "She spotted something shiny and tucked it into her basket.", "Hidden in the grass lay a little treasure, and she took it."],
     "berries": ["She found a bush full of berries and ate some. She felt much better!", "Tired and hungry, she stopped at a berry bush for a juicy snack.", "She ate a handful of sweet berries and walked on with new strength.", "A berry bush! She ate until her tummy was happy."]
   },
-  "swamp": ["Her socks got soaked in the swamp.", "She waded through a swamp, squelch, squelch.", "Her boots got muddy in a swamp.", "She set out with her basket by a swamp full of croaking.", "Red Riding Hood began her walk where the ground was soft and wet."],
+  "swamp": ["Her socks got soaked in the swamp.", "She waded through a swamp, squelch, squelch.", "Her boots got muddy in a swamp.", "She splashed through a swamp full of croaking frogs.", "The ground went soft and wet, and she waded through a swamp."],
   "bumps": ["She bumped into a tree.", "She walked right into a tree. Ouch!", "A tree got in her way, and she bumped her nose.", "She did not see the tree in time and bonked into it.", "Thump! A tree stood exactly where she wanted to go."],
+  "packed": {
+    "with": ["Besides the cake, her basket held {things}.", "Mother had packed {things} next to the cake.", "Along with the cake, she carried {things}."],
+    "noCake": ["There was no cake in her basket this time.", "Her basket was empty: nobody had packed a cake.", "This time she set off without any cake."],
+    "noCakeWith": ["There was no cake in her basket, only {things}.", "Nobody had packed a cake, but her basket held {things}.", "She set off without cake, carrying {things}."]
+  },
   "endings": {
-    "home": ["And at last she knocked on Grandma's door.", "And at last she reached Grandma's house, and Grandma hugged her.", "Red Riding Hood set out almost in sight of Grandma's chimney.", "She began her walk so near to Grandma's that she could smell the soup."],
+    "home": ["And at last she knocked on Grandma's door.", "And at last she reached Grandma's house, and Grandma hugged her.", "And at last she reached Grandma's door, and Grandma put the kettle on.", "And at last she saw Grandma's chimney smoke and ran the last few steps."],
     "homeNoCake": ["And at last she knocked on Grandma's door, with no cake but a big story.", "And at last she reached Grandma's house, without the cake.", "And at last she arrived, with no cake but a happy heart.", "And at last she knocked, hungry and cakeless, and Grandma laughed."],
     "eaten": ["But then she walked right into the wolf's den, and that was the end of her trip.", "But the wolf was waiting at his den, and the trip ended there.", "But then the wolf at his den was too quick, and her trip ended there.", "But she walked too close to the wolf's den, and that was it for this trip."],
     "lost": ["And then she was so tired that she sat down under a tree for a long nap.", "And then, far from Grandma's house, she sat down for a long nap.", "And then her legs gave out, and she curled up for a long rest.", "And then she ran out of steps and fell asleep in the middle of the forest."],

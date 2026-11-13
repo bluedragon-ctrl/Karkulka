@@ -9,7 +9,7 @@
 import type { Rng } from './rng';
 import type { Outcome } from './sim';
 import { CAST, EventMet, STORY, eventKind, metText, placeOf } from './storyEvents';
-import { FLOWERS, Forest, StepResult, SWAMP, TREASURE } from './world';
+import { Basket, FLOWERS, Forest, StepResult, SWAMP, TREASURE } from './world';
 
 /** What really happened on a trip (a `Walker` plus the events it met). */
 export interface TripRecord {
@@ -23,6 +23,8 @@ export interface TripRecord {
   met: readonly EventMet[];
   /** Event kinds placed in this forest; empty with events off (borrowed events then come from the whole cast). */
   placed: readonly number[];
+  /** What was packed in her basket before she set off; missing: the cake only. */
+  packed?: Basket;
   /** Who shaped her: her practice judge, or her teacher when she had no practice. */
   shapedBy: { by: 'judge' | 'teacher'; who: string } | null;
 }
@@ -109,9 +111,11 @@ export function tellStory(rec: TripRecord, boldness: number, rng: Rng): StorySen
   // Too long? Sound events, swamps and bumps go first (the last ones first), leaving room for the
   // made-up parts expected at this boldness, so a retelling keeps the same true parts. Then, if
   // still too long, fewer made-up parts (keeping one).
-  const trueRoom = MAX_SENTENCES - 2 - Math.round(expected);
+  // What was packed is told after the opening, and takes room like the other true parts.
+  const packed = packedLine(rec.packed, rng);
+  const trueRoom = MAX_SENTENCES - 2 - packed.length - Math.round(expected);
   for (let k = dropIndex(middle); middle.length > trueRoom && k >= 0; k = dropIndex(middle)) middle.splice(k, 1);
-  if (madeUp > 1) madeUp = Math.max(1, Math.min(madeUp, MAX_SENTENCES - 2 - middle.length));
+  if (madeUp > 1) madeUp = Math.max(1, Math.min(madeUp, MAX_SENTENCES - 2 - packed.length - middle.length));
 
   const met = new Set(rec.met.map((e) => e.kind));
   // Never an event that changes the basket: a made-up "the fox took the cake" would contradict how she arrived.
@@ -132,13 +136,23 @@ export function tellStory(rec: TripRecord, boldness: number, rng: Rng): StorySen
   const body = middle.map((m) => m.s);
   for (const m of made) body.splice(Math.floor(rng() * (body.length + 1)), 0, m);
 
-  const lostCake = rec.results.includes('grabbed');
+  const lostCake = rec.results.includes('grabbed') || rec.met.some((e) => e.effect === 'takeCake') || rec.packed?.cake === false;
   const ending = rec.outcome === 'home' ? (lostCake ? STORY.endings.homeNoCake : STORY.endings.home)
     : rec.outcome === 'eaten' ? STORY.endings.eaten : rec.outcome === 'lost' ? STORY.endings.lost : STORY.endings.stopped;
-  const out = [truth(pickFrom(rng, STORY.openings[placeOf(f, rec.start)]), 'opening'), ...body, truth(pickFrom(rng, ending), 'ending')];
+  const out = [truth(pickFrom(rng, STORY.openings[placeOf(f, rec.start)]), 'opening'), ...packed, ...body, truth(pickFrom(rng, ending), 'ending')];
   const closing = rec.shapedBy && STORY.shapedBy[rec.shapedBy.by][rec.shapedBy.who];
   if (closing) out.push(truth(closing, 'closing'));
   return out;
+}
+
+/** What was packed, when it was not the cake alone ("Besides the cake, her basket held a treasure."). */
+function packedLine(b: Basket | undefined, rng: Rng): StorySentence[] {
+  if (!b || (b.cake && !b.flowers && !b.treasure)) return [];
+  const parts: string[] = [];
+  if (b.flowers) parts.push(b.flowers === 1 ? 'a bunch of flowers' : `${b.flowers} bunches of flowers`);
+  if (b.treasure) parts.push(b.treasure === 1 ? 'a treasure' : `${b.treasure} treasures`);
+  const list = !b.cake ? (parts.length ? STORY.packed.noCakeWith : STORY.packed.noCake) : STORY.packed.with;
+  return [{ text: pickFrom(rng, list).replace('{things}', parts.join(' and ')), part: 'basket', madeUp: false }];
 }
 
 /** Which happening to leave out when the story is too long: the last sound event, then the bumps, then the swamp. */

@@ -9,7 +9,7 @@ import {
   fixedSeed, metText, placeStoryEvents, placeTests, tripSeed,
 } from '../src/storyEvents';
 import { FIXED, JUDGES, judgeMaps, judgeRewards, newStats, runOf, trainLessons } from '../src/train';
-import { HOME, PATH, SWAMP, Tile, TREE, applyEffect, walkingDistances, forestFromTiles, homeIndex, xyOf } from '../src/world';
+import { APPLE_ENERGY, EFFECTS, HOME, PATH, SWAMP, Tile, TREE, applyEffect, walkingDistances, forestFromTiles, homeIndex, xyOf } from '../src/world';
 
 const CODES = ['KARKULKA', 'A1', 'B2', 'C3', 'D4', 'E5'];
 
@@ -179,8 +179,9 @@ const FOX = CAST.find((k) => k.effect === 'takeCake')!.id;
 const NEIGHBOUR = CAST.find((k) => k.effect === 'giveFlowers')!.id;
 
 describe('events that change her basket', () => {
-  it('the data has the three effects, each on a step event', () => {
-    expect(new Set(CAST.filter((k) => k.effect).map((k) => k.effect))).toEqual(new Set(['takeCake', 'giveFlowers', 'giveTreasure']));
+  it('the data has every effect, each on a step event with a report phrase', () => {
+    expect(new Set(CAST.filter((k) => k.effect).map((k) => k.effect))).toEqual(new Set(EFFECTS));
+    for (const k of CAST.filter((c) => c.effect)) expect(k.deed, k.name).toBeTruthy();
     const bad: StoryData = JSON.parse(JSON.stringify(STORY));
     bad.events.push({ ...bad.events[0], id: 98, effect: 'takeCake' as never });
     bad.events.push({ ...bad.events[1], id: 99, effect: 'giveGold' as never, quiet: ['x'] });
@@ -189,6 +190,7 @@ describe('events that change her basket', () => {
     expect(errors.some((e) => /quiet version/.test(e))).toBe(true);
     expect(errors.some((e) => /unknown effect/.test(e))).toBe(true);
     expect(errors.some((e) => /quiet versions only/.test(e))).toBe(true);
+    expect(errors.some((e) => /deed/.test(e))).toBe(true);
   });
 
   it('applies an effect like the same change by a tile, and takes no cake that is not there', () => {
@@ -199,6 +201,21 @@ describe('events that change her basket', () => {
     expect(b).toEqual({ cake: false, flowers: 1, treasure: 1 });
     expect(applyEffect(b, 'takeCake')).toBe(false);
     expect(b).toEqual({ cake: false, flowers: 1, treasure: 1 });
+    expect(applyEffect(b, 'takeFlowers')).toBe(true);
+    expect(applyEffect(b, 'takeFlowers')).toBe(false);
+    expect(b.flowers).toBe(0);
+  });
+
+  it('an apple gives energy back, never above her starting energy, and nothing when she is full', () => {
+    const b = { cake: true, flowers: 0, treasure: 0 };
+    const e = { left: 20, budget: 60 };
+    expect(applyEffect(b, 'giveEnergy', e)).toBe(true);
+    expect(e.left).toBe(20 + APPLE_ENERGY);
+    e.left = 55;
+    expect(applyEffect(b, 'giveEnergy', e)).toBe(true);
+    expect(e.left).toBe(60);
+    expect(applyEffect(b, 'giveEnergy', e)).toBe(false);
+    expect(applyEffect(b, 'giveEnergy')).toBe(false);
   });
 
   it('an event with a chance only happens when the roll is under it, and a missed spot is not rolled again', () => {
@@ -264,12 +281,15 @@ describe('events that change her basket', () => {
           if (e.effect === 'takeCake') expect([before.cake, after.cake]).toEqual([true, false]);
           if (e.effect === 'giveFlowers') expect(after.flowers).toBeGreaterThan(before.flowers);
           if (e.effect === 'giveTreasure') expect(after.treasure).toBeGreaterThan(before.treasure);
+          if (e.effect === 'takeFlowers') expect(after.flowers).toBe(before.flowers - 1);
+          // An apple gives 10, more than any step costs, so she has more energy after that step than before it.
+          if (e.effect === 'giveEnergy') expect(w.history.energy[e.t]).toBeGreaterThan(w.history.energy[e.t - 1]);
           if (e.t < w.history.baskets.length) expect(w.history.baskets[e.t]).toEqual(after);
         }
       }
     }
     expect(effects).toBeGreaterThan(5);
-    expect(kinds.size).toBe(3);
+    expect(kinds.size).toBeGreaterThanOrEqual(4);
   });
 
   it('lessons, practice and test trips never apply effects: a walker without events walks as before', () => {
@@ -304,7 +324,7 @@ describe('basket events in the notes after a trip', () => {
   }
 
   it('eaten after the fox took the cake: the fox is to blame', () => {
-    const { w, stats, f } = findTrip('father', (w) => w.outcome === 'eaten' && w.effects.some((e) => e.effect === 'takeCake'));
+    const { w, stats, f } = findTrip('father', (w) => w.outcome === 'eaten' && w.effects.some((e) => e.effect === 'takeCake' && e.kind === FOX));
     const e = explainTrip(w, f, stats, false);
     expect(e.card).toBe('basketEvents');
     expect(e.text).toMatch(/fox took the cake/);
@@ -323,5 +343,6 @@ describe('basket events in the notes after a trip', () => {
   it('names where a basket change came from', () => {
     expect(effectWords({ t: 7, kind: 19, effect: 'takeCake' })).toBe('the fox took the cake at step 7');
     expect(effectWords({ t: 3, kind: 20, effect: 'giveFlowers' })).toMatch(/neighbour at step 3/);
+    expect(effectWords({ t: 4, kind: 53, effect: 'takeCake' })).toBe('the cake fell into the swamp at step 4');
   });
 });

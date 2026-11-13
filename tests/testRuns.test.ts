@@ -25,7 +25,7 @@ describe('the big test', () => {
     expect(r.count).toBe(100);
     expect(r.home + r.eaten + r.lost).toBeCloseTo(1);
     expect(r.homeNoCake).toBeLessThanOrEqual(r.home);
-    expect(r.trips.filter((t) => t.cakeBy).length).toBe(r.cakeByWolf + r.cakeByFox);
+    expect(r.trips.filter((t) => t.cakeBy).length).toBe(r.cakeByWolf + r.cakeByEvent);
     expect(r.sure).toBeGreaterThanOrEqual(0);
     expect(r.sure).toBeLessThanOrEqual(1);
     expect(r.facts.length).toBeGreaterThan(0);

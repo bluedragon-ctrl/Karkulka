@@ -61,7 +61,8 @@ function form(){
    <div><label>Basket effect</label><select id="f_effect"><option value="">none</option>${opts(meta.effects,k.effect)}</select></div>
   </div>
   <label>Story versions (one per line, at least 2)</label><textarea id="f_versions">${esc(k.versions.join('\n'))}</textarea>
-  <label>Quiet versions (only the sly fox: when her basket has no cake)</label><textarea id="f_quiet" style="height:4em">${esc((k.quiet||[]).join('\n'))}</textarea>
+  <label>Report phrase, with an effect (e.g. "the fox took the cake"; the step is added)</label><input id="f_deed" value="${esc(k.deed||'')}">
+  <label>Quiet versions (takeCake, takeFlowers, giveEnergy: when there is nothing to take or she is not hungry)</label><textarea id="f_quiet" style="height:4em">${esc((k.quiet||[]).join('\n'))}</textarea>
   <label>Her thoughts (one per line)</label><textarea id="f_thoughts" style="height:5em">${esc(k.thoughts.join('\n'))}</textarea>
   <button id="del">Delete this event</button>
   <p class="hint">Ids are permanent: never reuse a deleted one.</p>`;
@@ -71,6 +72,7 @@ function form(){
   bind('f_chance',v=>{if(v==='')delete k.chance;else k.chance=Math.min(100,Math.max(1,Number(v)))/100;});
   bind('f_effect',v=>{if(v)k.effect=v;else delete k.effect;});
   bind('f_versions',v=>k.versions=lines(v));bind('f_thoughts',v=>k.thoughts=lines(v));
+  bind('f_deed',v=>{if(v.trim())k.deed=v;else delete k.deed;});
   bind('f_quiet',v=>{const l=lines(v);if(l.length)k.quiet=l;else delete k.quiet;});
   $('del').onclick=()=>{if(confirm('Delete '+k.name+'?')){events.splice(cur,1);cur=Math.max(0,cur-1);render();}};
 }

@@ -4,18 +4,19 @@ import { ENERGY_NAMES, asSeenBy, energyLevel } from '../tokens';
 import { MOVE_NAMES, Move } from '../world';
 import { clear, h } from './dom';
 import { basketSymbols, energySymbol, moveToken, viewToken } from './symbols';
-import { fullBasket } from '../world';
+import { Basket, fullBasket } from '../world';
 
 /**
  * `hint` is an optional "?" button for the label, `basketHint` one for the pinned basket, `energyHint` one for the energy square.
  * The basket and energy squares sit at the left, pinned: the scrolling steps move past them.
  * `wolfToken`: she tells walking wolves from dens, so the strip shows him as his own token; otherwise as a den.
  */
-export function renderStrip(el: HTMLElement, hist: History | null, t: number, memory: number, nextMove?: Move | null, hint?: Node, basketHint?: Node, wolfToken = false, energyHint?: Node) {
+/** With no walk (`hist` null), `idleBasket` is the basket shown pinned: what is packed for her next trip. */
+export function renderStrip(el: HTMLElement, hist: History | null, t: number, memory: number, nextMove?: Move | null, hint?: Node, basketHint?: Node, wolfToken = false, energyHint?: Node, idleBasket?: Basket) {
   const seen = (i: number) => viewToken(asSeenBy({ wolfToken }, hist!.views[i]));
   clear(el);
   el.append(h('div', { class: 'strip-label' }, h('strong', {}, 'Memory strip', hint ?? null), h('span', {}, `her basket and energy, pinned, and her last ${memory === 1 ? 'step' : `${memory} steps`}`)));
-  const basket = hist?.baskets[Math.min(t, hist.baskets.length - 1)] ?? fullBasket();
+  const basket = hist?.baskets[Math.min(t, hist.baskets.length - 1)] ?? idleBasket ?? fullBasket();
   const level = hist?.energy.length ? energyLevel(hist.energy[Math.min(t, hist.energy.length - 1)]) : ENERGY_NAMES.length - 1;
   const pinned = h('span', { class: 'strip-pinned', title: 'Her basket and her energy: pinned at the front of her memory, they never scroll out' },
     h('span', { class: 'pin', 'aria-hidden': 'true' }, 'pinned'), ...basketSymbols(basket).map((tok) => h('span', { class: 'tok' }, tok)), basketHint ?? null,
