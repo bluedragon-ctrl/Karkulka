@@ -62,7 +62,7 @@ function form(){
   </div>
   <label>Story versions (one per line, at least 2)</label><textarea id="f_versions">${esc(k.versions.join('\n'))}</textarea>
   <label>Report phrase, with an effect (e.g. "the fox took the cake"; the step is added)</label><input id="f_deed" value="${esc(k.deed||'')}">
-  <label>Quiet versions (takeCake, takeFlowers, giveEnergy: when there is nothing to take or she is not hungry)</label><textarea id="f_quiet" style="height:4em">${esc((k.quiet||[]).join('\n'))}</textarea>
+  <label>Quiet versions (takeCake, takeFlowers, giveEnergy, giveCake: when there is nothing to take, she is not hungry, or she still has her cake)</label><textarea id="f_quiet" style="height:4em">${esc((k.quiet||[]).join('\n'))}</textarea>
   <label>Her thoughts (one per line)</label><textarea id="f_thoughts" style="height:5em">${esc(k.thoughts.join('\n'))}</textarea>
   <button id="del">Delete this event</button>
   <p class="hint">Ids are permanent: never reuse a deleted one.</p>`;

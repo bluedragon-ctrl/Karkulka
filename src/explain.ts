@@ -343,6 +343,7 @@ const DEEDS: Record<Effect, string> = {
   giveTreasure: 'a treasure from a forest event',
   takeFlowers: 'she gave away a bunch of flowers',
   giveEnergy: 'she got energy back',
+  giveCake: 'a new cake from a forest event',
 };
 
 /** What a forest event did to her basket or energy, for the trip report and the notes: "the fox took the cake at step 7". */
@@ -385,17 +386,49 @@ function denGambleJudge(stats: TrainStats | null): string | null {
     : ' The huntsman paid for a look inside a den while the wolf was out. Only the lucky runs got those points, so practice taught her to take the chance.';
 }
 
+/**
+ * The forest event that took the cake last, if no wolf grabbed it after that (so the event is
+ * what left her without it); undefined otherwise.
+ */
+function lastEventLoss(w: Walker): EffectDone | undefined {
+  const takes = w.effects.filter((e) => e.effect === 'takeCake');
+  const last = takes[takes.length - 1];
+  if (!last) return undefined;
+  const grabbedAfter = w.results.some((r, k) => r === 'grabbed' && k + 1 > last.t);
+  const givenAfter = w.effects.some((e) => e.effect === 'giveCake' && e.t >= last.t);
+  return grabbedAfter || givenAfter ? undefined : last;
+}
+
+/** How the cake was gone before step t, as a sentence: "The fox took the cake at step 4." */
+function cakeLossBefore(w: Walker, t: number): string {
+  const losses: { t: number; text: string }[] = [];
+  w.results.forEach((r, k) => { if (r === 'grabbed' && k + 1 <= t) losses.push({ t: k + 1, text: `At step ${k + 1} ${w.wolfMet.includes(k) ? 'a walking wolf' : 'the wolf at a den'} grabbed the cake.` }); });
+  for (const e of w.effects) if (e.effect === 'takeCake' && e.t <= t) { const s = effectWords(e); losses.push({ t: e.t, text: `${s[0].toUpperCase()}${s.slice(1)}.` }); }
+  losses.sort((a, b) => a.t - b.t);
+  return losses.length ? losses[losses.length - 1].text : 'No cake was packed.';
+}
+
 /** After she got home: a note about her basket when there is something to tell (the cake, flowers, treasure). */
 function basketNote(w: Walker, stats: TrainStats | null, dist: ArrayLike<number>): Explanation | null {
   const n = w.decisions.length;
   const things = basketWords(w.basket);
   const brought = things ? ` She brought ${things}.` : '';
   const packed = w.packed;
-  if (!packed.cake) {
+  // The baker's new cake: name what took the old one (or that none was packed), then the gift.
+  const baker = w.effects.find((e) => e.effect === 'giveCake');
+  if (baker && w.basket.cake) {
+    const loss = cakeLossBefore(w, baker.t);
+    return {
+      title: 'Why did she do that?',
+      text: `She got home in ${n} steps with the cake.${brought} ${loss} At step ${baker.t} a baker gave her a new one, so the cake in her basket told her she was safe again at the dens. A chatbot works the same way with a fact put back into its context.`,
+      card: 'basketEvents',
+    };
+  }
+  if (!packed.cake && !w.basket.cake) {
     return { title: 'Why did she do that?', text: `She got home in ${n} steps, without the cake: none was packed.${brought} Every lesson set off with the cake, so a basket without one is new to her, and she hardly reads that part of it: she walked her usual way, and a wolf den would have been the end.`, card: 'packBasket' };
   }
-  const fox = w.effects.find((e) => e.effect === 'takeCake');
-  if (fox) {
+  const fox = lastEventLoss(w);
+  if (fox && !w.basket.cake) {
     return { title: 'Why did she do that?', text: `She got home in ${n} steps, but without the cake: ${effectWords(fox)}.${brought}`, card: 'basketEvents' };
   }
   const empty = w.results.indexOf('empty');
@@ -551,7 +584,7 @@ export function explainTrip(w: Walker, f: Forest, stats: TrainStats | null, outd
     const raw = d.raw[chosen];
     const taught = stats?.coverage[from] ?? 0;
     const alike = lookAlikes(from);
-    const fox = w.effects.find((e) => e.effect === 'takeCake');
+    const fox = lastEventLoss(w);
     if (w.wolfMet.includes(t)) {
       return {
         title: 'Why did she do that?',
@@ -566,7 +599,7 @@ export function explainTrip(w: Walker, f: Forest, stats: TrainStats | null, outd
         card: 'basketEvents',
       };
     }
-    if (!w.packed.cake && f.tiles[w.pos] === WOLF && w.results.indexOf('empty') < 0) {
+    if (!w.packed.cake && !w.effects.some((e) => e.effect === 'giveCake') && f.tiles[w.pos] === WOLF && w.results.indexOf('empty') < 0) {
       return {
         title: 'Why did she do that?',
         text: `No cake was packed, so the first wolf den she walked into, at step ${t + 1}, was the end. Every lesson set off with the cake, and she hardly learned to read it, so she walked her usual way, near dens and all.${cutoff}`,

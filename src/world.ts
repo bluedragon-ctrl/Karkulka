@@ -61,12 +61,12 @@ export function pickUpAtStart(f: Forest, start: number, trip: BasketState) {
 
 /**
  * What a forest event can do on a trip alone: take the cake, give flowers, give a treasure,
- * take a bunch of flowers, or give energy back (an apple).
+ * take a bunch of flowers, give energy back (an apple), or give a new cake when hers is gone (the baker).
  */
-export const EFFECTS = ['takeCake', 'giveFlowers', 'giveTreasure', 'takeFlowers', 'giveEnergy'] as const;
+export const EFFECTS = ['takeCake', 'giveFlowers', 'giveTreasure', 'takeFlowers', 'giveEnergy', 'giveCake'] as const;
 export type Effect = typeof EFFECTS[number];
 /** The effects that can find nothing to change (no cake, no flowers, energy already full): they need quiet versions. */
-export const QUIET_EFFECTS: readonly Effect[] = ['takeCake', 'takeFlowers', 'giveEnergy'];
+export const QUIET_EFFECTS: readonly Effect[] = ['takeCake', 'takeFlowers', 'giveEnergy', 'giveCake'];
 /** Energy an apple gives back (`giveEnergy`), never above her starting energy. */
 export const APPLE_ENERGY = 10;
 
@@ -76,8 +76,9 @@ export interface EnergyState { left: number; budget: number }
 /**
  * A forest event's effect on her basket or energy, exactly like the same change by a tile: the
  * cake gone as when the wolf grabs it (so the next den eats her), one bunch of flowers or one
- * treasure more, one bunch of flowers less, or energy back as from berries. False when there is
- * nothing to change (no cake left to take, no flowers to give away, energy already full or not given).
+ * treasure more, one bunch of flowers less, energy back as from berries, or a new cake (only in
+ * place of a lost one, never a second). False when there is nothing to change (no cake left to take,
+ * no flowers to give away, energy already full or not given, a cake already in the basket).
  */
 export function applyEffect(b: Basket, e: Effect, energy?: EnergyState): boolean {
   if (e === 'takeCake') {
@@ -89,6 +90,9 @@ export function applyEffect(b: Basket, e: Effect, energy?: EnergyState): boolean
   } else if (e === 'giveEnergy') {
     if (!energy || energy.left >= energy.budget) return false;
     energy.left = Math.min(energy.budget, energy.left + APPLE_ENERGY);
+  } else if (e === 'giveCake') {
+    if (b.cake) return false;
+    b.cake = true;
   } else if (e === 'giveFlowers') b.flowers++;
   else b.treasure++;
   return true;

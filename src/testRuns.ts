@@ -48,9 +48,10 @@ export interface TestTrip {
   treasurePicked: number;
   /** Berry bushes she ate from (missing in older records: none). */
   berries?: number;
-  /** Bunches of flowers she gave away (a hungry cow) and apples she ate (forest events). */
+  /** Bunches of flowers she gave away (a hungry cow), apples she ate and new cakes from the baker (forest events). */
   flowersGiven?: number;
   apples?: number;
+  cakesGiven?: number;
   bumps: number;
   swampSteps: number;
   densSeen: number;
@@ -89,9 +90,10 @@ export interface TestReport {
   /** How often the wolf grabbed the cake, and a forest event took it (trips). */
   cakeByWolf: number;
   cakeByEvent: number;
-  /** In all the trips: bunches of flowers given to the cow, apples eaten. */
+  /** In all the trips: bunches of flowers given to the cow, apples eaten, new cakes from the baker. */
   flowersGiven: number;
   apples: number;
+  cakesGiven: number;
   /** Trips in which a walking wolf met her. */
   walkingWolf: number;
   /** Steps onto a den while its wolf was out, in all the trips, and the trips with at least one. */
@@ -155,6 +157,7 @@ function tripOf(f: Forest, w: Walker, shortest: number, tracker: EventTracker | 
     berries: w.pickups.berries,
     flowersGiven: did('takeFlowers'),
     apples: did('giveEnergy'),
+    cakesGiven: did('giveCake'),
     bumps: w.blocked.filter(Boolean).length,
     swampSteps: w.positions.slice(1).filter((p, i) => !w.blocked[i] && f.tiles[p] === SWAMP).length,
     densSeen: wolvesSeen,
@@ -201,6 +204,7 @@ export function summarize(f: Forest, list: TestTrip[]): TestReport {
     cakeByEvent: list.filter((t) => t.cakeBy === 'event').length,
     flowersGiven: list.reduce((a, t) => a + (t.flowersGiven ?? 0), 0),
     apples: list.reduce((a, t) => a + (t.apples ?? 0), 0),
+    cakesGiven: list.reduce((a, t) => a + (t.cakesGiven ?? 0), 0),
     walkingWolf: list.filter((t) => (t.wolfMet ?? 0) > 0).length,
     emptyDens: list.reduce((a, t) => a + (t.emptyDens ?? 0), 0),
     emptyDenTrips: list.filter((t) => (t.emptyDens ?? 0) > 0).length,
@@ -257,7 +261,11 @@ export function factoids(f: Forest, r: TestReport): string[] {
   if (r.cakeByWolf) out.push(`The wolf grabbed the cake ${times(r.cakeByWolf)}. ${wolfHome ? `She still got home in ${trips(wolfHome)}, without it.` : 'She never got home after that.'}`);
   if (r.cakeByEvent) {
     const foxEaten = list.filter((t) => t.cakeBy === 'event' && t.outcome === 'eaten').length;
-    out.push(`A forest event (the sly fox or the slippery swamp bank) took the cake ${times(r.cakeByEvent)}${foxEaten ? `; in ${trips(foxEaten)} of those, the next wolf den was the end` : ''}.`);
+    out.push(`A forest event (the sly fox, the slippery swamp bank or a tree root) took the cake ${times(r.cakeByEvent)}${foxEaten ? `; in ${trips(foxEaten)} of those, the next wolf den was the end` : ''}.`);
+  }
+  if (r.cakesGiven) {
+    const saved = list.filter((t) => (t.cakesGiven ?? 0) > 0 && t.cakeHome).length;
+    out.push(`A baker gave her a new cake ${times(r.cakesGiven)}${saved ? `, and ${trips(saved)} brought it to Grandma` : ''}.`);
   }
 
   // The den that ended the most trips.

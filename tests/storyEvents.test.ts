@@ -206,6 +206,15 @@ describe('events that change her basket', () => {
     expect(b.flowers).toBe(0);
   });
 
+  it('the baker only replaces a lost cake, never gives a second one', () => {
+    const b = { cake: true, flowers: 0, treasure: 0 };
+    expect(applyEffect(b, 'giveCake')).toBe(false);
+    expect(b.cake).toBe(true);
+    b.cake = false;
+    expect(applyEffect(b, 'giveCake')).toBe(true);
+    expect(b.cake).toBe(true);
+  });
+
   it('an apple gives energy back, never above her starting energy, and nothing when she is full', () => {
     const b = { cake: true, flowers: 0, treasure: 0 };
     const e = { left: 20, budget: 60 };
@@ -282,8 +291,9 @@ describe('events that change her basket', () => {
           if (e.effect === 'giveFlowers') expect(after.flowers).toBeGreaterThan(before.flowers);
           if (e.effect === 'giveTreasure') expect(after.treasure).toBeGreaterThan(before.treasure);
           if (e.effect === 'takeFlowers') expect(after.flowers).toBe(before.flowers - 1);
-          // An apple gives 10, more than any step costs, so she has more energy after that step than before it.
-          if (e.effect === 'giveEnergy') expect(w.history.energy[e.t]).toBeGreaterThan(w.history.energy[e.t - 1]);
+          // An apple gives 10, more than any step costs (3 at most), up to her starting energy.
+          if (e.effect === 'giveEnergy') expect(w.history.energy[e.t]).toBeGreaterThanOrEqual(Math.min(w.energy, w.history.energy[e.t - 1] + APPLE_ENERGY - 3));
+          if (e.effect === 'giveCake') expect([before.cake, after.cake]).toEqual([false, true]);
           if (e.t < w.history.baskets.length) expect(w.history.baskets[e.t]).toEqual(after);
         }
       }
