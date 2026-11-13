@@ -3,8 +3,8 @@ import { Adam, Model, accumulate, adamStep, forward, sgdStep, softmax, zeroGrads
 import { Rng, mulberry32, pick, rngFrom, shuffle } from './rng';
 import { Outcome, Walker } from './sim';
 import { LessonWalk, Teacher, TeacherChoice, costToDen, costToHome, walkLesson } from './teachers';
-import { encodeContext } from './tokens';
-import { Basket, densInSight, Forest, Move, PATH, headsHome, isWalkable, StepResult, SWAMP, energyToHome, nearWolf, tilesWhere, walkingDistances } from './world';
+import { encodeContext, viewKey } from './tokens';
+import { Basket, densInSight, Forest, Move, PATH, Seen, headsHome, isWalkable, StepResult, SWAMP, energyToHome, nearWolf, tilesWhere, walkingDistances } from './world';
 
 /**
  * Her energy on a trip alone, unless Settings say otherwise. Test trips (the outcome chart and the
@@ -94,6 +94,14 @@ export interface TrainStats {
   practiceSteps?: number;
   /** Lessons in which the walking wolf was out (missing in older saves). */
   wolfLessons?: number;
+  /**
+   * The views she read in lessons, by place: `"<tile>:<view key>"` → predictions made from it.
+   * Unlike the heatmap it sees an eaten berry bush and a walking wolf in view. Missing in older
+   * saves: the Inside the model tab then counts from the heatmap.
+   */
+  lessonViews?: Record<string, number>;
+  /** The same for practice runs. */
+  practiceViews?: Record<string, number>;
   radius: number;
   recent: number[];
   baseline: number;
@@ -111,6 +119,8 @@ export const newStats = (f: Forest): TrainStats => ({
   judgeRuns: {},
   lessonSteps: 0,
   practiceSteps: 0,
+  lessonViews: {},
+  practiceViews: {},
   radius: FIXED.curriculumStart,
   recent: [],
   baseline: 0,
@@ -181,6 +191,14 @@ export function homeShare(model: Model, f: Forest, energy = DEFAULT_ENERGY, roun
   return sum / rounds;
 }
 
+/** Count the views read at the first `steps` positions of a walk, by place (see `TrainStats.lessonViews`). */
+export function countViews(into: Record<string, number>, positions: readonly number[], views: readonly (readonly Seen[])[], steps: number) {
+  for (let t = 0; t < steps; t++) {
+    const key = `${positions[t]}:${viewKey(views[t])}`;
+    into[key] = (into[key] ?? 0) + 1;
+  }
+}
+
 /** Train on one lesson: per-step loss against what the parent did. Returns mean loss. */
 export function learnFromLesson(model: Model, opt: Adam, walk: LessonWalk, stats: TrainStats): number {
   const g = zeroGrads(model);
@@ -195,6 +213,8 @@ export function learnFromLesson(model: Model, opt: Adam, walk: LessonWalk, stats
     accumulate(model, g, fw, p);
   }
   for (const pos of walk.positions) stats.coverage[pos]++;
+  // An older save without view counts keeps counting from the heatmap, so its counts never mix.
+  if (stats.lessonViews || !stats.lessons) countViews(stats.lessonViews ??= {}, walk.positions, walk.history.views, steps);
   stats.teacherCounts[walk.teacher] = (stats.teacherCounts[walk.teacher] ?? 0) + 1;
   stats.lessons++;
   stats.lessonSteps = (stats.lessonSteps ?? 0) + steps;
@@ -465,6 +485,7 @@ export function learnFromRun(model: Model, f: Forest, judge: Judge, w: Walker, s
     accumulate(model, g, { x: d.input, nz: d.nz, h: d.hidden }, p);
   }
   if (steps) sgdStep(model, g, FIXED.practiceLearningRate, 1 / steps);
+  if (stats.practiceViews || !stats.practiceRuns) countViews(stats.practiceViews ??= {}, w.positions, w.history.views, steps);
   stats.practiceRuns++;
   stats.practiceSteps = (stats.practiceSteps ?? 0) + steps;
   stats.judgeRuns = stats.judgeRuns ?? {};

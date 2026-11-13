@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { generateForest } from '../src/forest';
 import {
-  OPS_PER_WEIGHT, ambiguityByTeacher, ambiguousTokens, chanceText, entropyBits, frequencySummary, sci, tokenCounts, trainingCompute, tripMeasures,
+  OPS_PER_WEIGHT, ambiguityByTeacher, ambiguousTokens, chanceText, entropyBits, frequencySummary, fullVocabulary, sci, tokenCounts, trainingCompute, tripMeasures,
 } from '../src/measures';
 import { createAdam, createModel, parameterCount } from '../src/model';
 import { mulberry32 } from '../src/rng';
@@ -9,7 +9,7 @@ import { Walker } from '../src/sim';
 import { costToHome, teacherMoves } from '../src/teachers';
 import { MEMORY_PAIRS, buildVocabulary } from '../src/tokens';
 import { newStats, trainLessons, trainPractice } from '../src/train';
-import { Move } from '../src/world';
+import { Move, WALKER } from '../src/world';
 
 const f = generateForest('KARKULKA');
 const vocab = buildVocabulary(f);
@@ -98,5 +98,45 @@ describe('trip measures', () => {
     expect(sci(3.8e25)).toBe('3.8 × 10²⁵');
     expect(sci(405e9)).toBe('4.05 × 10¹¹');
     expect(sci(9.999e12)).toBe('1 × 10¹³');
+  });
+});
+
+describe('full vocabulary', () => {
+  it('keeps the forest views first, and counts every lesson prediction from what she read', () => {
+    const { stats } = trained();
+    const full = fullVocabulary(f, stats, {});
+    expect(full.slice(0, vocab.length).map((v) => v.id)).toEqual(vocab.map((v) => v.id));
+    expect(full.reduce((a, v) => a + v.lessons, 0)).toBe(stats.lessonSteps);
+    expect(new Set(full.map((v) => v.key)).size).toBe(full.length);
+  });
+
+  it('adds the views read only on the way: eaten berry bushes and walking wolves', () => {
+    const wolfy = { ...f, wolves: 2 };
+    const model = createModel({ ...cfg, wolfToken: true }, mulberry32(1));
+    const stats = newStats(wolfy);
+    trainLessons(model, createAdam(model), wolfy, 'hedgehog', 60, stats, mulberry32(2));
+    trainPractice(model, wolfy, 'grandma', 20, stats, mulberry32(3));
+    const full = fullVocabulary(wolfy, stats, model.cfg);
+    const extra = full.filter((v) => v.onTheWay);
+    expect(extra.length).toBeGreaterThan(0);
+    expect(extra.some((v) => v.view.includes(WALKER))).toBe(true);
+    expect(full.reduce((a, v) => a + v.lessons, 0)).toBe(stats.lessonSteps);
+    expect(full.reduce((a, v) => a + v.practice, 0)).toBe(stats.practiceSteps);
+    // Without the walking-wolf token she reads a wolf as a den, so no view shows him.
+    expect(fullVocabulary(wolfy, stats, {}).some((v) => v.view.includes(WALKER))).toBe(false);
+  });
+
+  it('counts from the heatmap for older saves without view counts', () => {
+    const { stats } = trained();
+    const old = { ...stats, lessonViews: undefined };
+    expect(fullVocabulary(f, old, {}).map((v) => v.lessons)).toEqual(tokenCounts(vocab, stats.coverage));
+  });
+
+  it('adds the views of her latest trip alone', () => {
+    const { model, stats } = trained();
+    const w = new Walker({ ...f, wolves: 2 }, { ...model, cfg: { ...model.cfg, wolfToken: true } }, vocab[0].places[0], 60, 1, mulberry32(4));
+    w.run();
+    const keys = new Set(fullVocabulary(f, stats, { wolfToken: true }, w).map((v) => v.key));
+    for (const v of w.history.views) expect(keys.has(v.join(''))).toBe(true);
   });
 });
